@@ -39,6 +39,7 @@
   import { saveProject, loadProject } from '$lib/services/project';
   import { extractMetadata, type VideoMetadata } from '$lib/services/video-metadata';
   import { validateTrack } from '$lib/proto';
+  import { snapToFrame, snapToInterval } from '$lib/utils/time';
 
   // --- Local UI state ---
   let videoUrl = $state<string | null>(null);
@@ -210,14 +211,55 @@
     timelineStore.selectChannel(channelId);
   }
 
+  // Snapping + min interval settings
+  const DEFAULT_FPS = 24;
+  const DEFAULT_MIN_INTERVAL_MS = 200;
+
+  function getMinInterval(): number {
+    try {
+      const stored = localStorage.getItem('openlightfx-studio:min-interval');
+      if (stored) return Math.max(100, Math.min(1000, parseInt(stored)));
+    } catch {}
+    return DEFAULT_MIN_INTERVAL_MS;
+  }
+
+  function applySnapping(ms: number): number {
+    let snapped = Math.max(0, Math.round(ms));
+    if (timelineStore.snappingEnabled) {
+      snapped = snapToFrame(snapped, DEFAULT_FPS);
+      snapped = snapToInterval(snapped, 500);
+    }
+    return snapped;
+  }
+
+  function enforceMinInterval(channelId: string, timestampMs: number, excludeId?: string): number {
+    const minInterval = getMinInterval();
+    const existing = projectStore
+      .getKeyframesForChannel(channelId)
+      .filter((k) => (excludeId ? k.id !== excludeId : true))
+      .map((k) => k.timestampMs)
+      .sort((a, b) => a - b);
+
+    let ts = timestampMs;
+    for (const t of existing) {
+      if (Math.abs(ts - t) < minInterval) {
+        ts = ts >= t ? t + minInterval : t - minInterval;
+      }
+    }
+    return Math.max(0, Math.round(ts));
+  }
+
   function handleLaneDblClick(channelId: string, timestampMs: number) {
+    let ts = applySnapping(timestampMs);
+    ts = enforceMinInterval(channelId, ts);
+
     const id = `kf-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const prev = projectStore
       .getKeyframesForChannel(channelId)
-      .filter((k) => k.timestampMs < timestampMs)
+      .filter((k) => k.timestampMs < ts)
       .pop();
 
-    const newKf = createDefaultKeyframe(id, channelId, Math.round(timestampMs));
+    const newKf = createDefaultKeyframe(id, channelId, ts);
     if (prev) {
       newKf.color = { ...prev.color };
       newKf.brightness = prev.brightness;
@@ -226,7 +268,6 @@
       newKf.powerOn = prev.powerOn;
     }
 
-    // Record in undo history
     historyStore.push({
       type: 'add-keyframe',
       description: `Add keyframe on ${channelId}`,
@@ -303,10 +344,9 @@
   function handleKeyframeDrag(id: string, newTimestampMs: number) {
     const kf = keyframes.find((k: Keyframe) => k.id === id);
     if (!kf) return;
-    const oldTs = kf.timestampMs;
-    const newTs = Math.max(0, Math.round(newTimestampMs));
+    let newTs = applySnapping(newTimestampMs);
+    newTs = enforceMinInterval(kf.channelId, newTs, id);
     projectStore.updateKeyframe(id, { timestampMs: newTs });
-    // Drag is continuous — don't push each frame to undo; will batch on pointerup
   }
 
   // Timeline zoom via wheel
