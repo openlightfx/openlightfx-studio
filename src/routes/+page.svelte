@@ -5,18 +5,40 @@
   import VideoPanel from '$lib/components/video/VideoPanel.svelte';
   import PlaybackControls from '$lib/components/video/PlaybackControls.svelte';
   import TimelineCanvas from '$lib/components/timeline/TimelineCanvas.svelte';
+  import TimelineContextMenu from '$lib/components/timeline/TimelineContextMenu.svelte';
   import Minimap from '$lib/components/timeline/Minimap.svelte';
   import PropertiesPanel from '$lib/components/properties/PropertiesPanel.svelte';
   import EffectsPalette from '$lib/components/effects/EffectsPalette.svelte';
+  import LightingOverlay from '$lib/components/video/LightingOverlay.svelte';
+  import LightIcons from '$lib/components/video/LightIcons.svelte';
+  import ChannelList from '$lib/components/channels/ChannelList.svelte';
   import Toast from '$lib/components/shared/Toast.svelte';
+  import ShortcutsHelp from '$lib/components/shared/ShortcutsHelp.svelte';
+  import WelcomeFlow from '$lib/components/onboarding/WelcomeFlow.svelte';
+  import ChannelTemplateModal from '$lib/components/modals/ChannelTemplateModal.svelte';
+  import ChannelCreateModal from '$lib/components/modals/ChannelCreateModal.svelte';
+  import MovieMetadataModal from '$lib/components/modals/MovieMetadataModal.svelte';
+  import ExportDialog from '$lib/components/modals/ExportDialog.svelte';
 
   import { projectStore } from '$lib/stores/project.svelte';
   import { timelineStore } from '$lib/stores/timeline.svelte';
   import { historyStore } from '$lib/stores/history.svelte';
   import { uiStore } from '$lib/stores/ui.svelte';
   import { toastStore } from '$lib/stores/toast.svelte';
-  import { createDefaultChannel, createDefaultKeyframe, type Keyframe } from '$lib/types';
+  import {
+    createDefaultChannel,
+    createDefaultKeyframe,
+    createDefaultEffectKeyframe,
+    type Keyframe,
+    type EffectType,
+    type Channel,
+  } from '$lib/types';
   import { computeSafetyInfo } from '$lib/services/safety';
+  import { exportTrack, exportForMarketplace } from '$lib/services/export';
+  import { importTrack } from '$lib/services/import';
+  import { saveProject, loadProject } from '$lib/services/project';
+  import { extractMetadata, type VideoMetadata } from '$lib/services/video-metadata';
+  import { validateTrack } from '$lib/proto';
 
   // --- Local UI state ---
   let videoUrl = $state<string | null>(null);
@@ -24,6 +46,27 @@
   let propertiesPanelWidth = $state(280);
   let timelinePanelHeight = $state(300);
   let videoFile = $state<File | null>(null);
+  let videoPanelWidth = $state(0);
+  let videoPanelHeight = $state(0);
+
+  // Modal state
+  let showShortcutsHelp = $state(false);
+  let showWelcome = $state(false);
+  let showChannelTemplate = $state(false);
+  let showChannelCreate = $state(false);
+  let showMovieMetadata = $state(false);
+  let showExportDialog = $state(false);
+
+  // Context menu state
+  let contextMenu = $state<{
+    x: number;
+    y: number;
+    channelId: string;
+    timestampMs: number;
+  } | null>(null);
+
+  // Video metadata for prefill
+  let videoMetadata = $state<VideoMetadata | null>(null);
 
   // --- Derived from stores ---
   let channels = $derived(projectStore.track.channels);
@@ -55,6 +98,33 @@
   });
 
   let trackMetadata = $derived(projectStore.track.metadata);
+
+  let validationErrors = $derived.by(() => {
+    try {
+      return validateTrack(projectStore.track).map(
+        (e: { field: string; message: string }) => `${e.field}: ${e.message}`
+      );
+    } catch {
+      return [];
+    }
+  });
+
+  let durationWarning = $derived.by(() => {
+    const trackDur = projectStore.track.metadata.durationMs;
+    const videoDur = projectStore.track.metadata.durationMs;
+    if (trackDur > 0 && videoDur > 0 && Math.abs(trackDur - videoDur) > 5000) {
+      return `Track duration differs from video by ${Math.round(Math.abs(trackDur - videoDur) / 1000)}s`;
+    }
+    return null;
+  });
+
+  // Check onboarding on mount
+  $effect(() => {
+    if (typeof localStorage !== 'undefined') {
+      const done = localStorage.getItem('openlightfx-studio:onboarding-complete');
+      if (!done) showWelcome = true;
+    }
+  });
 
   // --- Handlers ---
   function handleSeek(ms: number) {
@@ -95,13 +165,34 @@
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'video/*';
-    input.onchange = (ev) => {
+    input.onchange = async (ev) => {
       const file = (ev.target as HTMLInputElement).files?.[0];
       if (file) {
         if (videoUrl) URL.revokeObjectURL(videoUrl);
         videoUrl = URL.createObjectURL(file);
         videoFile = file;
         projectStore.videoFilePath = file.name;
+
+        // Extract metadata from container
+        try {
+          const meta = await extractMetadata(file);
+          videoMetadata = meta;
+
+          // Auto-place chapter markers
+          if (meta.chapters.length > 0) {
+            for (const ch of meta.chapters) {
+              projectStore.addSceneMarker({
+                id: `marker-ch-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                timestampMs: ch.timestampMs,
+                label: ch.label || `Chapter`,
+                type: 'MARKER_CHAPTER',
+              });
+            }
+            toastStore.info(`Placed ${meta.chapters.length} chapter markers from video`);
+          }
+        } catch {
+          // Metadata extraction failed — not critical
+        }
       }
     };
     input.click();
@@ -305,6 +396,176 @@
       timelineStore.zoomOut();
       return;
     }
+    if (e.key === '?' || e.key === 'F1') {
+      e.preventDefault();
+      showShortcutsHelp = true;
+      return;
+    }
+    if (ctrl && e.key === 's') {
+      e.preventDefault();
+      handleSaveProject();
+      return;
+    }
+    if (ctrl && e.shiftKey && e.key === 'E') {
+      e.preventDefault();
+      showExportDialog = true;
+      return;
+    }
+  }
+
+  // --- Context menu handler ---
+  function handleTimelineContextMenu(e: { x: number; y: number; channelId: string; timestampMs: number }) {
+    contextMenu = e;
+  }
+
+  function handleContextMenuAddEffect(effectType: EffectType) {
+    if (!contextMenu) return;
+    const id = `ek-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const ek = createDefaultEffectKeyframe(id, contextMenu.channelId, contextMenu.timestampMs);
+    ek.effectType = effectType;
+    historyStore.push({
+      type: 'add-effect',
+      description: `Add ${effectType} effect`,
+      redo: () => projectStore.addEffectKeyframe(ek),
+      undo: () => projectStore.removeEffectKeyframe(id),
+    });
+    contextMenu = null;
+  }
+
+  // --- Channel template/create handlers ---
+  function handleApplyTemplate(templateChannels: Array<{ id: string; displayName: string; spatialHint: string }>) {
+    for (const tc of templateChannels) {
+      const ch = createDefaultChannel(tc.id, tc.displayName);
+      ch.spatialHint = tc.spatialHint;
+      ch.optional = true;
+      projectStore.addChannel(ch);
+
+      // Auto black keyframe at 0ms
+      const kf = createDefaultKeyframe(
+        `kf-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        tc.id,
+        0
+      );
+      projectStore.addKeyframe(kf);
+    }
+    showChannelTemplate = false;
+    toastStore.success(`Created ${templateChannels.length} channels from template`);
+  }
+
+  function handleCreateChannel(data: { id: string; displayName: string; spatialHint: string }) {
+    const ch = createDefaultChannel(data.id, data.displayName);
+    ch.spatialHint = data.spatialHint;
+    ch.optional = true;
+    const kf = createDefaultKeyframe(
+      `kf-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      data.id,
+      0
+    );
+    historyStore.push({
+      type: 'add-channel',
+      description: `Add channel ${data.id}`,
+      redo: () => {
+        projectStore.addChannel(ch);
+        projectStore.addKeyframe(kf);
+      },
+      undo: () => projectStore.removeChannel(data.id),
+    });
+    showChannelCreate = false;
+  }
+
+  // --- Save/Load/Export handlers ---
+  async function handleSaveProject() {
+    try {
+      await saveProject({
+        version: 1,
+        track: projectStore.track,
+        channelGroups: projectStore.channelGroups,
+        sceneMarkers: projectStore.sceneMarkers,
+        channelOrder: projectStore.channelOrder,
+        mutedChannels: [...projectStore.mutedChannels],
+        soloedChannels: [...projectStore.soloedChannels],
+        videoFilePath: projectStore.videoFilePath,
+        ui: {
+          zoom: timelineStore.zoom,
+          scrollX: timelineStore.scrollX,
+          scrollY: timelineStore.scrollY,
+        },
+        undoHistory: [],
+        redoHistory: [],
+      });
+      projectStore.markClean();
+      toastStore.success('Project saved');
+    } catch (err) {
+      toastStore.error('Failed to save project');
+    }
+  }
+
+  async function handleLoadProject() {
+    try {
+      const pf = await loadProject();
+      projectStore.track = pf.track;
+      projectStore.channelGroups = pf.channelGroups;
+      projectStore.sceneMarkers = pf.sceneMarkers;
+      projectStore.channelOrder = pf.channelOrder;
+      projectStore.mutedChannels = new Set(pf.mutedChannels);
+      projectStore.soloedChannels = new Set(pf.soloedChannels);
+      projectStore.videoFilePath = pf.videoFilePath;
+      projectStore.markClean();
+      historyStore.clear();
+      toastStore.success('Project loaded');
+    } catch {
+      toastStore.error('Failed to load project');
+    }
+  }
+
+  function handleExport(type: 'lightfx' | 'marketplace' | 'project') {
+    try {
+      if (type === 'project') {
+        handleSaveProject();
+      } else if (type === 'lightfx') {
+        const data = exportTrack(projectStore.track);
+        downloadFile(data, `${projectStore.projectName || 'track'}.lightfx`);
+        toastStore.success('Track exported');
+      } else if (type === 'marketplace') {
+        const data = exportForMarketplace(projectStore.track);
+        downloadFile(data, `${projectStore.projectName || 'track'}.lightfx`);
+        toastStore.success('Track exported for marketplace');
+      }
+    } catch (err) {
+      toastStore.error(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+    showExportDialog = false;
+  }
+
+  function downloadFile(data: Uint8Array, filename: string) {
+    const blob = new Blob([data], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleImport() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.lightfx';
+    input.onchange = async (ev) => {
+      const file = (ev.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      try {
+        const buf = await file.arrayBuffer();
+        const track = importTrack(new Uint8Array(buf));
+        projectStore.track = track;
+        projectStore.markDirty();
+        historyStore.clear();
+        toastStore.success('Track imported');
+      } catch (err) {
+        toastStore.error(`Import failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      }
+    };
+    input.click();
   }
 </script>
 
@@ -341,8 +602,11 @@
   <div class="flex-1 flex flex-col min-h-0">
     <!-- Top section: Video + Properties -->
     <div class="flex flex-1 min-h-0">
-      <!-- Video Panel -->
-      <div class="flex-1 flex flex-col min-w-0">
+      <!-- Video Panel with overlay -->
+      <div class="flex-1 flex flex-col min-w-0 relative"
+        bind:clientWidth={videoPanelWidth}
+        bind:clientHeight={videoPanelHeight}
+      >
         <VideoPanel
           bind:this={videoPanel}
           bind:videoUrl
@@ -354,6 +618,28 @@
           onloadedmetadata={handleVideoLoaded}
           ontimeupdate={(t) => timelineStore.setPlayhead(t)}
         />
+        {#if uiStore.showOverlay && videoPanelWidth > 0}
+          <LightingOverlay
+            channels={channels}
+            keyframes={keyframes}
+            effectKeyframes={effectKeyframes}
+            currentTimeMs={timelineStore.playheadMs}
+            visible={uiStore.showOverlay}
+            mutedChannels={projectStore.mutedChannels}
+            soloedChannels={projectStore.soloedChannels}
+            width={videoPanelWidth}
+            height={videoPanelHeight}
+          />
+          <LightIcons
+            channels={channels}
+            keyframes={keyframes}
+            currentTimeMs={timelineStore.playheadMs}
+            width={videoPanelWidth}
+            height={videoPanelHeight}
+            onaddKeyframe={(chId) => handleLaneDblClick(chId, timelineStore.playheadMs)}
+            oneditKeyframe={(kfId) => timelineStore.selectKeyframe(kfId)}
+          />
+        {/if}
       </div>
 
       <!-- Splitter -->
@@ -424,7 +710,80 @@
         onlanedblclick={handleLaneDblClick}
         onlaneclick={handleLaneClick}
         onkeyframedrag={handleKeyframeDrag}
+        oncontextmenu={handleTimelineContextMenu}
       />
+
+      {#if contextMenu}
+        <TimelineContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          channelId={contextMenu.channelId}
+          timestampMs={contextMenu.timestampMs}
+          hasSelection={selectedKeyframeIds.size > 0 || selectedEffectIds.size > 0}
+          hasClipboard={timelineStore.clipboard !== null}
+          hasEffectSelected={selectedEffectIds.size > 0}
+          channelSoloed={projectStore.soloedChannels.has(contextMenu.channelId)}
+          onaddKeyframe={() => {
+            if (contextMenu) handleLaneDblClick(contextMenu.channelId, contextMenu.timestampMs);
+            contextMenu = null;
+          }}
+          onaddEffect={handleContextMenuAddEffect}
+          onaddSceneMarker={() => {
+            if (contextMenu) {
+              projectStore.addSceneMarker({
+                id: `marker-${Date.now()}`,
+                timestampMs: contextMenu.timestampMs,
+                label: 'Scene',
+                type: 'MARKER_USER',
+              });
+            }
+            contextMenu = null;
+          }}
+          oneditProperties={() => { contextMenu = null; }}
+          onduplicate={() => {
+            timelineStore.copySelection();
+            timelineStore.pasteAtPlayhead();
+            contextMenu = null;
+          }}
+          oncut={() => {
+            timelineStore.copySelection();
+            timelineStore.deleteSelection();
+            contextMenu = null;
+          }}
+          oncopy={() => {
+            timelineStore.copySelection();
+            contextMenu = null;
+          }}
+          onpaste={() => {
+            timelineStore.pasteAtPlayhead(contextMenu?.channelId);
+            contextMenu = null;
+          }}
+          ondelete={() => {
+            timelineStore.deleteSelection();
+            contextMenu = null;
+          }}
+          onselectAllInChannel={() => {
+            if (contextMenu) {
+              const ids = new Set(
+                keyframes
+                  .filter((kf: Keyframe) => kf.channelId === contextMenu!.channelId)
+                  .map((kf: Keyframe) => kf.id)
+              );
+              timelineStore.selection = {
+                ...timelineStore.selection,
+                selectedKeyframeIds: ids,
+              };
+            }
+            contextMenu = null;
+          }}
+          onflattenToKeyframes={() => { contextMenu = null; }}
+          onchannelProperties={() => {
+            if (contextMenu) timelineStore.selectChannel(contextMenu.channelId);
+            contextMenu = null;
+          }}
+          onclose={() => (contextMenu = null)}
+        />
+      {/if}
 
       <!-- Minimap -->
       <Minimap
@@ -442,4 +801,44 @@
 
   <!-- Toast notifications -->
   <Toast />
+
+  <!-- Modals -->
+  <ShortcutsHelp open={showShortcutsHelp} onclose={() => (showShortcutsHelp = false)} />
+
+  <WelcomeFlow open={showWelcome} onclose={() => (showWelcome = false)} />
+
+  <ChannelTemplateModal
+    open={showChannelTemplate}
+    onclose={() => (showChannelTemplate = false)}
+    onapply={handleApplyTemplate}
+  />
+
+  <ChannelCreateModal
+    open={showChannelCreate}
+    onclose={() => (showChannelCreate = false)}
+    existingIds={channels.map((c: Channel) => c.id)}
+    oncreate={handleCreateChannel}
+  />
+
+  <MovieMetadataModal
+    open={showMovieMetadata}
+    onclose={() => (showMovieMetadata = false)}
+    metadata={projectStore.track.metadata.movieReference}
+    prefillData={videoMetadata ? { title: videoMetadata.title, year: videoMetadata.year, imdbId: videoMetadata.imdbId } : null}
+    onsave={(meta) => {
+      projectStore.track.metadata.movieReference = meta;
+      projectStore.markDirty();
+      showMovieMetadata = false;
+    }}
+  />
+
+  <ExportDialog
+    open={showExportDialog}
+    onclose={() => (showExportDialog = false)}
+    {validationErrors}
+    {durationWarning}
+    hasMovieMetadata={!!projectStore.track.metadata.movieReference?.imdbId}
+    onexport={handleExport}
+    onopenmoviemodal={() => (showMovieMetadata = true)}
+  />
 </div>
