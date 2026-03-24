@@ -1,0 +1,14 @@
+services:
+  build:
+    image: node:22-slim
+    working_dir: /app
+    volumes:
+      - ./:/app
+    command: sh -c "npm ci && npm run build"
+
+  protoc:
+    image: namely/protoc-all
+    volumes:
+      - ./proto:/defs
+      - ./src/lib/proto:/out
+    command: -f lightfx.proto -l node -o /out
