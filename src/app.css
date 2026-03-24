@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0f0f1a;
+  --surface: #1a1a2e;
+  --surface2: #252540;
+  --surface3: #2f2f4a;
+  --accent: #6c63ff;
+  --accent-hover: #7b73ff;
+  --accent2: #00d9ff;
+  --text: #e2e8f0;
+  --text-muted: #94a3b8;
+  --danger: #ef4444;
+  --success: #22c55e;
+  --warning: #f59e0b;
+
+  /* Timeline specific */
+  --timeline-ruler-bg: #141428;
+  --timeline-lane-bg: #161630;
+  --timeline-lane-alt-bg: #1a1a35;
+  --timeline-grid-line: rgba(108, 99, 255, 0.08);
+  --timeline-playhead: #ef4444;
+  --timeline-selection: rgba(108, 99, 255, 0.2);
+
+  /* Panel splitter */
+  --splitter-size: 4px;
+  --splitter-color: var(--surface2);
+  --splitter-hover: var(--accent);
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', system-ui, sans-serif;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--surface); }
+::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+/* Utility classes for the studio */
+@layer utilities {
+  .drag-handle {
+    cursor: grab;
+  }
+  .drag-handle:active {
+    cursor: grabbing;
+  }
+  .no-select {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .panel-header {
+    @apply flex items-center justify-between px-3 py-1.5 bg-surface text-xs font-medium text-textMuted uppercase tracking-wider border-b border-surface2;
+  }
+}

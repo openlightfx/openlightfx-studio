@@ -1,0 +1,12 @@
+node_modules
+.svelte-kit
+build
+dist
+release
+.env
+.env.*
+!.env.dev
+*.log
+.DS_Store
+src/lib/proto/*.js
+src/lib/proto/*.d.ts
