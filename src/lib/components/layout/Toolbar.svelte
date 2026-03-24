@@ -22,7 +22,7 @@
   class="flex items-center gap-1 h-9 px-2 bg-[var(--surface)] border-b border-[var(--surface2)] select-none"
 >
   <!-- Video -->
-  <button class="btn-icon" title="Load Video File" onclick={() => onLoadVideo?.()}>
+  <button class="btn-icon" title="Load Video File" aria-label="Load Video File" onclick={() => onLoadVideo?.()}>
     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
       <path
         stroke-linecap="round"
@@ -35,7 +35,7 @@
   <div class="w-px h-5 bg-[var(--surface2)] mx-1"></div>
 
   <!-- Keyframe -->
-  <button class="btn-icon" title="Add Keyframe (K)" onclick={() => onAddKeyframe?.()}>
+  <button class="btn-icon" title="Add Keyframe (K)" aria-label="Add Keyframe" onclick={() => onAddKeyframe?.()}>
     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
       <path
         stroke-linecap="round"
@@ -46,7 +46,7 @@
   </button>
 
   <!-- Channel -->
-  <button class="btn-icon" title="Add Channel" onclick={() => onAddChannel?.()}>
+  <button class="btn-icon" title="Add Channel" aria-label="Add Channel" onclick={() => onAddChannel?.()}>
     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
       <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
     </svg>
@@ -59,6 +59,8 @@
     class="btn-icon"
     class:text-accent={snappingEnabled}
     title="Toggle Snapping"
+    aria-label="Toggle Snapping"
+    aria-pressed={snappingEnabled}
     onclick={() => onToggleSnapping?.()}
   >
     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -71,6 +73,8 @@
     class="btn-icon"
     class:text-accent2={overlayVisible}
     title="Toggle Lighting Overlay (L)"
+    aria-label="Toggle Lighting Overlay"
+    aria-pressed={overlayVisible}
     onclick={() => onToggleOverlay?.()}
   >
     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">

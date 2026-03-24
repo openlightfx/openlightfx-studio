@@ -497,6 +497,9 @@
     bind:this={canvasEl}
     class="absolute inset-0 w-full h-full"
     style="--bg: var(--bg); --surface: var(--surface); --surface2: var(--surface2);"
+    role="application"
+    tabindex="0"
+    aria-label="Timeline editor - use arrow keys to navigate, Enter to select"
     onclick={handleCanvasClick}
     ondblclick={handleCanvasDblClick}
     oncontextmenu={handleCanvasContextMenu}

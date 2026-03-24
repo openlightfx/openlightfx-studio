@@ -99,14 +99,14 @@
   </button>
 
   <!-- Step Back -->
-  <button class="btn-icon" title="Step Back 1 Frame" onclick={() => onstepbackward?.()}>
+  <button class="btn-icon" title="Step Back 1 Frame" aria-label="Step Back 1 Frame" onclick={() => onstepbackward?.()}>
     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
       <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
     </svg>
   </button>
 
   <!-- Play/Pause -->
-  <button class="btn-icon" title={isPlaying ? 'Pause' : 'Play'} onclick={togglePlayPause}>
+  <button class="btn-icon" title={isPlaying ? 'Pause' : 'Play'} aria-label={isPlaying ? 'Pause' : 'Play'} onclick={togglePlayPause}>
     {#if isPlaying}
       <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
         <rect x="6" y="4" width="4" height="16" rx="1" />
@@ -120,7 +120,7 @@
   </button>
 
   <!-- Step Forward -->
-  <button class="btn-icon" title="Step Forward 1 Frame" onclick={() => onstepforward?.()}>
+  <button class="btn-icon" title="Step Forward 1 Frame" aria-label="Step Forward 1 Frame" onclick={() => onstepforward?.()}>
     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
       <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
     </svg>
