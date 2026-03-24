@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0f0f1a;
+  --surface: #1a1a2e;
+  --surface2: #252540;
+  --accent: #6c63ff;
+  --accent2: #00d9ff;
+  --text: #e2e8f0;
+  --text-muted: #94a3b8;
+  --danger: #ef4444;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --playhead: #ff4444;
+  --keyframe-size: 10px;
+  --lane-height: 40px;
+  --ruler-height: 28px;
+  --toolbar-height: 40px;
+  --splitter-size: 4px;
+}
+
+:root.light {
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface2: #f1f5f9;
+  --accent: #6c63ff;
+  --accent2: #00b8d9;
+  --text: #1e293b;
+  --text-muted: #64748b;
+}
+
+@layer base {
+  body {
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, sans-serif;
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--surface2) var(--surface);
+  }
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--surface);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--surface2);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
+@layer components {
+  .btn {
+    @apply px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 cursor-pointer;
+  }
+  .btn-primary {
+    @apply btn bg-accent text-white hover:bg-accent-hover;
+  }
+  .btn-secondary {
+    @apply btn border border-[var(--surface2)] text-[var(--text)] hover:bg-[var(--surface2)];
+  }
+  .btn-danger {
+    @apply btn bg-danger text-white hover:opacity-90;
+  }
+  .btn-ghost {
+    @apply btn text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface2)];
+  }
+  .btn-icon {
+    @apply p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface2)] transition-all duration-150 cursor-pointer;
+  }
+  .input {
+    @apply w-full px-3 py-1.5 rounded-lg text-sm bg-[var(--surface)] border border-[var(--surface2)] text-[var(--text)] focus:outline-none focus:border-accent transition-colors;
+  }
+  .panel {
+    @apply bg-[var(--surface)] border border-[var(--surface2)] rounded-lg;
+  }
+  .panel-header {
+    @apply px-3 py-2 border-b border-[var(--surface2)] text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)];
+  }
+}

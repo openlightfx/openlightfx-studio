@@ -1,44 +1,42 @@
 import type { Toast, ToastType } from '$lib/types';
 
-function createToastStore() {
-	let toasts = $state<Toast[]>([]);
+const DEFAULT_DURATION = 4000;
+const ERROR_DURATION = 6000;
 
-	function add(type: ToastType, message: string, duration = 4000): void {
-		const id = crypto.randomUUID();
-		toasts.push({ id, type, message, duration });
+class ToastStore {
+	toasts: Toast[] = $state([]);
+
+	add(type: ToastType, message: string, duration?: number) {
+		const resolvedDuration = duration ?? (type === 'error' ? ERROR_DURATION : DEFAULT_DURATION);
+		const toast: Toast = {
+			id: crypto.randomUUID(),
+			type,
+			message,
+			duration: resolvedDuration
+		};
+		this.toasts = [...this.toasts, toast];
+		setTimeout(() => this.remove(toast.id), resolvedDuration);
 	}
 
-	function remove(id: string): void {
-		toasts = toasts.filter((t) => t.id !== id);
+	remove(id: string) {
+		this.toasts = this.toasts.filter((t) => t.id !== id);
 	}
 
-	function success(msg: string): void {
-		add('success', msg);
+	success(message: string, duration?: number) {
+		this.add('success', message, duration);
 	}
 
-	function error(msg: string): void {
-		add('error', msg, 6000);
+	error(message: string, duration?: number) {
+		this.add('error', message, duration);
 	}
 
-	function info(msg: string): void {
-		add('info', msg);
+	info(message: string, duration?: number) {
+		this.add('info', message, duration);
 	}
 
-	function warning(msg: string): void {
-		add('warning', msg, 5000);
+	warning(message: string, duration?: number) {
+		this.add('warning', message, duration);
 	}
-
-	return {
-		get toasts() {
-			return toasts;
-		},
-		add,
-		remove,
-		success,
-		error,
-		info,
-		warning
-	};
 }
 
-export const toastStore = createToastStore();
+export const toastStore = new ToastStore();

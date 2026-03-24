@@ -1,0 +1,16 @@
+services:
+  protoc:
+    image: namely/protoc-all
+    volumes:
+      - ./proto:/defs
+    command: ["-f", "lightfx.proto", "-l", "node", "-o", "/defs/generated"]
+
+  build:
+    image: node:22-slim
+    working_dir: /app
+    volumes:
+      - ./:/app
+    command: sh -c "npm ci && npm run build"
+    depends_on:
+      protoc:
+        condition: service_completed_successfully
