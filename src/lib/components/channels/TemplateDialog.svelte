@@ -57,7 +57,7 @@
   }
 </script>
 
-<Modal open={open} title="Create from Template" onclose={handleClose} size="lg">
+<Modal {open} title="Create from Template" onclose={handleClose} size="lg">
   {#if selectedTemplate === null}
     <!-- Template selection list -->
     <div class="flex flex-col gap-2">
@@ -73,7 +73,9 @@
           <p class="text-xs text-textMuted">{template.description}</p>
           <div class="mt-1 flex flex-wrap gap-1.5">
             {#each template.channels as ch (ch.id)}
-              <span class="inline-flex items-center gap-1 rounded bg-surface2 px-2 py-0.5 text-2xs text-textMuted">
+              <span
+                class="inline-flex items-center gap-1 rounded bg-surface2 px-2 py-0.5 text-2xs text-textMuted"
+              >
                 <code>{ch.id}</code>
                 <span class="text-textMuted/60">({spatialLabel(ch.spatialHint)})</span>
               </span>
@@ -82,10 +84,6 @@
         </button>
       {/each}
     </div>
-
-    {#snippet footer()}
-      <Button variant="ghost" onclick={handleClose}>Cancel</Button>
-    {/snippet}
   {:else}
     <!-- Confirmation view -->
     <div class="flex flex-col gap-3">
@@ -114,7 +112,10 @@
 
       {#if conflicts.length > 0}
         <p class="text-xs text-warning">
-          {conflicts.length} channel{conflicts.length > 1 ? 's' : ''} already exist{conflicts.length === 1 ? 's' : ''} and will be skipped.
+          {conflicts.length} channel{conflicts.length > 1 ? 's' : ''} already exist{conflicts.length ===
+          1
+            ? 's'
+            : ''} and will be skipped.
         </p>
       {/if}
 
@@ -122,13 +123,17 @@
         <p class="text-xs text-danger">All channels in this template already exist.</p>
       {/if}
     </div>
+  {/if}
 
-    {#snippet footer()}
+  {#snippet footer()}
+    {#if selectedTemplate === null}
+      <Button variant="ghost" onclick={handleClose}>Cancel</Button>
+    {:else}
       <Button variant="ghost" onclick={handleBack}>Back</Button>
       <Button variant="ghost" onclick={handleClose}>Cancel</Button>
       <Button variant="primary" disabled={channelsToCreate.length === 0} onclick={handleCreate}>
         Create {channelsToCreate.length} Channel{channelsToCreate.length !== 1 ? 's' : ''}
       </Button>
-    {/snippet}
-  {/if}
+    {/if}
+  {/snippet}
 </Modal>

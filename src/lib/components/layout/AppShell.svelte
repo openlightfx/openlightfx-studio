@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { untrack } from 'svelte';
   import { projectStore } from '$lib/stores/project.svelte.js';
   import { DEFAULT_PANEL_SIZES } from '$lib/types/index.js';
   import type { PanelSizes } from '$lib/types/index.js';
@@ -60,16 +61,18 @@
   // Persist panel sizes to project store
   $effect(() => {
     const ps = panelSizes;
-    projectStore.project = {
-      ...projectStore.project,
-      file: {
-        ...projectStore.project.file,
-        uiState: {
-          ...projectStore.project.file.uiState,
-          panelSizes: { ...ps },
+    untrack(() => {
+      projectStore.project = {
+        ...projectStore.project,
+        file: {
+          ...projectStore.project.file,
+          uiState: {
+            ...projectStore.project.file.uiState,
+            panelSizes: { ...ps },
+          },
         },
-      },
-    };
+      };
+    });
   });
 
   // Document title — project name + dirty indicator (STU-005)

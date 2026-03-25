@@ -102,6 +102,22 @@ class TimelineStoreClass {
 		};
 	}
 
+	/**
+	 * Scroll the viewport so that `ms` is visible.
+	 * If already in view, does nothing. If out of view, scrolls so the
+	 * timestamp lands at ~20% from the left edge (giving runway ahead).
+	 */
+	ensureVisible(ms: number): void {
+		const start = this.visibleStartMs;
+		const end = this.visibleEndMs;
+		const duration = this.visibleDurationMs;
+		if (duration <= 0) return;
+		if (ms >= start && ms <= end) return;
+		// Place ms at 20% from the left
+		const newScrollX = Math.max(0, ms - duration * 0.2);
+		this.viewport = { ...this.viewport, scrollX: newScrollX };
+	}
+
 	setViewportSize(width: number, height: number): void {
 		this.viewport = {
 			...this.viewport,

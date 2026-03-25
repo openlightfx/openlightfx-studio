@@ -57,7 +57,7 @@ export interface SceneMarker {
 /** Timeline zoom limits */
 export const MIN_PX_PER_MS = 0.001; // Very zoomed out (entire 3h movie visible)
 export const MAX_PX_PER_MS = 2.0; // Very zoomed in (sub-frame precision)
-export const DEFAULT_PX_PER_MS = 0.05; // ~20px per second
+export const DEFAULT_PX_PER_MS = 0.00467; // ~5 minutes visible at 1400px wide
 
 /** Channel lane dimensions */
 export const CHANNEL_LANE_HEIGHT = 40; // px

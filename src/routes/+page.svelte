@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
 
   // Layout
   import { AppShell } from '$lib/components/layout/index.js';
@@ -21,6 +21,8 @@
     MovieMetadataDialog,
     SceneDetectionDialog,
     KeyboardShortcutsDialog,
+    AboutDialog,
+    NewProjectWizard,
   } from '$lib/components/dialogs/index.js';
 
   // Shared
@@ -32,14 +34,25 @@
   import { videoStore } from '$lib/stores/video.svelte.js';
   import { uiStore } from '$lib/stores/ui.svelte.js';
   import { undoStore } from '$lib/stores/undo.svelte.js';
-  import { clipboardStore } from '$lib/stores/clipboard.svelte.js';
   import { snapshotStore } from '$lib/stores/snapshot.svelte.js';
   import { toastStore } from '$lib/stores/toast.svelte.js';
 
-  // Services
-  import { saveProjectFile } from '$lib/services/project-io.js';
+  // Shared edit actions
+  import {
+    copySelectedKeyframes,
+    cutSelectedKeyframes,
+    pasteKeyframes,
+    selectAllInActiveChannel,
+    deleteSelected,
+    addKeyframeAtPlayhead,
+    addSceneMarkerAtPlayhead,
+    openProject,
+    saveProject,
+    saveProjectAs,
+  } from '$lib/services/edit-actions.js';
 
   let appShell: AppShell;
+  let sidebarTab = $state<'properties' | 'channels' | 'effects'>('properties');
 
   function resetLayout() {
     appShell?.resetLayout();
@@ -58,19 +71,20 @@
     }
 
     // ── File ─────────────────────────────────────────────────
-    if (ctrl && !shift && key === 's') {
+    if (ctrl && shift && (key === 's' || key === 'S')) {
       e.preventDefault();
-      saveProjectFile(projectStore.project.file).then(() => {
-        projectStore.markClean();
-        toastStore.success('Project saved');
-      }).catch(() => {
-        toastStore.error('Save failed');
-      });
+      saveProjectAs();
+    } else if (ctrl && !shift && key === 's') {
+      e.preventDefault();
+      saveProject();
+    } else if (ctrl && !shift && key === 'o') {
+      e.preventDefault();
+      openProject();
     } else if (ctrl && !shift && key === 'e') {
       e.preventDefault();
       uiStore.openModal('export');
 
-    // ── Undo/Redo ────────────────────────────────────────────
+      // ── Undo/Redo ────────────────────────────────────────────
     } else if (ctrl && shift && (key === 'z' || key === 'Z')) {
       e.preventDefault();
       undoStore.redo();
@@ -78,7 +92,7 @@
       e.preventDefault();
       undoStore.undo();
 
-    // ── Clipboard ────────────────────────────────────────────
+      // ── Clipboard ────────────────────────────────────────────
     } else if (ctrl && key === 'x') {
       e.preventDefault();
       cutSelectedKeyframes();
@@ -89,17 +103,17 @@
       e.preventDefault();
       pasteKeyframes();
 
-    // ── Select all in active channel ─────────────────────────
+      // ── Select all in active channel ─────────────────────────
     } else if (ctrl && key === 'a') {
       e.preventDefault();
       selectAllInActiveChannel();
 
-    // ── Delete ───────────────────────────────────────────────
+      // ── Delete ───────────────────────────────────────────────
     } else if (key === 'Delete' || key === 'Backspace') {
       e.preventDefault();
       deleteSelected();
 
-    // ── Playback ─────────────────────────────────────────────
+      // ── Playback ─────────────────────────────────────────────
     } else if (key === ' ') {
       e.preventDefault();
       videoStore.togglePlayback();
@@ -110,127 +124,58 @@
       e.preventDefault();
       videoStore.stepBackward();
 
-    // ── Quick-add shortcuts ──────────────────────────────────
+      // ── Zoom ──────────────────────────────────────────────────
+    } else if (ctrl && (key === '=' || key === '+')) {
+      e.preventDefault();
+      timelineStore.zoomIn();
+    } else if (ctrl && key === '-') {
+      e.preventDefault();
+      timelineStore.zoomOut();
+    } else if (ctrl && key === '0') {
+      e.preventDefault();
+      if (videoStore.state.isLoaded) {
+        timelineStore.zoomToFit(videoStore.state.durationMs);
+      }
+
+      // ── Quick-add shortcuts ──────────────────────────────────
     } else if (key === 'k' || key === 'K') {
       addKeyframeAtPlayhead();
     } else if (key === 'm' && !ctrl) {
       addSceneMarkerAtPlayhead();
 
-    // ── Escape ───────────────────────────────────────────────
+      // ── Escape ───────────────────────────────────────────────
     } else if (key === 'Escape') {
       timelineStore.clearSelection();
       uiStore.setEyedropperActive(false);
       uiStore.closeModal();
 
-    // ── Help ─────────────────────────────────────────────────
+      // ── Help ─────────────────────────────────────────────────
     } else if (key === '?') {
       uiStore.openModal('keyboard-shortcuts');
     }
   }
 
-  // ── Clipboard helpers ──────────────────────────────────────
-  function getSelectedKeyframes() {
-    const ids = timelineStore.selection.keyframeIds;
-    if (ids.length === 0) return null;
-    const keyframes = ids.map((id) => projectStore.getKeyframe(id)).filter(Boolean) as import('$lib/types/index.js').Keyframe[];
-    if (keyframes.length === 0) return null;
-    const channelId = keyframes[0].channelId;
-    return { keyframes, channelId };
-  }
-
-  function copySelectedKeyframes() {
-    const sel = getSelectedKeyframes();
-    if (!sel) return;
-    clipboardStore.copy(sel.keyframes, sel.channelId);
-    toastStore.info(`Copied ${sel.keyframes.length} keyframe${sel.keyframes.length > 1 ? 's' : ''}`);
-  }
-
-  function cutSelectedKeyframes() {
-    const sel = getSelectedKeyframes();
-    if (!sel) return;
-    clipboardStore.cut(sel.keyframes, sel.channelId);
-    for (const kf of sel.keyframes) {
-      projectStore.removeKeyframe(kf.id);
-    }
-    timelineStore.clearSelection();
-    toastStore.info(`Cut ${sel.keyframes.length} keyframe${sel.keyframes.length > 1 ? 's' : ''}`);
-  }
-
-  function pasteKeyframes() {
-    const activeChannelId = timelineStore.selection.activeChannelId;
-    if (!activeChannelId || !clipboardStore.hasContent) return;
-    const currentTimeMs = videoStore.state.currentTimeMs;
-    const result = clipboardStore.paste(activeChannelId, currentTimeMs);
-    if (!result) return;
-
-    if (result.type === 'keyframes') {
-      for (const kf of result.keyframes) {
-        projectStore.addKeyframe(kf.channelId, kf.timestampMs, kf);
-      }
-      toastStore.info(`Pasted ${result.keyframes.length} keyframe${result.keyframes.length > 1 ? 's' : ''}`);
-    } else if (result.type === 'effect') {
-      projectStore.addEffectKeyframe(result.effect);
-      toastStore.info('Pasted effect');
-    }
-  }
-
-  function selectAllInActiveChannel() {
-    const channelId = timelineStore.selection.activeChannelId;
-    if (!channelId) return;
-    const keyframeIds = projectStore.keyframesByChannel(channelId).map((kf) => kf.id);
-    timelineStore.selectAllInChannel(channelId, keyframeIds);
-  }
-
-  function deleteSelected() {
-    const { keyframeIds, effectKeyframeIds, sceneMarkerIds } = timelineStore.selection;
-    let count = 0;
-    for (const id of keyframeIds) {
-      projectStore.removeKeyframe(id);
-      count++;
-    }
-    for (const id of effectKeyframeIds) {
-      projectStore.removeEffectKeyframe(id);
-      count++;
-    }
-    for (const id of sceneMarkerIds) {
-      projectStore.removeSceneMarker(id);
-      count++;
-    }
-    if (count > 0) {
-      timelineStore.clearSelection();
-    }
-  }
-
-  function addKeyframeAtPlayhead() {
-    const channelId = timelineStore.selection.activeChannelId;
-    if (!channelId) {
-      toastStore.warning('Select a channel first');
-      return;
-    }
-    const timestampMs = videoStore.state.currentTimeMs;
-    projectStore.addKeyframe(channelId, timestampMs);
-  }
-
-  function addSceneMarkerAtPlayhead() {
-    const timestampMs = videoStore.state.currentTimeMs;
-    projectStore.addSceneMarker(timestampMs, '');
-  }
-
   // ── Properties context sync ────────────────────────────────
   $effect(() => {
-    const { keyframeIds, effectKeyframeIds, sceneMarkerIds, activeChannelId } = timelineStore.selection;
+    const { keyframeIds, effectKeyframeIds, sceneMarkerIds, activeChannelId } =
+      timelineStore.selection;
 
-    if (keyframeIds.length > 0) {
-      uiStore.setPropertiesContext({ type: 'keyframe', keyframeIds: [...keyframeIds] });
-    } else if (effectKeyframeIds.length > 0) {
-      uiStore.setPropertiesContext({ type: 'effect', effectKeyframeId: effectKeyframeIds[0] });
-    } else if (sceneMarkerIds.length > 0) {
-      uiStore.setPropertiesContext({ type: 'scene-marker', sceneMarkerId: sceneMarkerIds[0] });
-    } else if (activeChannelId) {
-      uiStore.setPropertiesContext({ type: 'channel', channelId: activeChannelId });
-    } else {
-      uiStore.setPropertiesContext({ type: 'track' });
-    }
+    // Use untrack to prevent the uiStore write from creating a dependency
+    // cycle (setPropertiesContext reads this.state via spread, which would
+    // re-trigger this effect).
+    untrack(() => {
+      if (keyframeIds.length > 0) {
+        uiStore.setPropertiesContext({ type: 'keyframe', keyframeIds: [...keyframeIds] });
+      } else if (effectKeyframeIds.length > 0) {
+        uiStore.setPropertiesContext({ type: 'effect', effectKeyframeId: effectKeyframeIds[0] });
+      } else if (sceneMarkerIds.length > 0) {
+        uiStore.setPropertiesContext({ type: 'scene-marker', sceneMarkerId: sceneMarkerIds[0] });
+      } else if (activeChannelId) {
+        uiStore.setPropertiesContext({ type: 'channel', channelId: activeChannelId });
+      } else {
+        uiStore.setPropertiesContext({ type: 'track' });
+      }
+    });
   });
 
   // ── Auto-save / restore (STU-064-069) ─────────────────────
@@ -277,6 +222,8 @@
 <MovieMetadataDialog />
 <SceneDetectionDialog />
 <KeyboardShortcutsDialog />
+<AboutDialog />
+<NewProjectWizard />
 
 <!-- Toast notifications -->
 <Toast toasts={toastStore.toasts} ondismiss={(id) => toastStore.dismiss(id)} />
@@ -299,13 +246,44 @@
   {/snippet}
 
   {#snippet propertiesPanel()}
-    <div class="flex flex-col h-full overflow-y-auto">
-      <PropertiesPanel />
-      <div class="border-t border-surface2">
-        <ChannelManager />
+    <div class="flex flex-col h-full">
+      <div class="flex shrink-0 border-b border-surface2">
+        <button
+          class="flex-1 px-3 py-1.5 text-xs font-medium transition-colors
+            {sidebarTab === 'properties'
+            ? 'text-text-base border-b-2 border-accent'
+            : 'text-textMuted hover:text-text-base'}"
+          onclick={() => (sidebarTab = 'properties')}
+        >
+          Properties
+        </button>
+        <button
+          class="flex-1 px-3 py-1.5 text-xs font-medium transition-colors
+            {sidebarTab === 'channels'
+            ? 'text-text-base border-b-2 border-accent'
+            : 'text-textMuted hover:text-text-base'}"
+          onclick={() => (sidebarTab = 'channels')}
+        >
+          Channels
+        </button>
+        <button
+          class="flex-1 px-3 py-1.5 text-xs font-medium transition-colors
+            {sidebarTab === 'effects'
+            ? 'text-text-base border-b-2 border-accent'
+            : 'text-textMuted hover:text-text-base'}"
+          onclick={() => (sidebarTab = 'effects')}
+        >
+          Effects
+        </button>
       </div>
-      <div class="border-t border-surface2">
-        <EffectsPalette />
+      <div class="flex-1 min-h-0 overflow-y-auto">
+        {#if sidebarTab === 'properties'}
+          <PropertiesPanel />
+        {:else if sidebarTab === 'channels'}
+          <ChannelManager />
+        {:else}
+          <EffectsPalette />
+        {/if}
       </div>
     </div>
   {/snippet}

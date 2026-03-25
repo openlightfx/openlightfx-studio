@@ -84,6 +84,19 @@ export function exportLightFXTrack(
   // Expand channel groups into per-channel keyframes
   const expandedTrack = expandChannelGroups(track, channelGroups);
 
+  // If track duration is unset, derive it from the latest keyframe/effect timestamp
+  if (!expandedTrack.metadata.durationMs || expandedTrack.metadata.durationMs <= 0) {
+    const kfMax = expandedTrack.keyframes.reduce((max, kf) => Math.max(max, kf.timestampMs), 0);
+    const efMax = expandedTrack.effectKeyframes.reduce(
+      (max, ef) => Math.max(max, ef.timestampMs + ef.durationMs),
+      0,
+    );
+    const derived = Math.max(kfMax, efMax);
+    if (derived > 0) {
+      expandedTrack.metadata = { ...expandedTrack.metadata, durationMs: derived };
+    }
+  }
+
   // Recompute safety info
   expandedTrack.safetyInfo = computeSafetyInfo(expandedTrack);
 

@@ -56,17 +56,26 @@ const TOTAL_BINS = BINS_PER_CHANNEL * 3; // 24 bins (R + G + B)
 const EPSILON = 1e-10;
 
 const SENSITIVITY_THRESHOLDS: Record<string, number> = {
-  low: 0.5,
-  medium: 0.3,
-  high: 0.15,
+  low: 1.5,
+  medium: 0.8,
+  high: 0.4,
+};
+
+// Minimum time between detected markers to suppress rapid-fire false positives
+const MIN_GAP_MS: Record<string, number> = {
+  low: 2000,
+  medium: 1000,
+  high: 500,
 };
 
 // --- State ---
 
 let cancelled = false;
 let threshold = SENSITIVITY_THRESHOLDS.medium;
+let minGapMs = MIN_GAP_MS.medium;
 let totalDurationMs = 0;
 let previousHistogram: Float64Array | null = null;
+let lastMarkerTimestampMs = -Infinity;
 let detectedMarkers: Array<{ timestampMs: number; confidence: number }> = [];
 
 // --- Histogram computation ---
@@ -108,8 +117,10 @@ function chiSquaredDistance(observed: Float64Array, expected: Float64Array): num
 function handleStart(msg: StartMessage): void {
   cancelled = false;
   threshold = SENSITIVITY_THRESHOLDS[msg.sensitivity] ?? SENSITIVITY_THRESHOLDS.medium;
+  minGapMs = MIN_GAP_MS[msg.sensitivity] ?? MIN_GAP_MS.medium;
   totalDurationMs = msg.totalDurationMs;
   previousHistogram = null;
+  lastMarkerTimestampMs = -Infinity;
   detectedMarkers = [];
 }
 
@@ -120,11 +131,12 @@ function handleFrame(msg: FrameMessage): void {
 
   if (previousHistogram !== null) {
     const distance = chiSquaredDistance(histogram, previousHistogram);
-    if (distance >= threshold) {
+    if (distance >= threshold && msg.timestampMs - lastMarkerTimestampMs >= minGapMs) {
       detectedMarkers.push({
         timestampMs: msg.timestampMs,
         confidence: Math.min(distance / threshold, 1),
       });
+      lastMarkerTimestampMs = msg.timestampMs;
     }
   }
 

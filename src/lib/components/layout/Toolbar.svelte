@@ -12,14 +12,6 @@
   <Tooltip text="Add Keyframe (K)">
     <IconButton icon="◆" title="Add Keyframe" />
   </Tooltip>
-  <Tooltip text="Eyedropper">
-    <IconButton
-      icon="💧"
-      title="Eyedropper"
-      active={uiStore.state.eyedropperActive}
-      onclick={() => uiStore.setEyedropperActive(!uiStore.state.eyedropperActive)}
-    />
-  </Tooltip>
   <Tooltip text="Add Channel">
     <IconButton icon="➕" title="Add Channel" />
   </Tooltip>

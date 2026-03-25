@@ -2,9 +2,7 @@
   import { Modal, Button } from '$lib/components/shared/index.js';
   import { uiStore } from '$lib/stores/ui.svelte.js';
 
-  let open = $derived(
-    uiStore.state.activeModal === 'welcome' || !uiStore.state.onboardingComplete
-  );
+  let open = $derived(uiStore.state.activeModal === 'welcome');
 
   let step = $state(0);
   let dontShowAgain = $state(false);

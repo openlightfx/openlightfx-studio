@@ -28,3 +28,18 @@ export {
   exportLightFXTrack,
   importLightFXFile,
 } from './project-io.js';
+export {
+  copySelectedKeyframes,
+  cutSelectedKeyframes,
+  pasteKeyframes,
+  selectAllInActiveChannel,
+  deleteSelected,
+  addKeyframeAtPlayhead,
+  addSceneMarkerAtPlayhead,
+  openProject,
+  openVideo,
+  saveProject,
+  saveProjectAs,
+  importLightFX,
+  showAbout,
+} from './edit-actions.js';

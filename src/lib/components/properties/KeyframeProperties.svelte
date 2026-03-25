@@ -11,7 +11,8 @@
     COLOR_TEMPERATURE_STEP,
   } from '$lib/types/index.js';
   import { projectStore } from '$lib/stores/project.svelte.js';
-  import { TextInput, Select, Slider } from '$lib/components/shared/index.js';
+  import { TextInput, Select, Slider, Modal } from '$lib/components/shared/index.js';
+  import { ColorPicker } from '$lib/components/color/index.js';
   import { rgbToHex, hexToRgb, rgbToCssString, kelvinToRgb } from '$lib/services/color-utils.js';
 
   let {
@@ -136,6 +137,20 @@
     updateAll({ powerOn: newPower });
   }
 
+  let colorPickerOpen = $state(false);
+
+  const pickerMode = $derived<'rgb' | 'temperature'>(
+    activeColorMode === 'COLOR_TEMPERATURE' ? 'temperature' : 'rgb'
+  );
+
+  function handlePickerColorChange(color: RGBColor) {
+    updateAll({ color });
+  }
+
+  function handlePickerModeChange(m: 'rgb' | 'temperature') {
+    handleColorModeChange(m === 'temperature' ? 'COLOR_TEMPERATURE' : 'RGB');
+  }
+
   const interpolationOptions = [
     { value: 'STEP', label: 'Step' },
     { value: 'LINEAR', label: 'Linear' },
@@ -191,11 +206,14 @@
       {#if activeColorMode === 'RGB'}
         <!-- Color swatch + hex -->
         <div class="flex items-center gap-3">
-          <div
-            class="h-8 w-8 shrink-0 rounded-md border border-surface3 shadow-sm"
+          <button
+            type="button"
+            class="h-8 w-8 shrink-0 rounded-md border border-surface3 shadow-sm transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
             style="background-color: {sharedColor ? rgbToCssString(sharedColor) : '#000'};"
-            title="Keyframe color"
-          ></div>
+            title="Open color picker"
+            onclick={() => (colorPickerOpen = true)}
+            aria-label="Open color picker"
+          ></button>
           <TextInput
             value={hexColor ? hexColor.slice(1) : '--'}
             label="Hex"
@@ -227,11 +245,14 @@
         <!-- Color Temperature -->
         <div class="flex items-center gap-3">
           {#if kelvinPreview}
-            <div
-              class="h-8 w-8 shrink-0 rounded-md border border-surface3 shadow-sm"
+            <button
+              type="button"
+              class="h-8 w-8 shrink-0 rounded-md border border-surface3 shadow-sm transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
               style="background-color: {rgbToCssString(kelvinPreview)};"
-              title="Color temperature preview"
-            ></div>
+              title="Open color picker"
+              onclick={() => (colorPickerOpen = true)}
+              aria-label="Open color picker"
+            ></button>
           {/if}
           <span class="text-sm text-text-base">
             {sharedColorTemp != null ? `${sharedColorTemp}K` : '--'}
@@ -319,6 +340,20 @@
     </section>
   </div>
 {/if}
+
+<Modal
+  open={colorPickerOpen}
+  title="Color Picker"
+  size="md"
+  onclose={() => (colorPickerOpen = false)}
+>
+  <ColorPicker
+    color={sharedColor ?? { r: 0, g: 0, b: 0 }}
+    mode={pickerMode}
+    onchange={handlePickerColorChange}
+    onmodechange={handlePickerModeChange}
+  />
+</Modal>
 
 <style>
   .kelvin-slider {

@@ -21,7 +21,21 @@
   // Run validation when dialog opens
   $effect(() => {
     if (open) {
-      validationResult = validateTrack(track);
+      // Sort keyframes before validation (users may add keyframes out of order)
+      const sorted = {
+        ...track,
+        keyframes: [...track.keyframes].sort((a, b) =>
+          a.channelId === b.channelId
+            ? a.timestampMs - b.timestampMs
+            : a.channelId.localeCompare(b.channelId),
+        ),
+        effectKeyframes: [...track.effectKeyframes].sort((a, b) =>
+          a.channelId === b.channelId
+            ? a.timestampMs - b.timestampMs
+            : a.channelId.localeCompare(b.channelId),
+        ),
+      };
+      validationResult = validateTrack(sorted);
       exportError = '';
       exporting = false;
     }
@@ -63,7 +77,10 @@
     exportError = '';
     try {
       const bytes = exportLightFXTrack(track, channelGroups, sceneMarkers);
-      const blob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/octet-stream' });
+      const blob = new Blob(
+        [(bytes.buffer as ArrayBuffer).slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)],
+        { type: 'application/octet-stream' },
+      );
       const fileName =
         (metadata.title || 'untitled').replace(/[^a-zA-Z0-9 _\-()]/g, '').replace(/\s+/g, '_') +
         '.lightfx';

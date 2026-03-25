@@ -28,9 +28,9 @@
   ];
 
   const sensitivityDescriptions: Record<Sensitivity, string> = {
-    low: 'Detects only major scene changes (e.g. hard cuts, fade-to-black). Fewer markers, higher confidence.',
-    medium: 'Balanced detection for most films. Good mix of precision and recall.',
-    high: 'Detects subtle transitions and minor scene changes. More markers, may include false positives.',
+    low: 'Detects only hard cuts and fade-to-black. Fewest markers, highest confidence.',
+    medium: 'Balanced detection for most films. Catches clear scene changes.',
+    high: 'Detects softer transitions and faster cuts. More markers, may include false positives.',
   };
 
   // Reset state when dialog opens

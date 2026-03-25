@@ -28,6 +28,7 @@
 
   let overlayEl: HTMLDivElement | undefined = $state();
   let dragState: TimelineDragState | null = $state(null);
+  let dragMoved = false; // true if pointer moved enough to be a real drag
 
   const ZOOM_FACTOR = 1.15;
 
@@ -177,6 +178,7 @@
     // Ruler: seek
     if (hit.type === 'ruler') {
       videoStore.seek(Math.max(0, hit.timestampMs));
+      timelineStore.ensureVisible(hit.timestampMs);
       dragState = {
         type: 'scroll',
         startX: x,
@@ -226,6 +228,7 @@
         targetIds: selectedIds,
         originalTimestamps: origTimestamps,
       };
+      dragMoved = false;
       overlayEl.setPointerCapture(e.pointerId);
       return;
     }
@@ -293,6 +296,7 @@
 
     if (dragState.type === 'keyframe') {
       const deltaMs = (x - dragState.startX) / vp.pxPerMs;
+      dragMoved = true;
 
       for (const [id, origMs] of dragState.originalTimestamps) {
         let newMs = Math.max(0, origMs + deltaMs);
@@ -338,7 +342,20 @@
       onselectionrect?.(null);
     }
 
+    // If keyframe click (not a drag), seek to the keyframe's current timestamp
+    if (dragState?.type === 'keyframe' && !dragMoved) {
+      const id = dragState.targetIds[0];
+      if (id) {
+        const kf = projectStore.getKeyframe(id);
+        if (kf) {
+          videoStore.seek(kf.timestampMs);
+          timelineStore.ensureVisible(kf.timestampMs);
+        }
+      }
+    }
+
     dragState = null;
+    dragMoved = false;
     overlayEl.releasePointerCapture(e.pointerId);
   }
 

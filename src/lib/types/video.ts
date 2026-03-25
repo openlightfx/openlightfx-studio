@@ -4,8 +4,10 @@
 
 /** Video playback state */
 export interface VideoState {
-  /** Whether a video file is loaded */
+  /** Whether a video file is loaded and ready */
   isLoaded: boolean;
+  /** Whether a video file is currently being loaded */
+  isLoading: boolean;
   /** Whether video is currently playing */
   isPlaying: boolean;
   /** Current playback position in ms */
@@ -27,9 +29,9 @@ export interface VideoState {
 }
 
 /** Supported playback speeds (STU-012b) */
-export type PlaybackSpeed = 0.25 | 0.5 | 1 | 2;
+export type PlaybackSpeed = 0.25 | 0.5 | 1 | 2 | 4;
 
-export const PLAYBACK_SPEEDS: PlaybackSpeed[] = [0.25, 0.5, 1, 2];
+export const PLAYBACK_SPEEDS: PlaybackSpeed[] = [0.25, 0.5, 1, 2, 4];
 export const DEFAULT_PLAYBACK_SPEED: PlaybackSpeed = 1;
 export const DEFAULT_FRAME_RATE = 24;
 

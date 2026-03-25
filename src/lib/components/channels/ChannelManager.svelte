@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Channel } from '$lib/types/index.js';
   import type { ContextMenu as ContextMenuType } from '$lib/types/ui.js';
-  import { Modal, Button, Badge, IconButton, ContextMenu } from '$lib/components/shared/index.js';
+  import { Modal, Button, Badge, ContextMenu } from '$lib/components/shared/index.js';
   import { projectStore } from '$lib/stores/project.svelte.js';
   import { timelineStore } from '$lib/stores/timeline.svelte.js';
   import AddChannelDialog from './AddChannelDialog.svelte';
@@ -51,7 +51,16 @@
   });
 
   // Group color palette for visual indicators
-  const GROUP_COLORS = ['#6c63ff', '#ff6b6b', '#51cf66', '#fcc419', '#22b8cf', '#cc5de8', '#ff922b', '#20c997'];
+  const GROUP_COLORS = [
+    '#6c63ff',
+    '#ff6b6b',
+    '#51cf66',
+    '#fcc419',
+    '#22b8cf',
+    '#cc5de8',
+    '#ff922b',
+    '#20c997',
+  ];
 
   function groupColor(groupId: string): string {
     const idx = groups.findIndex((g) => g.id === groupId);
@@ -60,10 +69,14 @@
 
   function modeLabel(mode: string): string {
     switch (mode) {
-      case 'GROUP_MIRROR': return 'Mirror';
-      case 'GROUP_SPREAD': return 'Spread';
-      case 'GROUP_ALTERNATE': return 'Alternate';
-      default: return mode;
+      case 'GROUP_MIRROR':
+        return 'Mirror';
+      case 'GROUP_SPREAD':
+        return 'Spread';
+      case 'GROUP_ALTERNATE':
+        return 'Alternate';
+      default:
+        return mode;
     }
   }
 
@@ -270,12 +283,8 @@
 
 <div class="flex h-full flex-col bg-surface">
   <!-- Header -->
-  <div class="flex items-center justify-between border-b border-surface2 px-3 py-2">
+  <div class="flex items-center border-b border-surface2 px-3 py-2">
     <h3 class="text-xs font-semibold uppercase tracking-wider text-textMuted">Channels</h3>
-    <div class="flex items-center gap-1">
-      <IconButton icon="📋" title="From Template..." size="sm" onclick={() => (showTemplateDialog = true)} />
-      <IconButton icon="＋" title="Add Channel" size="sm" onclick={() => (showAddDialog = true)} />
-    </div>
   </div>
 
   <!-- Channel list -->
@@ -303,8 +312,8 @@
         <!-- Drag handle -->
         <span
           class="flex-shrink-0 cursor-grab text-xs text-textMuted/50 group-hover:text-textMuted active:cursor-grabbing"
-          aria-hidden="true"
-        >⠿</span>
+          aria-hidden="true">⠿</span
+        >
 
         <!-- Group indicator brackets -->
         {#if channelGroups.length > 0}
@@ -314,7 +323,10 @@
                 class="h-5 w-1.5 rounded-sm transition-opacity hover:opacity-80"
                 style="background-color: {groupColor(cg.id)};"
                 title="{cg.name} ({modeLabel(cg.mode)})"
-                onclick={(e: MouseEvent) => { e.stopPropagation(); editExistingGroup(cg); }}
+                onclick={(e: MouseEvent) => {
+                  e.stopPropagation();
+                  editExistingGroup(cg);
+                }}
               ></button>
             {/each}
           </div>
@@ -323,7 +335,8 @@
         <!-- Color dot -->
         <span
           class="h-3 w-3 flex-shrink-0 rounded-full border border-white/10"
-          style="background-color: rgb({channel.defaultColor.r}, {channel.defaultColor.g}, {channel.defaultColor.b});"
+          style="background-color: rgb({channel.defaultColor.r}, {channel.defaultColor.g}, {channel
+            .defaultColor.b});"
         ></span>
 
         <!-- Name -->
@@ -352,37 +365,42 @@
           <button
             class="flex h-5 w-5 items-center justify-center rounded text-2xs font-bold transition-colors
               {soloSet.has(channel.id)
-                ? 'bg-accent text-white'
-                : 'text-textMuted/60 hover:bg-surface2 hover:text-text-base'}"
+              ? 'bg-accent text-white'
+              : 'text-textMuted/60 hover:bg-surface2 hover:text-text-base'}"
             title={soloSet.has(channel.id) ? 'Unsolo' : 'Solo'}
-            onclick={(e: MouseEvent) => { e.stopPropagation(); toggleSolo(channel.id); }}
-          >S</button>
+            onclick={(e: MouseEvent) => {
+              e.stopPropagation();
+              toggleSolo(channel.id);
+            }}>S</button
+          >
           <button
             class="flex h-5 w-5 items-center justify-center rounded text-2xs font-bold transition-colors
               {muteSet.has(channel.id)
-                ? 'bg-danger/80 text-white'
-                : 'text-textMuted/60 hover:bg-surface2 hover:text-text-base'}"
+              ? 'bg-danger/80 text-white'
+              : 'text-textMuted/60 hover:bg-surface2 hover:text-text-base'}"
             title={muteSet.has(channel.id) ? 'Unmute' : 'Mute'}
-            onclick={(e: MouseEvent) => { e.stopPropagation(); toggleMute(channel.id); }}
-          >M</button>
+            onclick={(e: MouseEvent) => {
+              e.stopPropagation();
+              toggleMute(channel.id);
+            }}>M</button
+          >
         </div>
 
         <!-- Three-dot menu -->
         <button
           class="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-xs text-textMuted/60 opacity-0 transition-all group-hover:opacity-100 hover:bg-surface2 hover:text-text-base"
           title="Channel actions"
-          onclick={(e: MouseEvent) => { e.stopPropagation(); showChannelMenu(e, channel); }}
-        >⋯</button>
+          onclick={(e: MouseEvent) => {
+            e.stopPropagation();
+            showChannelMenu(e, channel);
+          }}>⋯</button
+        >
       </div>
     {/each}
 
     {#if channels.length === 0}
       <div class="flex flex-col items-center gap-2 px-4 py-8 text-center">
         <p class="text-xs text-textMuted">No channels yet.</p>
-        <div class="flex gap-2">
-          <Button variant="secondary" size="sm" onclick={() => (showAddDialog = true)}>Add Channel</Button>
-          <Button variant="ghost" size="sm" onclick={() => (showTemplateDialog = true)}>From Template...</Button>
-        </div>
       </div>
     {/if}
   </div>

@@ -1,0 +1,22 @@
+services:
+  dev:
+    image: node:22-slim
+    working_dir: /app
+    volumes:
+      - ./:/app
+      - node_modules:/app/node_modules
+    ports:
+      - "5174:5173"
+    env_file:
+      - .env.dev
+    command: sh -c "npm install && npm run dev"
+
+  protoc:
+    image: namely/protoc-all
+    volumes:
+      - ./proto:/defs
+      - ./src/lib/proto:/out
+    command: -f lightfx.proto -l node -o /out
+
+volumes:
+  node_modules:

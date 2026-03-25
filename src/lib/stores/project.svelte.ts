@@ -665,6 +665,30 @@ class UpdateChannelGroupCommand implements Command {
 	}
 }
 
+class CompositeCommand implements Command {
+	readonly type = 'COMPOSITE';
+	readonly description: string;
+	constructor(
+		private commands: Command[],
+		description: string
+	) {
+		this.description = description;
+	}
+	execute(): void {
+		for (const cmd of this.commands) cmd.execute();
+	}
+	undo(): void {
+		for (let i = this.commands.length - 1; i >= 0; i--) this.commands[i].undo();
+	}
+	serialize(): SerializedCommandData {
+		return {
+			type: this.type,
+			description: this.description,
+			payload: this.commands.map((c) => c.serialize()),
+		};
+	}
+}
+
 // ============================================================
 // Project Store Class
 // ============================================================
@@ -819,6 +843,32 @@ class ProjectStoreClass {
 		};
 		undoStore.execute(new AddKeyframeCommand(this, keyframe));
 		return keyframe;
+	}
+
+	copyKeyframeToAllChannels(keyframeId: string): number {
+		const source = this.getKeyframe(keyframeId);
+		if (!source) return 0;
+		const otherChannels = this.channels.filter((ch) => ch.id !== source.channelId);
+		if (otherChannels.length === 0) return 0;
+		const commands: Command[] = otherChannels.map((ch) => {
+			const kf: Keyframe = {
+				id: crypto.randomUUID(),
+				channelId: ch.id,
+				timestampMs: source.timestampMs,
+				colorMode: source.colorMode,
+				color: { ...source.color },
+				colorTemperature: source.colorTemperature,
+				brightness: source.brightness,
+				transitionMs: source.transitionMs,
+				interpolation: source.interpolation,
+				powerOn: source.powerOn,
+			};
+			return new AddKeyframeCommand(this, kf);
+		});
+		undoStore.execute(
+			new CompositeCommand(commands, `Copy keyframe to ${commands.length} channels`)
+		);
+		return commands.length;
 	}
 
 	removeKeyframe(id: string): void {

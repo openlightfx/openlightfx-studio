@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import type { Channel, Keyframe, EffectKeyframe, RGBColor } from '$lib/types/index.js';
   import type { SceneMarker } from '$lib/types/index.js';
   import {
@@ -454,7 +455,10 @@
     canvasEl.height = canvasHeight * dpr;
     canvasEl.style.width = `${canvasWidth}px`;
     canvasEl.style.height = `${canvasHeight}px`;
-    timelineStore.setViewportSize(canvasWidth - CHANNEL_HEADER_WIDTH, canvasHeight - RULER_HEIGHT);
+    // Use untrack to prevent this write from triggering reactive re-runs
+    untrack(() => {
+      timelineStore.setViewportSize(canvasWidth - CHANNEL_HEADER_WIDTH, canvasHeight - RULER_HEIGHT);
+    });
     dirty = true;
   }
 
@@ -482,9 +486,8 @@
     dirty = true;
   }
 
-  // React to store changes
+  // React to store changes — mark canvas dirty when data changes.
   $effect(() => {
-    // Access reactive state to track dependencies
     timelineStore.viewport;
     timelineStore.selection;
     projectStore.channels;

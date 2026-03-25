@@ -10,12 +10,21 @@
   import { projectStore } from '$lib/stores/project.svelte.js';
   import { videoStore } from '$lib/stores/video.svelte.js';
   import { uiStore } from '$lib/stores/ui.svelte.js';
+  import { toastStore } from '$lib/stores/toast.svelte.js';
   import { EFFECT_DEFINITIONS } from '$lib/effects/definitions.js';
 
   let contextMenu: ContextMenu | null = $state(null);
   let lastHit: TimelineHitResult | null = $state(null);
   let selectionRect: SelectionRect | null = $state(null);
   let canvasRef: TimelineCanvas | undefined = $state();
+
+  // Keep cursor in view during playback
+  $effect(() => {
+    const currentTimeMs = videoStore.state.currentTimeMs;
+    if (videoStore.state.isPlaying) {
+      timelineStore.ensureVisible(currentTimeMs);
+    }
+  });
 
   // ---- CLIPBOARD ----
   let clipboard: {
@@ -116,6 +125,19 @@
         shortcut: 'Ctrl+D',
         action: () => {
           duplicateSelection(hit);
+        },
+      },
+      {
+        id: 'copy-to-all-channels',
+        label: 'Copy to All Other Channels',
+        enabled: hit.type === 'keyframe' && projectStore.channels.length > 1,
+        icon: '⊞',
+        action: () => {
+          if (hit.type !== 'keyframe' || !hit.keyframeId) return;
+          const count = projectStore.copyKeyframeToAllChannels(hit.keyframeId);
+          if (count > 0) {
+            toastStore.success(`Copied keyframe to ${count} channel${count !== 1 ? 's' : ''}`);
+          }
         },
       },
       { id: 'sep-2', label: '', enabled: false, separator: true },

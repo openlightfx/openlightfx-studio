@@ -9,6 +9,7 @@
   } from '$lib/effects/index.js';
   import { projectStore } from '$lib/stores/project.svelte.js';
   import { toastStore } from '$lib/stores/toast.svelte.js';
+  import { videoStore } from '$lib/stores/video.svelte.js';
   import {
     DEFAULT_RGB_COLOR,
     DEFAULT_BRIGHTNESS,
@@ -48,7 +49,7 @@
         return Math.max(0, Math.round(startMs + offsetX / pxPerMs));
       }
     }
-    return 0;
+    return videoStore.state.currentTimeMs;
   }
 
   /**

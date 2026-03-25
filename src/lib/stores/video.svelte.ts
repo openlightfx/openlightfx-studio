@@ -4,10 +4,12 @@
 
 import type { VideoState, PlaybackSpeed } from '$lib/types/index.js';
 import { DEFAULT_PLAYBACK_SPEED, DEFAULT_FRAME_RATE } from '$lib/types/index.js';
+import { projectStore } from './project.svelte.js';
 
 function createDefaultVideoState(): VideoState {
 	return {
 		isLoaded: false,
+		isLoading: false,
 		isPlaying: false,
 		currentTimeMs: 0,
 		durationMs: 0,
@@ -34,6 +36,10 @@ class VideoStoreClass {
 		el.addEventListener('ended', this.handleEnded);
 	}
 
+	getVideoElement(): HTMLVideoElement | null {
+		return this.videoElement;
+	}
+
 	unbindVideoElement(): void {
 		if (this.videoElement) {
 			this.videoElement.removeEventListener('loadedmetadata', this.handleLoadedMetadata);
@@ -46,13 +52,19 @@ class VideoStoreClass {
 	private handleLoadedMetadata = (): void => {
 		const el = this.videoElement;
 		if (!el) return;
+		const durationMs = el.duration * 1000;
 		this.state = {
 			...this.state,
 			isLoaded: true,
-			durationMs: el.duration * 1000,
+			isLoading: false,
+			durationMs,
 			videoWidth: el.videoWidth,
 			videoHeight: el.videoHeight,
 		};
+		// Sync track duration from video if not already set
+		if (projectStore.metadata.durationMs <= 0) {
+			projectStore.updateMetadata({ durationMs });
+		}
 	};
 
 	private handleEnded = (): void => {
@@ -152,6 +164,7 @@ class VideoStoreClass {
 		this.state = {
 			...createDefaultVideoState(),
 			objectUrl,
+			isLoading: true,
 		};
 	}
 

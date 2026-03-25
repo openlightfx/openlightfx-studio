@@ -11,6 +11,7 @@
   let fileInput: HTMLInputElement | undefined = $state();
 
   const isLoaded = $derived(videoStore.state.isLoaded);
+  const isLoading = $derived(videoStore.state.isLoading);
   const objectUrl = $derived(videoStore.state.objectUrl);
   const eyedropperActive = $derived(uiStore.state.eyedropperActive);
 
@@ -50,6 +51,26 @@
     aria-label="Load video file"
   />
 
+  {#if isLoading}
+    <!-- Loading overlay -->
+    <div class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/80">
+      <svg
+        class="h-10 w-10 animate-spin text-accent"
+        viewBox="0 0 24 24"
+        fill="none"
+        aria-hidden="true"
+      >
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" />
+        <path
+          class="opacity-75"
+          fill="currentColor"
+          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+        />
+      </svg>
+      <p class="text-sm text-textMuted">Loading video…</p>
+    </div>
+  {/if}
+
   {#if isLoaded && objectUrl}
     <!-- Video wrapper: aspect-ratio constrained -->
     <div class="relative flex h-full w-full items-center justify-center">
@@ -73,12 +94,13 @@
       {/if}
     </div>
   {:else}
-    <!-- Unloaded state: show prompt -->
+    <!-- Unloaded state: keep video element bound for loadedmetadata to fire -->
     <video bind:this={videoEl} class="hidden" preload="auto" playsinline>
       <track kind="captions" />
     </video>
 
-    <div class="flex flex-col items-center gap-4 text-textMuted">
+    {#if !isLoading}
+      <div class="flex flex-col items-center gap-4 text-textMuted">
       <svg
         class="h-16 w-16 opacity-40"
         viewBox="0 0 24 24"
@@ -103,5 +125,6 @@
       </button>
       <p class="text-xs opacity-60">Supports MP4 (H.264), WebM (VP8/VP9)</p>
     </div>
+    {/if}
   {/if}
 </div>

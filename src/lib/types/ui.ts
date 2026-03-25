@@ -32,7 +32,9 @@ export type ModalType =
   | 'scene-detection'
   | 'channel-template'
   | 'channel-group'
-  | 'confirm-delete';
+  | 'confirm-delete'
+  | 'about'
+  | 'new-project';
 
 /** Properties panel context — what to display */
 export type PropertiesContext =
@@ -90,13 +92,7 @@ export interface KeyboardShortcut {
   action: () => void;
 }
 
-export type ShortcutCategory =
-  | 'file'
-  | 'edit'
-  | 'playback'
-  | 'timeline'
-  | 'keyframe'
-  | 'view';
+export type ShortcutCategory = 'file' | 'edit' | 'playback' | 'timeline' | 'keyframe' | 'view';
 
 /** Color history entry */
 export interface ColorHistoryEntry {
