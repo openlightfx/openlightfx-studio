@@ -6,6 +6,7 @@
   import { validateTrack, type ValidationResult, type ValidationIssue } from '$lib/services/validation.js';
   import { exportLightFXTrack } from '$lib/services/project-io.js';
   import { saveProjectFile } from '$lib/services/project-io.js';
+  import { computeSafetyInfo } from '$lib/services/safety.js';
 
   let open = $derived(uiStore.state.activeModal === 'export');
 
@@ -34,6 +35,7 @@
             ? a.timestampMs - b.timestampMs
             : a.channelId.localeCompare(b.channelId),
         ),
+        safetyInfo: computeSafetyInfo(track),
       };
       validationResult = validateTrack(sorted);
       exportError = '';
