@@ -2,6 +2,7 @@
   import { videoStore } from '$lib/stores/video.svelte.js';
   import type { RGBColor } from '$lib/types/index.js';
   import { rgbToHex } from '$lib/services/color-utils.js';
+  import { captureVideoFrame, tonemapImageData, isHdrSignal } from '$lib/services/hdr-tonemap.js';
 
   let { onpick }: { onpick: (color: RGBColor) => void } = $props();
 
@@ -11,16 +12,22 @@
 
   const isLoaded = $derived(videoStore.state.isLoaded);
 
-  // Draw current video frame onto canvas whenever it opens
+  // Capture and tone-map the current video frame onto the visible canvas
   $effect(() => {
     if (!canvasEl || !isLoaded) return;
     const videoEl = videoStore.getVideoElement();
     if (!videoEl) return;
-    const ctx = canvasEl.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return;
-    canvasEl.width = videoEl.videoWidth;
-    canvasEl.height = videoEl.videoHeight;
-    ctx.drawImage(videoEl, 0, 0);
+
+    captureVideoFrame(videoEl).then(({ imageData, wideGamut }) => {
+      if (!canvasEl) return;
+      if (wideGamut && isHdrSignal(imageData)) {
+        tonemapImageData(imageData);
+      }
+      canvasEl.width = imageData.width;
+      canvasEl.height = imageData.height;
+      const ctx = canvasEl.getContext('2d', { willReadFrequently: true });
+      if (ctx) ctx.putImageData(imageData, 0, 0);
+    });
   });
 
   function sampleAt(e: MouseEvent): RGBColor | null {
