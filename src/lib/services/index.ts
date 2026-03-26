@@ -28,7 +28,7 @@ export {
   exportLightFXTrack,
   importLightFXFile,
 } from './project-io.js';
-export { captureVideoFrame, tonemapImageData, isHdrSignal } from './hdr-tonemap.js';
+export { extractAndTonemapFrame, probeHdr } from './hdr-tonemap.js';
 export {
   copySelectedKeyframes,
   cutSelectedKeyframes,

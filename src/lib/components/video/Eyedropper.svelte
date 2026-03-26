@@ -2,8 +2,9 @@
   import { uiStore } from '$lib/stores/ui.svelte.js';
   import { timelineStore } from '$lib/stores/timeline.svelte.js';
   import { projectStore } from '$lib/stores/project.svelte.js';
+  import { videoStore } from '$lib/stores/video.svelte.js';
   import { rgbToHex } from '$lib/services/color-utils.js';
-  import { captureVideoFrame, tonemapImageData, isHdrSignal } from '$lib/services/hdr-tonemap.js';
+  import { extractAndTonemapFrame } from '$lib/services/hdr-tonemap.js';
   import type { RGBColor } from '$lib/types/index.js';
   import { LS_KEY_COLOR_HISTORY, MAX_COLOR_HISTORY } from '$lib/types/index.js';
   import type { ColorHistoryEntry } from '$lib/types/ui.js';
@@ -21,6 +22,7 @@
   let frameCanvas: HTMLCanvasElement | null = $state(null);
   let frameCtx: CanvasRenderingContext2D | null = $state(null);
   let frameReady = $state(false);
+  let isExtracting = $state(false);
 
   // Magnifier canvas for the preview
   let magnifierCanvas: HTMLCanvasElement | null = $state(null);
@@ -30,7 +32,7 @@
   const MAGNIFIER_ZOOM = 8;
   const SAMPLE_RADIUS = Math.floor(MAGNIFIER_SIZE / MAGNIFIER_ZOOM / 2);
 
-  // Capture and tone-map the current frame once when the eyedropper opens
+  // Extract and tone-map the current frame once when the eyedropper opens
   $effect(() => {
     magnifierCanvas = document.createElement('canvas');
     magnifierCanvas.width = MAGNIFIER_SIZE;
@@ -38,20 +40,33 @@
     magnifierCtx = magnifierCanvas.getContext('2d');
 
     frameCanvas = document.createElement('canvas');
+    const file = videoStore.state.file;
+    const timestampMs = videoStore.state.currentTimeMs;
+    const isHdr = videoStore.state.isHdr;
 
-    captureVideoFrame(videoEl).then(({ imageData, wideGamut }) => {
-      if (!frameCanvas) return;
-      if (wideGamut && isHdrSignal(imageData)) {
-        tonemapImageData(imageData);
-      }
-      frameCanvas.width = imageData.width;
-      frameCanvas.height = imageData.height;
+    if (file && isHdr) {
+      isExtracting = true;
+      extractAndTonemapFrame(file, videoEl, timestampMs, true).then((imageData) => {
+        if (!frameCanvas) return;
+        frameCanvas.width = imageData.width;
+        frameCanvas.height = imageData.height;
+        frameCtx = frameCanvas.getContext('2d', { willReadFrequently: true });
+        if (frameCtx) {
+          frameCtx.putImageData(imageData, 0, 0);
+          frameReady = true;
+        }
+        isExtracting = false;
+      });
+    } else {
+      // No File available — fall back to direct canvas draw
+      frameCanvas.width = videoEl.videoWidth;
+      frameCanvas.height = videoEl.videoHeight;
       frameCtx = frameCanvas.getContext('2d', { willReadFrequently: true });
       if (frameCtx) {
-        frameCtx.putImageData(imageData, 0, 0);
+        frameCtx.drawImage(videoEl, 0, 0);
         frameReady = true;
       }
-    });
+    }
   });
 
   // Keyboard listener for Escape
@@ -222,6 +237,15 @@
   tabindex="-1"
   aria-label="Eyedropper — click to sample color, Escape to cancel"
 >
+  <!-- HDR tone-mapping loading indicator -->
+  {#if isExtracting}
+    <div class="absolute inset-0 flex items-center justify-center">
+      <div class="rounded-lg bg-black/80 px-4 py-2 text-sm text-white shadow-lg">
+        Tone mapping HDR frame…
+      </div>
+    </div>
+  {/if}
+
   <!-- Magnifier preview following cursor -->
   {#if isOverVideo && magnifiedImageData && sampledColor}
     <div

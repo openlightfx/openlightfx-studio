@@ -26,6 +26,10 @@ export interface VideoState {
   frameDurationMs: number;
   /** Object URL for the loaded video */
   objectUrl: string | null;
+  /** Original video File (retained for raw frame extraction via ffmpeg) */
+  file: File | null;
+  /** Whether the video has HDR10 (BT.2020/PQ) content requiring tone mapping */
+  isHdr: boolean;
 }
 
 /** Supported playback speeds (STU-012b) */
@@ -62,11 +66,6 @@ export interface VideoContainerTags {
 }
 
 /** Supported video MIME types for the file picker */
-export const SUPPORTED_VIDEO_TYPES = [
-  'video/mp4',
-  'video/webm',
-  'video/x-matroska',
-  'video/ogg',
-];
+export const SUPPORTED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/x-matroska', 'video/ogg'];
 
 export const VIDEO_FILE_EXTENSIONS = '.mp4,.webm,.mkv,.ogg';

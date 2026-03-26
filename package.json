@@ -15,6 +15,7 @@
     "electron:build": "npm run build && electron-builder"
   },
   "dependencies": {
+    "@ffmpeg/ffmpeg": "^0.12.15",
     "@sveltejs/adapter-static": "^3.0",
     "@sveltejs/kit": "^2.16",
     "@sveltejs/vite-plugin-svelte": "^5.0",
