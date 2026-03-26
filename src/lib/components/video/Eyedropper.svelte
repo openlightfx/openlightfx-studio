@@ -2,7 +2,9 @@
   import { uiStore } from '$lib/stores/ui.svelte.js';
   import { timelineStore } from '$lib/stores/timeline.svelte.js';
   import { projectStore } from '$lib/stores/project.svelte.js';
+  import { videoStore } from '$lib/stores/video.svelte.js';
   import { rgbToHex } from '$lib/services/color-utils.js';
+  import { extractAndTonemapFrame } from '$lib/services/hdr-tonemap.js';
   import type { RGBColor } from '$lib/types/index.js';
   import { LS_KEY_COLOR_HISTORY, MAX_COLOR_HISTORY } from '$lib/types/index.js';
   import type { ColorHistoryEntry } from '$lib/types/ui.js';
@@ -16,9 +18,11 @@
   let magnifiedImageData: string | null = $state(null);
   let isOverVideo = $state(false);
 
-  // Offscreen canvas for pixel sampling
-  let offscreenCanvas: HTMLCanvasElement | null = $state(null);
-  let offscreenCtx: CanvasRenderingContext2D | null = $state(null);
+  // Tone-mapped frame captured once on activation
+  let frameCanvas: HTMLCanvasElement | null = $state(null);
+  let frameCtx: CanvasRenderingContext2D | null = $state(null);
+  let frameReady = $state(false);
+  let isExtracting = $state(false);
 
   // Magnifier canvas for the preview
   let magnifierCanvas: HTMLCanvasElement | null = $state(null);
@@ -28,13 +32,41 @@
   const MAGNIFIER_ZOOM = 8;
   const SAMPLE_RADIUS = Math.floor(MAGNIFIER_SIZE / MAGNIFIER_ZOOM / 2);
 
+  // Extract and tone-map the current frame once when the eyedropper opens
   $effect(() => {
-    offscreenCanvas = document.createElement('canvas');
-    offscreenCtx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
     magnifierCanvas = document.createElement('canvas');
     magnifierCanvas.width = MAGNIFIER_SIZE;
     magnifierCanvas.height = MAGNIFIER_SIZE;
     magnifierCtx = magnifierCanvas.getContext('2d');
+
+    frameCanvas = document.createElement('canvas');
+    const file = videoStore.state.file;
+    const timestampMs = videoStore.state.currentTimeMs;
+    const isHdr = videoStore.state.isHdr;
+
+    if (file && isHdr) {
+      isExtracting = true;
+      extractAndTonemapFrame(file, videoEl, timestampMs, true).then((imageData) => {
+        if (!frameCanvas) return;
+        frameCanvas.width = imageData.width;
+        frameCanvas.height = imageData.height;
+        frameCtx = frameCanvas.getContext('2d', { willReadFrequently: true });
+        if (frameCtx) {
+          frameCtx.putImageData(imageData, 0, 0);
+          frameReady = true;
+        }
+        isExtracting = false;
+      });
+    } else {
+      // No File available — fall back to direct canvas draw
+      frameCanvas.width = videoEl.videoWidth;
+      frameCanvas.height = videoEl.videoHeight;
+      frameCtx = frameCanvas.getContext('2d', { willReadFrequently: true });
+      if (frameCtx) {
+        frameCtx.drawImage(videoEl, 0, 0);
+        frameReady = true;
+      }
+    }
   });
 
   // Keyboard listener for Escape
@@ -59,22 +91,18 @@
   }
 
   function samplePixel(vx: number, vy: number): RGBColor | null {
-    if (!videoEl || !offscreenCanvas || !offscreenCtx) return null;
+    if (!videoEl || !frameCanvas || !frameCtx || !frameReady) return null;
 
     const rect = videoEl.getBoundingClientRect();
-    const scaleX = videoEl.videoWidth / rect.width;
-    const scaleY = videoEl.videoHeight / rect.height;
-
-    offscreenCanvas.width = videoEl.videoWidth;
-    offscreenCanvas.height = videoEl.videoHeight;
-    offscreenCtx.drawImage(videoEl, 0, 0);
+    const scaleX = frameCanvas.width / rect.width;
+    const scaleY = frameCanvas.height / rect.height;
 
     const px = Math.floor(vx * scaleX);
     const py = Math.floor(vy * scaleY);
 
-    if (px < 0 || py < 0 || px >= videoEl.videoWidth || py >= videoEl.videoHeight) return null;
+    if (px < 0 || py < 0 || px >= frameCanvas.width || py >= frameCanvas.height) return null;
 
-    const imageData = offscreenCtx.getImageData(px, py, 1, 1);
+    const imageData = frameCtx.getImageData(px, py, 1, 1);
     return {
       r: imageData.data[0],
       g: imageData.data[1],
@@ -83,15 +111,12 @@
   }
 
   function updateMagnifier(vx: number, vy: number) {
-    if (!videoEl || !offscreenCanvas || !offscreenCtx || !magnifierCanvas || !magnifierCtx) return;
+    if (!videoEl || !frameCanvas || !frameCtx || !magnifierCanvas || !magnifierCtx || !frameReady)
+      return;
 
     const rect = videoEl.getBoundingClientRect();
-    const scaleX = videoEl.videoWidth / rect.width;
-    const scaleY = videoEl.videoHeight / rect.height;
-
-    offscreenCanvas.width = videoEl.videoWidth;
-    offscreenCanvas.height = videoEl.videoHeight;
-    offscreenCtx.drawImage(videoEl, 0, 0);
+    const scaleX = frameCanvas.width / rect.width;
+    const scaleY = frameCanvas.height / rect.height;
 
     const px = Math.floor(vx * scaleX);
     const py = Math.floor(vy * scaleY);
@@ -100,12 +125,12 @@
     // Source coords (clamped)
     const sx = Math.max(0, px - SAMPLE_RADIUS);
     const sy = Math.max(0, py - SAMPLE_RADIUS);
-    const sw = Math.min(sampleSize, videoEl.videoWidth - sx);
-    const sh = Math.min(sampleSize, videoEl.videoHeight - sy);
+    const sw = Math.min(sampleSize, frameCanvas.width - sx);
+    const sh = Math.min(sampleSize, frameCanvas.height - sy);
 
     magnifierCtx.imageSmoothingEnabled = false;
     magnifierCtx.clearRect(0, 0, MAGNIFIER_SIZE, MAGNIFIER_SIZE);
-    magnifierCtx.drawImage(offscreenCanvas, sx, sy, sw, sh, 0, 0, MAGNIFIER_SIZE, MAGNIFIER_SIZE);
+    magnifierCtx.drawImage(frameCanvas, sx, sy, sw, sh, 0, 0, MAGNIFIER_SIZE, MAGNIFIER_SIZE);
 
     // Draw crosshair
     const center = MAGNIFIER_SIZE / 2;
@@ -205,11 +230,22 @@
   onmousemove={handleMouseMove}
   onclick={handleClick}
   oncontextmenu={handleContextMenu}
-  onkeydown={(e) => { if (e.key === 'Escape') uiStore.setEyedropperActive(false); }}
+  onkeydown={(e) => {
+    if (e.key === 'Escape') uiStore.setEyedropperActive(false);
+  }}
   role="application"
   tabindex="-1"
   aria-label="Eyedropper — click to sample color, Escape to cancel"
 >
+  <!-- HDR tone-mapping loading indicator -->
+  {#if isExtracting}
+    <div class="absolute inset-0 flex items-center justify-center">
+      <div class="rounded-lg bg-black/80 px-4 py-2 text-sm text-white shadow-lg">
+        Tone mapping HDR frame…
+      </div>
+    </div>
+  {/if}
+
   <!-- Magnifier preview following cursor -->
   {#if isOverVideo && magnifiedImageData && sampledColor}
     <div
@@ -229,9 +265,7 @@
         />
       </div>
       <!-- Color info label -->
-      <div
-        class="mt-1 flex items-center gap-2 rounded bg-black/80 px-2 py-1 text-xs text-white"
-      >
+      <div class="mt-1 flex items-center gap-2 rounded bg-black/80 px-2 py-1 text-xs text-white">
         <span
           class="inline-block h-3.5 w-3.5 rounded border border-white/30"
           style="background: rgb({sampledColor.r}, {sampledColor.g}, {sampledColor.b});"
