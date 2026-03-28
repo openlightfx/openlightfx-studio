@@ -1,6 +1,7 @@
 <script lang="ts">
   import TopBar from './TopBar.svelte';
   import StatusBar from './StatusBar.svelte';
+  import CommandPalette from './CommandPalette.svelte';
   import { projectStore } from '$lib/stores/project.svelte.js';
 
   let {
@@ -20,6 +21,13 @@
     onexport?: () => void;
     oncommandpalette?: () => void;
   } = $props();
+
+  let commandPaletteOpen = $state(false);
+
+  function openCommandPalette() {
+    commandPaletteOpen = true;
+    oncommandpalette?.();
+  }
 
   // ── Resizable split: video panel + timeline area ─────────────────────────
   // Stored as percentage of the "inner" area (between TopBar/PlaybackControls/Minimap/StatusBar).
@@ -84,7 +92,7 @@
     {onopen}
     {onsave}
     {onexport}
-    {oncommandpalette}
+    oncommandpalette={openCommandPalette}
   />
 
   <!-- Row 1: Video Panel (placeholder) -->
@@ -143,3 +151,6 @@
   <!-- Row 6: StatusBar -->
   <StatusBar {saveProviderName} />
 </div>
+
+<!-- Command Palette (portal-level overlay, outside grid) -->
+<CommandPalette bind:isOpen={commandPaletteOpen} />

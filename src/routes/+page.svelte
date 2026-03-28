@@ -55,5 +55,5 @@
   saveProviderName="Local"
   onrename={(name) => projectStore.updateMetadata({ title: name })}
   onnewproject={() => uiStore.openModal('new-project')}
-  oncommandpalette={() => {/* TODO Task 21: command palette */}}
+  oncommandpalette={() => { /* handled inside AppShell */ }}
 />
