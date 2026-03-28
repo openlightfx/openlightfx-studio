@@ -5,6 +5,7 @@
   import { uiStore } from '$lib/stores/ui.svelte.js';
   import { SUPPORTED_VIDEO_TYPES } from '$lib/types/video.js';
   import Eyedropper from '$lib/components/video/Eyedropper.svelte';
+  import LightingOverlay from '$lib/components/video/LightingOverlay.svelte';
 
   let videoEl = $state<HTMLVideoElement | null>(null);
   let isDragOver = $state(false);
@@ -88,7 +89,8 @@
       playsinline
     ></video>
 
-    <!-- TODO Task 25: LightingOverlay — render here when uiStore.overlayEnabled && videoStore.isLoaded -->
+    <!-- Lighting overlay -->
+    <LightingOverlay />
     <!-- Eyedropper overlay -->
     {#if videoStore.isLoaded}
       <Eyedropper />
