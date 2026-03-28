@@ -47,12 +47,7 @@
 
 <Modal {open} title="Movie Metadata" onclose={handleSkip}>
   <div class="flex flex-col gap-4">
-    <TextInput
-      value={title}
-      label="Title"
-      placeholder="Movie title"
-      oninput={(v) => (title = v)}
-    />
+    <TextInput value={title} label="Title" placeholder="Movie title" oninput={(v) => (title = v)} />
 
     <div class="flex flex-col gap-1.5">
       <TextInput
@@ -61,18 +56,11 @@
         placeholder="tt1234567"
         oninput={(v) => (imdbId = v)}
       />
-      <p class="text-2xs text-textMuted">
-        Format: tt followed by 7+ digits (e.g. tt1234567)
-      </p>
+      <p class="text-2xs text-textMuted">Format: tt followed by 7+ digits (e.g. tt1234567)</p>
     </div>
 
     <div class="flex flex-col gap-1.5">
-      <TextInput
-        value={tmdbId}
-        label="TMDB ID"
-        placeholder="12345"
-        oninput={(v) => (tmdbId = v)}
-      />
+      <TextInput value={tmdbId} label="TMDB ID" placeholder="12345" oninput={(v) => (tmdbId = v)} />
       <p class="text-2xs text-textMuted">
         Find your movie on themoviedb.org and copy the numeric ID from the URL
       </p>

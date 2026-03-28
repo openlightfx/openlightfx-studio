@@ -55,14 +55,18 @@
 
       <div class="flex flex-col gap-1.5">
         <span class="text-xs font-medium text-textMuted">Type</span>
-        <span class="rounded-md border border-surface2 bg-surface2/50 px-3 py-1.5 text-sm text-text-base">
+        <span
+          class="rounded-md border border-surface2 bg-surface2/50 px-3 py-1.5 text-sm text-text-base"
+        >
           {MARKER_TYPE_LABELS[marker.type] ?? marker.type}
         </span>
       </div>
 
       <div class="flex flex-col gap-1.5">
         <span class="text-xs font-medium text-textMuted">Timestamp</span>
-        <span class="rounded-md border border-surface2 bg-surface2/50 px-3 py-1.5 text-sm font-mono text-text-base">
+        <span
+          class="rounded-md border border-surface2 bg-surface2/50 px-3 py-1.5 text-sm font-mono text-text-base"
+        >
           {formatTimestamp(marker.timestampMs)}
         </span>
       </div>
@@ -70,9 +74,7 @@
 
     <hr class="border-surface2" />
 
-    <Button variant="danger" size="sm" onclick={handleDelete}>
-      Delete Marker
-    </Button>
+    <Button variant="danger" size="sm" onclick={handleDelete}>Delete Marker</Button>
   </div>
 {:else}
   <p class="text-sm text-textMuted">Scene marker not found.</p>

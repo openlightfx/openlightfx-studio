@@ -33,7 +33,7 @@
     {
       title: '📦 Export Your Track',
       illustration: '💾 → .lightfx',
-      body: 'When you\'re done, export your track as a .lightfx file. This portable format works with the Emby plugin — just drop it in and your lights will sync to the movie automatically!',
+      body: "When you're done, export your track as a .lightfx file. This portable format works with the Emby plugin — just drop it in and your lights will sync to the movie automatically!",
     },
   ];
 

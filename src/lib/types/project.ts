@@ -2,13 +2,7 @@
 // Project types — working project file format, undo history
 // ============================================================
 
-import type {
-  Channel,
-  EffectKeyframe,
-  Keyframe,
-  LightFXTrack,
-  TrackMetadata,
-} from './track.js';
+import type { Channel, EffectKeyframe, Keyframe, LightFXTrack, TrackMetadata } from './track.js';
 import type { ChannelGroup } from './channels.js';
 import type { SceneMarker } from './timeline.js';
 import type { Command } from './commands.js';

@@ -62,10 +62,16 @@
   const channels = $derived(projectStore.channels);
 
   function getOffset(channelId: string): ChannelGroupOffset {
-    return offsets.get(channelId) ?? { channelId, hueOffset: 0, brightnessOffset: 0, timingOffsetMs: 0 };
+    return (
+      offsets.get(channelId) ?? { channelId, hueOffset: 0, brightnessOffset: 0, timingOffsetMs: 0 }
+    );
   }
 
-  function setOffset(channelId: string, field: keyof Omit<ChannelGroupOffset, 'channelId'>, value: number) {
+  function setOffset(
+    channelId: string,
+    field: keyof Omit<ChannelGroupOffset, 'channelId'>,
+    value: number
+  ) {
     const current = getOffset(channelId);
     const updated = { ...current, [field]: value };
     const next = new Map(offsets);
@@ -129,7 +135,12 @@
   }
 </script>
 
-<Modal open={open} title={editGroup ? 'Edit Channel Group' : 'Create Channel Group'} onclose={handleClose} size="lg">
+<Modal
+  {open}
+  title={editGroup ? 'Edit Channel Group' : 'Create Channel Group'}
+  onclose={handleClose}
+  size="lg"
+>
   <div class="flex flex-col gap-4">
     <TextInput
       value={groupName}
@@ -158,10 +169,16 @@
 
     <!-- Channel selection -->
     <div class="flex flex-col gap-1.5">
-      <span class="text-xs font-medium text-textMuted">Channels ({selectedChannelIds.size} selected)</span>
-      <div class="flex flex-col gap-1 rounded-lg border border-surface2 bg-surface2/30 p-2 max-h-48 overflow-y-auto">
+      <span class="text-xs font-medium text-textMuted"
+        >Channels ({selectedChannelIds.size} selected)</span
+      >
+      <div
+        class="flex flex-col gap-1 rounded-lg border border-surface2 bg-surface2/30 p-2 max-h-48 overflow-y-auto"
+      >
         {#each channels as ch (ch.id)}
-          <label class="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-text-base transition-colors hover:bg-surface2">
+          <label
+            class="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-text-base transition-colors hover:bg-surface2"
+          >
             <input
               type="checkbox"
               checked={selectedChannelIds.has(ch.id)}
@@ -170,14 +187,17 @@
             />
             <span
               class="h-3 w-3 rounded-full flex-shrink-0"
-              style="background-color: rgb({ch.defaultColor.r}, {ch.defaultColor.g}, {ch.defaultColor.b});"
+              style="background-color: rgb({ch.defaultColor.r}, {ch.defaultColor.g}, {ch
+                .defaultColor.b});"
             ></span>
             <span>{ch.displayName}</span>
             <code class="text-2xs text-textMuted">{ch.id}</code>
           </label>
         {/each}
         {#if channels.length === 0}
-          <p class="py-2 text-center text-xs text-textMuted">No channels available. Add channels first.</p>
+          <p class="py-2 text-center text-xs text-textMuted">
+            No channels available. Add channels first.
+          </p>
         {/if}
       </div>
       {#if selectedChannelIds.size < 2 && selectedChannelIds.size > 0}
@@ -191,18 +211,20 @@
         class="flex items-center gap-1.5 text-xs text-accent hover:text-accent-hover transition-colors"
         onclick={() => (showPerChannelOffsets = !showPerChannelOffsets)}
       >
-        <span class="transition-transform {showPerChannelOffsets ? 'rotate-90' : ''}"
-          >▸</span
-        >
+        <span class="transition-transform {showPerChannelOffsets ? 'rotate-90' : ''}">▸</span>
         Per-channel offsets
       </button>
 
       {#if showPerChannelOffsets}
-        <div class="flex flex-col gap-3 rounded-lg border border-surface2 bg-surface2/30 p-3 max-h-64 overflow-y-auto">
+        <div
+          class="flex flex-col gap-3 rounded-lg border border-surface2 bg-surface2/30 p-3 max-h-64 overflow-y-auto"
+        >
           {#each [...selectedChannelIds] as chId (chId)}
             {@const ch = projectStore.getChannel(chId)}
             {#if ch}
-              <div class="flex flex-col gap-2 border-b border-surface2 pb-3 last:border-0 last:pb-0">
+              <div
+                class="flex flex-col gap-2 border-b border-surface2 pb-3 last:border-0 last:pb-0"
+              >
                 <div class="flex items-center justify-between">
                   <span class="text-xs font-medium text-text-base">{ch.displayName}</span>
                   <label class="flex items-center gap-1.5 text-2xs text-textMuted">
@@ -216,7 +238,11 @@
                   </label>
                 </div>
 
-                <div class="grid grid-cols-3 gap-2 {unlinked.has(chId) ? 'opacity-40 pointer-events-none' : ''}">
+                <div
+                  class="grid grid-cols-3 gap-2 {unlinked.has(chId)
+                    ? 'opacity-40 pointer-events-none'
+                    : ''}"
+                >
                   <div class="flex flex-col gap-1">
                     <span class="text-2xs text-textMuted">Hue Offset (°)</span>
                     <input
@@ -224,7 +250,8 @@
                       min="0"
                       max="360"
                       value={getOffset(chId).hueOffset}
-                      oninput={(e) => setOffset(chId, 'hueOffset', Number((e.target as HTMLInputElement).value))}
+                      oninput={(e) =>
+                        setOffset(chId, 'hueOffset', Number((e.target as HTMLInputElement).value))}
                       class="w-full rounded border border-surface2 bg-surface2 px-2 py-1 text-xs text-text-base focus:outline-none focus:ring-1 focus:ring-accent"
                     />
                   </div>
@@ -235,7 +262,12 @@
                       min="-100"
                       max="100"
                       value={getOffset(chId).brightnessOffset}
-                      oninput={(e) => setOffset(chId, 'brightnessOffset', Number((e.target as HTMLInputElement).value))}
+                      oninput={(e) =>
+                        setOffset(
+                          chId,
+                          'brightnessOffset',
+                          Number((e.target as HTMLInputElement).value)
+                        )}
                       class="w-full rounded border border-surface2 bg-surface2 px-2 py-1 text-xs text-text-base focus:outline-none focus:ring-1 focus:ring-accent"
                     />
                   </div>
@@ -246,7 +278,12 @@
                       min="0"
                       max="5000"
                       value={getOffset(chId).timingOffsetMs}
-                      oninput={(e) => setOffset(chId, 'timingOffsetMs', Number((e.target as HTMLInputElement).value))}
+                      oninput={(e) =>
+                        setOffset(
+                          chId,
+                          'timingOffsetMs',
+                          Number((e.target as HTMLInputElement).value)
+                        )}
                       class="w-full rounded border border-surface2 bg-surface2 px-2 py-1 text-xs text-text-base focus:outline-none focus:ring-1 focus:ring-accent"
                     />
                   </div>

@@ -148,7 +148,9 @@
         <span class="text-lg" title={definition.name}>{definition.icon}</span>
       {/if}
       <div class="flex flex-col">
-        <span class="text-sm font-medium text-text-base">{definition?.name ?? effect.effectType}</span>
+        <span class="text-sm font-medium text-text-base"
+          >{definition?.name ?? effect.effectType}</span
+        >
         {#if definition?.description}
           <span class="text-2xs text-textMuted">{definition.description}</span>
         {/if}
@@ -161,7 +163,9 @@
     <section class="flex flex-col gap-3">
       <Slider
         value={effect.intensity}
-        min={0} max={100} step={1}
+        min={0}
+        max={100}
+        step={1}
         label="Intensity"
         onchange={handleIntensity}
       />
@@ -190,7 +194,11 @@
           viewBox="0 0 20 20"
           fill="currentColor"
         >
-          <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+          <path
+            fill-rule="evenodd"
+            d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+            clip-rule="evenodd"
+          />
         </svg>
       </button>
 
@@ -202,15 +210,32 @@
             class="h-8 w-8 shrink-0 rounded-md border border-surface3 shadow-sm"
             style="background-color: {rgbToCssString(effect.primaryColor)};"
           ></div>
-          <TextInput
-            value={primaryHex.slice(1)}
-            placeholder="FF0000"
-            oninput={handlePrimaryHex}
-          />
+          <TextInput value={primaryHex.slice(1)} placeholder="FF0000" oninput={handlePrimaryHex} />
         </div>
-        <Slider value={effect.primaryColor.r} min={0} max={255} step={1} label="R" onchange={handlePrimaryR} />
-        <Slider value={effect.primaryColor.g} min={0} max={255} step={1} label="G" onchange={handlePrimaryG} />
-        <Slider value={effect.primaryColor.b} min={0} max={255} step={1} label="B" onchange={handlePrimaryB} />
+        <Slider
+          value={effect.primaryColor.r}
+          min={0}
+          max={255}
+          step={1}
+          label="R"
+          onchange={handlePrimaryR}
+        />
+        <Slider
+          value={effect.primaryColor.g}
+          min={0}
+          max={255}
+          step={1}
+          label="G"
+          onchange={handlePrimaryG}
+        />
+        <Slider
+          value={effect.primaryColor.b}
+          min={0}
+          max={255}
+          step={1}
+          label="B"
+          onchange={handlePrimaryB}
+        />
 
         <!-- Secondary -->
         <h5 class="mt-2 text-xs text-textMuted">Secondary Color</h5>
@@ -225,9 +250,30 @@
             oninput={handleSecondaryHex}
           />
         </div>
-        <Slider value={effect.secondaryColor.r} min={0} max={255} step={1} label="R" onchange={handleSecondaryR} />
-        <Slider value={effect.secondaryColor.g} min={0} max={255} step={1} label="G" onchange={handleSecondaryG} />
-        <Slider value={effect.secondaryColor.b} min={0} max={255} step={1} label="B" onchange={handleSecondaryB} />
+        <Slider
+          value={effect.secondaryColor.r}
+          min={0}
+          max={255}
+          step={1}
+          label="R"
+          onchange={handleSecondaryR}
+        />
+        <Slider
+          value={effect.secondaryColor.g}
+          min={0}
+          max={255}
+          step={1}
+          label="G"
+          onchange={handleSecondaryG}
+        />
+        <Slider
+          value={effect.secondaryColor.b}
+          min={0}
+          max={255}
+          step={1}
+          label="B"
+          onchange={handleSecondaryB}
+        />
       {/if}
     </section>
 
@@ -247,7 +293,11 @@
             viewBox="0 0 20 20"
             fill="currentColor"
           >
-            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+            <path
+              fill-rule="evenodd"
+              d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+              clip-rule="evenodd"
+            />
           </svg>
         </button>
 
@@ -293,7 +343,11 @@
           viewBox="0 0 20 20"
           fill="currentColor"
         >
-          <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+          <path
+            fill-rule="evenodd"
+            d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+            clip-rule="evenodd"
+          />
         </svg>
       </button>
 
@@ -310,13 +364,36 @@
             oninput={handleFallbackHex}
           />
         </div>
-        <Slider value={effect.fallbackColor.r} min={0} max={255} step={1} label="R" onchange={handleFallbackR} />
-        <Slider value={effect.fallbackColor.g} min={0} max={255} step={1} label="G" onchange={handleFallbackG} />
-        <Slider value={effect.fallbackColor.b} min={0} max={255} step={1} label="B" onchange={handleFallbackB} />
+        <Slider
+          value={effect.fallbackColor.r}
+          min={0}
+          max={255}
+          step={1}
+          label="R"
+          onchange={handleFallbackR}
+        />
+        <Slider
+          value={effect.fallbackColor.g}
+          min={0}
+          max={255}
+          step={1}
+          label="G"
+          onchange={handleFallbackG}
+        />
+        <Slider
+          value={effect.fallbackColor.b}
+          min={0}
+          max={255}
+          step={1}
+          label="B"
+          onchange={handleFallbackB}
+        />
 
         <Slider
           value={effect.fallbackBrightness}
-          min={0} max={100} step={1}
+          min={0}
+          max={100}
+          step={1}
           label="Fallback Brightness"
           onchange={handleFallbackBrightness}
         />

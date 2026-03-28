@@ -13,10 +13,9 @@ export class SnapshotController {
 
   private getWorker(): Worker {
     if (!this.worker) {
-      this.worker = new Worker(
-        new URL('./snapshot.worker.ts', import.meta.url),
-        { type: 'module' },
-      );
+      this.worker = new Worker(new URL('./snapshot.worker.ts', import.meta.url), {
+        type: 'module',
+      });
     }
     return this.worker;
   }

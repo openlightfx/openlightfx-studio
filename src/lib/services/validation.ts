@@ -294,7 +294,8 @@ function validateV015(track: LightFXTrack, issues: ValidationIssue[]): void {
 
 function hasFallback(ek: EffectKeyframe): boolean {
   const hasFallbackColor =
-    ek.fallbackColor && (ek.fallbackColor.r > 0 || ek.fallbackColor.g > 0 || ek.fallbackColor.b > 0);
+    ek.fallbackColor &&
+    (ek.fallbackColor.r > 0 || ek.fallbackColor.g > 0 || ek.fallbackColor.b > 0);
   return !!(hasFallbackColor || ek.fallbackBrightness > 0);
 }
 
@@ -314,9 +315,7 @@ function validateV016(track: LightFXTrack, issues: ValidationIssue[]): void {
 // V-017: If any flashing effect is present, safety_info.contains_flashing MUST be true
 function validateV017(track: LightFXTrack, issues: ValidationIssue[]): void {
   const flashingTypes = new Set(['LIGHTNING', 'FLASHBANG', 'GUNFIRE', 'STROBE', 'SPARK']);
-  const hasFlashing = (track.effectKeyframes ?? []).some((e) =>
-    flashingTypes.has(e.effectType),
-  );
+  const hasFlashing = (track.effectKeyframes ?? []).some((e) => flashingTypes.has(e.effectType));
 
   if (hasFlashing && !track.safetyInfo?.containsFlashing) {
     issues.push({
@@ -330,9 +329,7 @@ function validateV017(track: LightFXTrack, issues: ValidationIssue[]): void {
 
 // V-017a: If any STROBE effect is present, safety_info.contains_strobing MUST be true
 function validateV017a(track: LightFXTrack, issues: ValidationIssue[]): void {
-  const hasStrobe = (track.effectKeyframes ?? []).some(
-    (e) => e.effectType === 'STROBE',
-  );
+  const hasStrobe = (track.effectKeyframes ?? []).some((e) => e.effectType === 'STROBE');
 
   if (hasStrobe && !track.safetyInfo?.containsStrobing) {
     issues.push({
@@ -352,12 +349,7 @@ function validateV017a(track: LightFXTrack, issues: ValidationIssue[]): void {
 // V-020: metadata.start_behavior and end_behavior use BoundaryBehavior enum values
 function validateV020(track: LightFXTrack, issues: ValidationIssue[]): void {
   if (!track.metadata) return;
-  const validBehaviors = new Set([
-    'BOUNDARY_UNSPECIFIED',
-    'LEAVE',
-    'OFF',
-    'ON',
-  ]);
+  const validBehaviors = new Set(['BOUNDARY_UNSPECIFIED', 'LEAVE', 'OFF', 'ON']);
 
   if (!validBehaviors.has(track.metadata.startBehavior)) {
     issues.push({

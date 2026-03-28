@@ -42,7 +42,14 @@
     { description: 'Toggle Overlay', keys: 'Ctrl+L', category: 'view' },
   ];
 
-  const categoryOrder: ShortcutCategory[] = ['file', 'edit', 'playback', 'timeline', 'keyframe', 'view'];
+  const categoryOrder: ShortcutCategory[] = [
+    'file',
+    'edit',
+    'playback',
+    'timeline',
+    'keyframe',
+    'view',
+  ];
   const categoryLabels: Record<ShortcutCategory, string> = {
     file: 'File',
     edit: 'Edit',

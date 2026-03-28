@@ -57,10 +57,13 @@ This codebase uses **Svelte 5 runes exclusively** — no Svelte 4 patterns (`wri
 ### Stores
 
 Class-based singletons with `$state()` fields. Updates are **always immutable** (object spread):
+
 ```ts
 this.state = { ...this.state, field: newValue };
 ```
+
 Computed values use **getter methods** (not `$derived`):
+
 ```ts
 get visibleDurationMs(): number {
   return this.viewport.viewportWidth / this.viewport.pxPerMs;

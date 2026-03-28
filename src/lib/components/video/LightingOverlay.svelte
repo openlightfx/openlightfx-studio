@@ -23,9 +23,7 @@
 
   // Channels with spatial hints for overlay
   const spatialChannels = $derived(
-    channels.filter(
-      (ch) => ch.spatialHint !== 'SPATIAL_UNSPECIFIED'
-    )
+    channels.filter((ch) => ch.spatialHint !== 'SPATIAL_UNSPECIFIED')
   );
 
   // Channels without spatial hint — for the "Unassigned" indicator

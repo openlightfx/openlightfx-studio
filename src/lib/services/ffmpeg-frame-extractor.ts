@@ -54,7 +54,13 @@ async function mountFile(ffmpeg: FFmpeg, file: File): Promise<string> {
     isMounted = false;
   }
 
-  await ffmpeg.createDir(MOUNT_DIR);
+  // Create the mount directory — ignore error if it already exists
+  try {
+    await ffmpeg.createDir(MOUNT_DIR);
+  } catch {
+    // Directory already exists from a previous call, that's fine
+  }
+
   await ffmpeg.mount(FFFSType.WORKERFS, { files: [file] }, MOUNT_DIR);
   isMounted = true;
 
@@ -148,7 +154,9 @@ export async function extractRawFrame(
  * SMPTE 2084 (PQ) transfer function in the stream info line.
  */
 export async function probeHdr(file: File): Promise<boolean> {
+  console.log('[probeHdr] starting probe for', file.name);
   const ffmpeg = await getFFmpeg();
+  console.log('[probeHdr] ffmpeg loaded, mounting file');
   const inputPath = await mountFile(ffmpeg, file);
 
   const logs: string[] = [];
@@ -158,10 +166,12 @@ export async function probeHdr(file: File): Promise<boolean> {
   ffmpeg.on('log', logHandler);
 
   try {
-    // Run ffmpeg with no output — it will print stream info to stderr/log
-    await ffmpeg.exec(['-i', inputPath, '-f', 'null', '-']);
+    // Run ffmpeg with input only and no output — ffmpeg prints stream info
+    // then exits immediately with "At least one output file must be specified".
+    // Far faster than decoding the video with -f null.
+    await ffmpeg.exec(['-i', inputPath]);
   } catch {
-    // ffmpeg returns non-zero when there's no output, that's expected
+    // Expected — ffmpeg exits non-zero with no output specified
   } finally {
     ffmpeg.off('log', logHandler);
     await unmountFile(ffmpeg);
@@ -171,6 +181,10 @@ export async function probeHdr(file: File): Promise<boolean> {
   // HDR10 = BT.2020 primaries + SMPTE ST.2084 (PQ) transfer
   const hasBt2020 = /bt2020/i.test(logText);
   const hasPq = /smpte2084|arib-std-b67/i.test(logText);
+
+  console.log('[probeHdr] log output:', logText);
+  console.log(`[probeHdr] hasBt2020=${hasBt2020} hasPq=${hasPq} → isHdr=${hasBt2020 && hasPq}`);
+
   return hasBt2020 && hasPq;
 }
 

@@ -11,9 +11,24 @@
   } = $props();
 
   const channels = [
-    { key: 'r' as const, label: 'R', cssLow: (c: RGBColor) => rgbToCssString({ ...c, r: 0 }), cssHigh: (c: RGBColor) => rgbToCssString({ ...c, r: 255 }) },
-    { key: 'g' as const, label: 'G', cssLow: (c: RGBColor) => rgbToCssString({ ...c, g: 0 }), cssHigh: (c: RGBColor) => rgbToCssString({ ...c, g: 255 }) },
-    { key: 'b' as const, label: 'B', cssLow: (c: RGBColor) => rgbToCssString({ ...c, b: 0 }), cssHigh: (c: RGBColor) => rgbToCssString({ ...c, b: 255 }) },
+    {
+      key: 'r' as const,
+      label: 'R',
+      cssLow: (c: RGBColor) => rgbToCssString({ ...c, r: 0 }),
+      cssHigh: (c: RGBColor) => rgbToCssString({ ...c, r: 255 }),
+    },
+    {
+      key: 'g' as const,
+      label: 'G',
+      cssLow: (c: RGBColor) => rgbToCssString({ ...c, g: 0 }),
+      cssHigh: (c: RGBColor) => rgbToCssString({ ...c, g: 255 }),
+    },
+    {
+      key: 'b' as const,
+      label: 'B',
+      cssLow: (c: RGBColor) => rgbToCssString({ ...c, b: 0 }),
+      cssHigh: (c: RGBColor) => rgbToCssString({ ...c, b: 255 }),
+    },
   ] as const;
 
   function handleSlider(key: 'r' | 'g' | 'b', val: number) {

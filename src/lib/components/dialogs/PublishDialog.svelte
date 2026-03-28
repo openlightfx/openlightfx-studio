@@ -61,7 +61,9 @@
     <!-- Missing Fields -->
     {#if missingFields.length > 0}
       <div>
-        <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-textMuted">Required Fields Missing</h3>
+        <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-textMuted">
+          Required Fields Missing
+        </h3>
         <ul class="flex flex-col gap-1">
           {#each missingFields as { label } (label)}
             <li class="flex items-center gap-2 text-sm text-danger">

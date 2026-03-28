@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "80:8080"
+      - '80:8080'
     read_only: true
     tmpfs:
       - /tmp
@@ -12,14 +12,14 @@ services:
     cap_drop:
       - ALL
     security_opt:
-      - "no-new-privileges:true"
+      - 'no-new-privileges:true'
     deploy:
       resources:
         limits:
           cpus: '1.0'
           memory: 128M
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/"]
+      test: ['CMD', 'wget', '--spider', '-q', 'http://localhost:8080/']
       interval: 30s
       timeout: 5s
       retries: 3

@@ -142,9 +142,8 @@ function handleFrame(msg: FrameMessage): void {
 
   previousHistogram = histogram;
 
-  const percent = totalDurationMs > 0
-    ? Math.min(100, Math.round((msg.timestampMs / totalDurationMs) * 100))
-    : 0;
+  const percent =
+    totalDurationMs > 0 ? Math.min(100, Math.round((msg.timestampMs / totalDurationMs) * 100)) : 0;
 
   const progress: ProgressMessage = {
     type: 'progress',

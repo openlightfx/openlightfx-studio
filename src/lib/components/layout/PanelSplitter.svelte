@@ -39,7 +39,9 @@
   class="flex-shrink-0 transition-colors {direction === 'vertical'
     ? 'w-[var(--splitter-size)] cursor-col-resize'
     : 'h-[var(--splitter-size)] cursor-row-resize'}
-    {dragging ? 'bg-[var(--splitter-hover)]' : 'bg-[var(--splitter-color)] hover:bg-[var(--splitter-hover)]'}"
+    {dragging
+    ? 'bg-[var(--splitter-hover)]'
+    : 'bg-[var(--splitter-color)] hover:bg-[var(--splitter-hover)]'}"
   onpointerdown={onPointerDown}
   onpointermove={onPointerMove}
   onpointerup={onPointerUp}

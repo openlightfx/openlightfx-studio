@@ -21,7 +21,7 @@ export interface InterpolatedState {
 export function interpolateAtTime(
   channelId: string,
   timestampMs: number,
-  keyframes: Keyframe[],
+  keyframes: Keyframe[]
 ): InterpolatedState | null {
   const channelKfs = keyframes
     .filter((kf) => kf.channelId === channelId)

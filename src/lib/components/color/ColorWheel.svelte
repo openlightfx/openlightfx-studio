@@ -1,9 +1,6 @@
 <script lang="ts">
   import type { RGBColor } from '$lib/types/index.js';
-  import {
-    rgbToHsl,
-    hslToRgb,
-  } from '$lib/services/color-utils.js';
+  import { rgbToHsl, hslToRgb } from '$lib/services/color-utils.js';
 
   let {
     color,
@@ -55,8 +52,14 @@
   function pickFromPosition(clientX: number, clientY: number) {
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const x = Math.max(0, Math.min(SPECTRUM_WIDTH - 1, ((clientX - rect.left) / rect.width) * SPECTRUM_WIDTH));
-    const y = Math.max(0, Math.min(SPECTRUM_HEIGHT - 1, ((clientY - rect.top) / rect.height) * SPECTRUM_HEIGHT));
+    const x = Math.max(
+      0,
+      Math.min(SPECTRUM_WIDTH - 1, ((clientX - rect.left) / rect.width) * SPECTRUM_WIDTH)
+    );
+    const y = Math.max(
+      0,
+      Math.min(SPECTRUM_HEIGHT - 1, ((clientY - rect.top) / rect.height) * SPECTRUM_HEIGHT)
+    );
 
     const hue = (x / SPECTRUM_WIDTH) * 360;
     const saturation = (1 - y / SPECTRUM_HEIGHT) * 100;
@@ -83,7 +86,7 @@
     onchange(hslToRgb(hsl.h, hsl.s, val));
   }
 
-  const lightnessPct = $derived(((hsl.l) / 100) * 100);
+  const lightnessPct = $derived((hsl.l / 100) * 100);
 </script>
 
 <div class="flex flex-col gap-2">
@@ -108,7 +111,8 @@
     <!-- Crosshair -->
     <div
       class="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white"
-      style="left: {(hsl.h / 360) * 100}%; top: {(1 - hsl.s / 100) * 100}%; box-shadow: 0 0 2px rgba(0,0,0,0.6);"
+      style="left: {(hsl.h / 360) * 100}%; top: {(1 - hsl.s / 100) *
+        100}%; box-shadow: 0 0 2px rgba(0,0,0,0.6);"
     ></div>
   </div>
 
@@ -123,7 +127,9 @@
       value={Math.round(hsl.l)}
       oninput={handleLightnessChange}
       class="lightness-slider h-1.5 w-full flex-1 cursor-pointer appearance-none rounded-full"
-      style="background: linear-gradient(to right, #000 0%, hsl({Math.round(hsl.h)}, {Math.round(hsl.s)}%, 50%) 50%, #fff 100%);"
+      style="background: linear-gradient(to right, #000 0%, hsl({Math.round(hsl.h)}, {Math.round(
+        hsl.s
+      )}%, 50%) 50%, #fff 100%);"
       aria-label="Lightness"
       aria-valuemin={0}
       aria-valuemax={100}

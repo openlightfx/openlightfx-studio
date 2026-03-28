@@ -1,9 +1,5 @@
 <script lang="ts">
-  import {
-    CHANNEL_LANE_HEIGHT,
-    CHANNEL_HEADER_WIDTH,
-    MINIMAP_HEIGHT,
-  } from '$lib/types/index.js';
+  import { CHANNEL_LANE_HEIGHT, CHANNEL_HEADER_WIDTH, MINIMAP_HEIGHT } from '$lib/types/index.js';
   import { timelineStore } from '$lib/stores/timeline.svelte.js';
   import { projectStore } from '$lib/stores/project.svelte.js';
   import { videoStore } from '$lib/stores/video.svelte.js';
@@ -115,7 +111,9 @@
 
     // Viewport rectangle
     const vpStartX = msToMinimapX(vp.scrollX);
-    const vpEndMs = vp.scrollX + (vp.viewportWidth > 0 && vp.pxPerMs > 0 ? vp.viewportWidth / vp.pxPerMs : duration);
+    const vpEndMs =
+      vp.scrollX +
+      (vp.viewportWidth > 0 && vp.pxPerMs > 0 ? vp.viewportWidth / vp.pxPerMs : duration);
     const vpEndX = msToMinimapX(Math.min(vpEndMs, duration));
     const vpW = Math.max(4, vpEndX - vpStartX);
 
@@ -187,7 +185,8 @@
     const clickedMs = minimapXToMs(x);
 
     const vp = timelineStore.viewport;
-    const visibleDuration = vp.viewportWidth > 0 && vp.pxPerMs > 0 ? vp.viewportWidth / vp.pxPerMs : 0;
+    const visibleDuration =
+      vp.viewportWidth > 0 && vp.pxPerMs > 0 ? vp.viewportWidth / vp.pxPerMs : 0;
 
     // Check if click is within the viewport box
     const vpStartX = msToMinimapX(vp.scrollX);

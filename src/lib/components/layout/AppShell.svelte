@@ -105,11 +105,7 @@
   <!-- Content area (middle + timeline) fills remaining space -->
   <div class="flex flex-col flex-1 min-h-0">
     <!-- Middle section: video + properties -->
-    <div
-      bind:this={middleContainerEl}
-      class="flex min-h-0"
-      style="height: {middleHeight}%"
-    >
+    <div bind:this={middleContainerEl} class="flex min-h-0" style="height: {middleHeight}%">
       <!-- Video Panel -->
       <div class="min-w-0 overflow-hidden" style="width: {videoPanelWidth}%">
         {@render videoPanel()}

@@ -93,7 +93,9 @@
     <section class="flex flex-col gap-3">
       <div class="flex flex-col gap-1.5">
         <span class="text-xs font-medium text-textMuted">Channel ID</span>
-        <span class="rounded-md border border-surface2 bg-surface2/50 px-3 py-1.5 text-sm font-mono text-text-base">
+        <span
+          class="rounded-md border border-surface2 bg-surface2/50 px-3 py-1.5 text-sm font-mono text-text-base"
+        >
           {channel.id}
         </span>
       </div>
@@ -106,7 +108,9 @@
       />
 
       <div class="flex flex-col gap-1.5">
-        <label for="channel-description" class="text-xs font-medium text-textMuted">Description</label>
+        <label for="channel-description" class="text-xs font-medium text-textMuted"
+          >Description</label
+        >
         <textarea
           id="channel-description"
           value={descriptionValue}
@@ -139,9 +143,30 @@
         />
       </div>
 
-      <Slider value={channel.defaultColor.r} min={0} max={255} step={1} label="R" onchange={handleDefaultColorR} />
-      <Slider value={channel.defaultColor.g} min={0} max={255} step={1} label="G" onchange={handleDefaultColorG} />
-      <Slider value={channel.defaultColor.b} min={0} max={255} step={1} label="B" onchange={handleDefaultColorB} />
+      <Slider
+        value={channel.defaultColor.r}
+        min={0}
+        max={255}
+        step={1}
+        label="R"
+        onchange={handleDefaultColorR}
+      />
+      <Slider
+        value={channel.defaultColor.g}
+        min={0}
+        max={255}
+        step={1}
+        label="G"
+        onchange={handleDefaultColorG}
+      />
+      <Slider
+        value={channel.defaultColor.b}
+        min={0}
+        max={255}
+        step={1}
+        label="B"
+        onchange={handleDefaultColorB}
+      />
     </section>
 
     <hr class="border-surface2" />

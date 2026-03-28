@@ -35,17 +35,25 @@
   } | null = $state(null);
 
   function hasTarget(): boolean {
-    return !!(lastHit && (lastHit.type === 'keyframe' || lastHit.type === 'effect' || lastHit.type === 'scene-marker'));
+    return !!(
+      lastHit &&
+      (lastHit.type === 'keyframe' || lastHit.type === 'effect' || lastHit.type === 'scene-marker')
+    );
   }
 
   function hasSelection(): boolean {
     const sel = timelineStore.selection;
-    return sel.keyframeIds.length > 0 || sel.effectKeyframeIds.length > 0 || sel.sceneMarkerIds.length > 0;
+    return (
+      sel.keyframeIds.length > 0 ||
+      sel.effectKeyframeIds.length > 0 ||
+      sel.sceneMarkerIds.length > 0
+    );
   }
 
   // ---- CONTEXT MENU BUILDER ----
   function buildContextMenuItems(hit: TimelineHitResult): ContextMenuItem[] {
-    const isTarget = hit.type === 'keyframe' || hit.type === 'effect' || hit.type === 'scene-marker';
+    const isTarget =
+      hit.type === 'keyframe' || hit.type === 'effect' || hit.type === 'scene-marker';
     const hasSel = hasSelection() || isTarget;
     const channelId = hit.channelId;
 
@@ -98,7 +106,10 @@
         enabled: true,
         icon: '🏷',
         action: () => {
-          projectStore.addSceneMarker(hit.timestampMs, `Scene ${projectStore.sceneMarkers.length + 1}`);
+          projectStore.addSceneMarker(
+            hit.timestampMs,
+            `Scene ${projectStore.sceneMarkers.length + 1}`
+          );
         },
       },
       { id: 'sep-1', label: '', enabled: false, separator: true },
@@ -111,9 +122,15 @@
           if (hit.type === 'keyframe' && hit.keyframeId) {
             uiStore.setPropertiesContext({ type: 'keyframe', keyframeIds: [hit.keyframeId] });
           } else if (hit.type === 'effect' && hit.effectKeyframeId) {
-            uiStore.setPropertiesContext({ type: 'effect', effectKeyframeId: hit.effectKeyframeId });
+            uiStore.setPropertiesContext({
+              type: 'effect',
+              effectKeyframeId: hit.effectKeyframeId,
+            });
           } else if (hit.type === 'scene-marker' && hit.sceneMarkerId) {
-            uiStore.setPropertiesContext({ type: 'scene-marker', sceneMarkerId: hit.sceneMarkerId });
+            uiStore.setPropertiesContext({
+              type: 'scene-marker',
+              sceneMarkerId: hit.sceneMarkerId,
+            });
           }
         },
       },

@@ -41,10 +41,7 @@ export interface SelectionRect {
 }
 
 /** Scene marker types */
-export type SceneMarkerType =
-  | 'MARKER_MANUAL'
-  | 'MARKER_AUTO_DETECTED'
-  | 'MARKER_CHAPTER';
+export type SceneMarkerType = 'MARKER_MANUAL' | 'MARKER_AUTO_DETECTED' | 'MARKER_CHAPTER';
 
 /** Scene marker (Studio-only, not exported to .lightfx) */
 export interface SceneMarker {

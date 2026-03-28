@@ -1,10 +1,5 @@
 <script lang="ts">
-  import type {
-    Keyframe,
-    RGBColor,
-    ColorMode,
-    InterpolationMode,
-  } from '$lib/types/index.js';
+  import type { Keyframe, RGBColor, ColorMode, InterpolationMode } from '$lib/types/index.js';
   import {
     MIN_COLOR_TEMPERATURE,
     MAX_COLOR_TEMPERATURE,
@@ -181,7 +176,8 @@
         </div>
         <div class="flex items-center justify-between">
           <span class="text-xs text-textMuted">Timestamp</span>
-          <span class="text-xs font-mono text-text-base">{formatTimestamp(single.timestampMs)}</span>
+          <span class="text-xs font-mono text-text-base">{formatTimestamp(single.timestampMs)}</span
+          >
         </div>
       </section>
 
@@ -225,19 +221,25 @@
         <!-- RGB Sliders -->
         <Slider
           value={sharedColor?.r ?? 0}
-          min={0} max={255} step={1}
+          min={0}
+          max={255}
+          step={1}
           label="R"
           onchange={handleColorR}
         />
         <Slider
           value={sharedColor?.g ?? 0}
-          min={0} max={255} step={1}
+          min={0}
+          max={255}
+          step={1}
           label="G"
           onchange={handleColorG}
         />
         <Slider
           value={sharedColor?.b ?? 0}
-          min={0} max={255} step={1}
+          min={0}
+          max={255}
+          step={1}
           label="B"
           onchange={handleColorB}
         />
@@ -261,7 +263,8 @@
 
         <div class="flex flex-col gap-1.5">
           <div class="flex items-center justify-between">
-            <label for="kelvin-slider" class="text-xs font-medium text-textMuted">Temperature</label>
+            <label for="kelvin-slider" class="text-xs font-medium text-textMuted">Temperature</label
+            >
             <span class="text-xs tabular-nums text-text-base">{sharedColorTemp ?? '--'}K</span>
           </div>
           <input
@@ -289,7 +292,9 @@
     <section class="flex flex-col gap-3">
       <Slider
         value={sharedBrightness ?? 50}
-        min={0} max={100} step={1}
+        min={0}
+        max={100}
+        step={1}
         label="Brightness"
         onchange={handleBrightness}
       />

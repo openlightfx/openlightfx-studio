@@ -101,30 +101,28 @@
 
     {#if !isLoading}
       <div class="flex flex-col items-center gap-4 text-textMuted">
-      <svg
-        class="h-16 w-16 opacity-40"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.5"
-        aria-hidden="true"
-      >
-        <path
-          d="M15.91 11.672a.375.375 0 010 .656l-5.603 3.113a.375.375 0 01-.557-.328V8.887c0-.286.307-.466.557-.327l5.603 3.112z"
-        />
-        <path
-          d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-        />
-      </svg>
-      <p class="text-sm">No video loaded</p>
-      <button
-        onclick={openFilePicker}
-        class="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
-      >
-        Load Video
-      </button>
-      <p class="text-xs opacity-60">Supports MP4 (H.264), WebM (VP8/VP9)</p>
-    </div>
+        <svg
+          class="h-16 w-16 opacity-40"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          aria-hidden="true"
+        >
+          <path
+            d="M15.91 11.672a.375.375 0 010 .656l-5.603 3.113a.375.375 0 01-.557-.328V8.887c0-.286.307-.466.557-.327l5.603 3.112z"
+          />
+          <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <p class="text-sm">No video loaded</p>
+        <button
+          onclick={openFilePicker}
+          class="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
+        >
+          Load Video
+        </button>
+        <p class="text-xs opacity-60">Supports MP4 (H.264), WebM (VP8/VP9)</p>
+      </div>
     {/if}
   {/if}
 </div>

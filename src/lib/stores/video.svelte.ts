@@ -178,9 +178,11 @@ class VideoStoreClass {
         .then((isHdr) => {
           this.state = { ...this.state, isHdr };
         })
-        .catch(() => {
-          // Non-critical — assume SDR on failure
+        .catch((err) => {
+          console.warn('[videoStore] probeHdr failed:', err);
         });
+    } else {
+      console.warn('[videoStore] ffmpeg not supported, skipping HDR probe');
     }
   }
 

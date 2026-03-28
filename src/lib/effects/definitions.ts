@@ -19,7 +19,12 @@ const YELLOW: RGBColor = { r: 255, g: 230, b: 120 };
 const NEON_PINK: RGBColor = { r: 255, g: 20, b: 147 };
 
 const FLASH_COUNT_EFFECTS: EffectType[] = [
-  'LIGHTNING', 'FLASHBANG', 'EXPLOSION', 'GUNFIRE', 'SIREN', 'STROBE',
+  'LIGHTNING',
+  'FLASHBANG',
+  'EXPLOSION',
+  'GUNFIRE',
+  'SIREN',
+  'STROBE',
 ];
 const FLICKER_RATE_EFFECTS: EffectType[] = ['FLAME', 'CANDLE', 'NEON', 'AURORA'];
 const PULSE_RATE_EFFECTS: EffectType[] = ['PULSE', 'BREATHING'];

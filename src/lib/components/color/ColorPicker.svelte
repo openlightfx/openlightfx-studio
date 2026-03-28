@@ -89,12 +89,14 @@
       <button
         type="button"
         class="ml-auto rounded p-1 text-xs transition-colors
-          {showSampler ? 'bg-accent text-white' : 'text-textMuted hover:bg-surface2 hover:text-text-base'}"
+          {showSampler
+          ? 'bg-accent text-white'
+          : 'text-textMuted hover:bg-surface2 hover:text-text-base'}"
         title={showSampler ? 'Hide video sampler' : 'Sample color from video frame'}
         aria-label={showSampler ? 'Hide video sampler' : 'Sample color from video frame'}
         aria-pressed={showSampler}
-        onclick={() => (showSampler = !showSampler)}
-      >💧</button>
+        onclick={() => (showSampler = !showSampler)}>💧</button
+      >
     {/if}
   </div>
 

@@ -61,11 +61,7 @@ function readBoxHeader(view: DataView, offset: number): Box | null {
 /**
  * Iterate over sibling boxes within a region.
  */
-function* iterateBoxes(
-  view: DataView,
-  start: number,
-  end: number,
-): Generator<Box> {
+function* iterateBoxes(view: DataView, start: number, end: number): Generator<Box> {
   let pos = start;
   while (pos < end) {
     const box = readBoxHeader(view, pos);
@@ -127,7 +123,12 @@ function parseIlst(view: DataView, box: Box): VideoContainerTags {
   const end = Math.min(box.dataOffset + box.dataSize, view.byteLength);
 
   for (const item of iterateBoxes(view, box.dataOffset, end)) {
-    const dataBox = findBox(view, item.dataOffset, Math.min(item.endOffset, view.byteLength), 'data');
+    const dataBox = findBox(
+      view,
+      item.dataOffset,
+      Math.min(item.endOffset, view.byteLength),
+      'data'
+    );
     if (!dataBox) continue;
 
     // 'data' box: 4 bytes type indicator + 4 bytes locale, then value
@@ -136,7 +137,7 @@ function parseIlst(view: DataView, box: Box): VideoContainerTags {
     if (valueOffset + valueSize > view.byteLength || valueSize <= 0) continue;
 
     const value = utf8Decoder.decode(
-      new Uint8Array(view.buffer, view.byteOffset + valueOffset, valueSize),
+      new Uint8Array(view.buffer, view.byteOffset + valueOffset, valueSize)
     );
 
     switch (item.type) {
@@ -186,9 +187,7 @@ function parseChpl(view: DataView, box: Box): VideoChapter[] {
 
     let title = '';
     if (off + titleLen <= end) {
-      title = utf8Decoder.decode(
-        new Uint8Array(view.buffer, view.byteOffset + off, titleLen),
-      );
+      title = utf8Decoder.decode(new Uint8Array(view.buffer, view.byteOffset + off, titleLen));
     }
     off += titleLen;
 

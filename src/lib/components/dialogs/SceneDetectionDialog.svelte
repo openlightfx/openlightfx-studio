@@ -119,7 +119,9 @@
       <p class="text-xs text-textMuted">{sensitivityDescriptions[sensitivity]}</p>
 
       {#if !videoLoaded}
-        <div class="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
+        <div
+          class="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning"
+        >
           A video must be loaded before running scene detection.
         </div>
       {/if}
@@ -152,7 +154,9 @@
       <div class="flex flex-col items-center gap-2 py-2 text-center">
         <span class="text-3xl">🎬</span>
         <p class="text-sm text-text-base">
-          <strong>{detectedMarkers.length}</strong> scene marker{detectedMarkers.length !== 1 ? 's' : ''} detected
+          <strong>{detectedMarkers.length}</strong> scene marker{detectedMarkers.length !== 1
+            ? 's'
+            : ''} detected
         </p>
       </div>
     {/if}
@@ -168,7 +172,11 @@
       <Button variant="danger" onclick={handleCancel}>Cancel</Button>
     {:else if phase === 'results'}
       <Button variant="ghost" onclick={handleClose}>Discard</Button>
-      <Button variant="primary" onclick={handleAddToTimeline} disabled={detectedMarkers.length === 0}>
+      <Button
+        variant="primary"
+        onclick={handleAddToTimeline}
+        disabled={detectedMarkers.length === 0}
+      >
         Add to Timeline
       </Button>
     {/if}

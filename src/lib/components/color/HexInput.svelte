@@ -44,7 +44,11 @@
 <div class="flex flex-col gap-2">
   <div class="flex items-center gap-1.5">
     <label for="hex-input" class="text-xs font-medium text-textMuted">Hex</label>
-    <div class="flex flex-1 items-center rounded border bg-surface2 {error ? 'border-danger' : 'border-surface2 hover:border-surface3'} focus-within:ring-1 focus-within:ring-accent">
+    <div
+      class="flex flex-1 items-center rounded border bg-surface2 {error
+        ? 'border-danger'
+        : 'border-surface2 hover:border-surface3'} focus-within:ring-1 focus-within:ring-accent"
+    >
       <span class="pl-2 text-xs text-textMuted">#</span>
       <input
         id="hex-input"

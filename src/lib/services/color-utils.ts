@@ -71,8 +71,7 @@ export function hslToRgb(h: number, s: number, l: number): RGBColor {
 }
 
 export function rgbToHex(color: RGBColor): string {
-  const toHex = (v: number) =>
-    clampColorComponent(v).toString(16).padStart(2, '0');
+  const toHex = (v: number) => clampColorComponent(v).toString(16).padStart(2, '0');
   return `#${toHex(color.r)}${toHex(color.g)}${toHex(color.b)}`;
 }
 

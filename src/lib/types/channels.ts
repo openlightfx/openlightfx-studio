@@ -45,9 +45,7 @@ export const CHANNEL_TEMPLATES: ChannelTemplate[] = [
   {
     name: 'Mono (1-channel)',
     description: 'Single ambient channel',
-    channels: [
-      { id: 'main', displayName: 'Main', spatialHint: 'SPATIAL_AMBIENT' },
-    ],
+    channels: [{ id: 'main', displayName: 'Main', spatialHint: 'SPATIAL_AMBIENT' }],
   },
   {
     name: 'Stereo (2-channel)',
@@ -73,7 +71,11 @@ export const CHANNEL_TEMPLATES: ChannelTemplate[] = [
       { id: 'left', displayName: 'Left', spatialHint: 'SPATIAL_LEFT' },
       { id: 'right', displayName: 'Right', spatialHint: 'SPATIAL_RIGHT' },
       { id: 'surround-left', displayName: 'Surround Left', spatialHint: 'SPATIAL_SURROUND_LEFT' },
-      { id: 'surround-right', displayName: 'Surround Right', spatialHint: 'SPATIAL_SURROUND_RIGHT' },
+      {
+        id: 'surround-right',
+        displayName: 'Surround Right',
+        spatialHint: 'SPATIAL_SURROUND_RIGHT',
+      },
     ],
   },
   {
@@ -84,7 +86,11 @@ export const CHANNEL_TEMPLATES: ChannelTemplate[] = [
       { id: 'center', displayName: 'Center', spatialHint: 'SPATIAL_CENTER' },
       { id: 'right', displayName: 'Right', spatialHint: 'SPATIAL_RIGHT' },
       { id: 'surround-left', displayName: 'Surround Left', spatialHint: 'SPATIAL_SURROUND_LEFT' },
-      { id: 'surround-right', displayName: 'Surround Right', spatialHint: 'SPATIAL_SURROUND_RIGHT' },
+      {
+        id: 'surround-right',
+        displayName: 'Surround Right',
+        spatialHint: 'SPATIAL_SURROUND_RIGHT',
+      },
       { id: 'ambient', displayName: 'Ambient', spatialHint: 'SPATIAL_AMBIENT' },
     ],
   },
@@ -96,7 +102,11 @@ export const CHANNEL_TEMPLATES: ChannelTemplate[] = [
       { id: 'center', displayName: 'Center', spatialHint: 'SPATIAL_CENTER' },
       { id: 'right', displayName: 'Right', spatialHint: 'SPATIAL_RIGHT' },
       { id: 'surround-left', displayName: 'Surround Left', spatialHint: 'SPATIAL_SURROUND_LEFT' },
-      { id: 'surround-right', displayName: 'Surround Right', spatialHint: 'SPATIAL_SURROUND_RIGHT' },
+      {
+        id: 'surround-right',
+        displayName: 'Surround Right',
+        spatialHint: 'SPATIAL_SURROUND_RIGHT',
+      },
       { id: 'back-left', displayName: 'Back Left', spatialHint: 'SPATIAL_SURROUND_LEFT' },
       { id: 'back-right', displayName: 'Back Right', spatialHint: 'SPATIAL_SURROUND_RIGHT' },
       { id: 'ambient', displayName: 'Ambient', spatialHint: 'SPATIAL_AMBIENT' },

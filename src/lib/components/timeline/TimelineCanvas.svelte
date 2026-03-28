@@ -163,7 +163,12 @@
       const y = contentTop + i * laneH - vp.scrollY;
       if (y + laneH < contentTop || y > h) continue;
       c.fillStyle = i % 2 === 0 ? colors.laneBg : colors.laneAltBg;
-      c.fillRect(contentLeft, Math.max(y, contentTop), contentWidth, laneH - Math.max(0, contentTop - y));
+      c.fillRect(
+        contentLeft,
+        Math.max(y, contentTop),
+        contentWidth,
+        laneH - Math.max(0, contentTop - y)
+      );
     }
 
     // Clip content area for grid, markers, keyframes
@@ -175,7 +180,7 @@
     // 3. Grid lines (vertical)
     const tickLevel = getTickLevel(vp.pxPerMs);
     const visibleStartMs = vp.scrollX;
-    const visibleEndMs = vp.scrollX + (contentWidth / vp.pxPerMs);
+    const visibleEndMs = vp.scrollX + contentWidth / vp.pxPerMs;
 
     const gridStartMs = Math.floor(visibleStartMs / tickLevel.minorMs) * tickLevel.minorMs;
     c.lineWidth = 1;
@@ -457,7 +462,10 @@
     canvasEl.style.height = `${canvasHeight}px`;
     // Use untrack to prevent this write from triggering reactive re-runs
     untrack(() => {
-      timelineStore.setViewportSize(canvasWidth - CHANNEL_HEADER_WIDTH, canvasHeight - RULER_HEIGHT);
+      timelineStore.setViewportSize(
+        canvasWidth - CHANNEL_HEADER_WIDTH,
+        canvasHeight - RULER_HEIGHT
+      );
     });
     dirty = true;
   }

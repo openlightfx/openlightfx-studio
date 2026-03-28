@@ -36,7 +36,8 @@
 
   const idError = $derived.by(() => {
     if (channelId.length === 0) return 'Channel ID is required';
-    if (!CHANNEL_ID_REGEX.test(channelId)) return 'Only lowercase a-z, 0-9, hyphens, underscores (1-64 chars)';
+    if (!CHANNEL_ID_REGEX.test(channelId))
+      return 'Only lowercase a-z, 0-9, hyphens, underscores (1-64 chars)';
     if (projectStore.channels.some((ch) => ch.id === channelId)) return 'Channel ID already exists';
     return '';
   });
@@ -100,7 +101,7 @@
   }
 </script>
 
-<Modal open={open} title="Add Channel" onclose={handleClose} size="md">
+<Modal {open} title="Add Channel" onclose={handleClose} size="md">
   <div class="flex flex-col gap-4">
     <TextInput
       value={channelId}
@@ -125,7 +126,9 @@
     />
 
     <div class="flex flex-col gap-1.5">
-      <label for="channel-default-color" class="text-xs font-medium text-textMuted">Default Color</label>
+      <label for="channel-default-color" class="text-xs font-medium text-textMuted"
+        >Default Color</label
+      >
       <div class="flex items-center gap-3">
         <input
           id="channel-default-color"

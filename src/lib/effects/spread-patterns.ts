@@ -22,9 +22,7 @@ function frontToBack(templateName: string, channelIds: string[], offsetMs = 150)
   const stages: SpreadPattern['stages'] = [];
 
   const front = channelIds.filter((id) => ['left', 'center', 'right'].includes(id));
-  const surrounds = channelIds.filter((id) =>
-    ['surround-left', 'surround-right'].includes(id)
-  );
+  const surrounds = channelIds.filter((id) => ['surround-left', 'surround-right'].includes(id));
   const backs = channelIds.filter((id) => ['back-left', 'back-right'].includes(id));
   const ambient = channelIds.filter((id) => ['ambient', 'main'].includes(id));
 
@@ -63,9 +61,7 @@ function centerOutward(templateName: string, channelIds: string[], offsetMs = 15
 
   const center = channelIds.filter((id) => ['center', 'main'].includes(id));
   const frontLR = channelIds.filter((id) => ['left', 'right'].includes(id));
-  const surrounds = channelIds.filter((id) =>
-    ['surround-left', 'surround-right'].includes(id)
-  );
+  const surrounds = channelIds.filter((id) => ['surround-left', 'surround-right'].includes(id));
   const backs = channelIds.filter((id) => ['back-left', 'back-right'].includes(id));
   const ambient = channelIds.filter((id) => id === 'ambient');
 
@@ -84,15 +80,11 @@ function centerOutward(templateName: string, channelIds: string[], offsetMs = 15
 function alternatingLR(templateName: string, channelIds: string[], offsetMs = 150): SpreadPattern {
   const stages: SpreadPattern['stages'] = [];
 
-  const leftSide = channelIds.filter((id) =>
-    ['left', 'surround-left', 'back-left'].includes(id)
-  );
+  const leftSide = channelIds.filter((id) => ['left', 'surround-left', 'back-left'].includes(id));
   const rightSide = channelIds.filter((id) =>
     ['right', 'surround-right', 'back-right'].includes(id)
   );
-  const other = channelIds.filter(
-    (id) => !leftSide.includes(id) && !rightSide.includes(id)
-  );
+  const other = channelIds.filter((id) => !leftSide.includes(id) && !rightSide.includes(id));
 
   if (leftSide.length > 0) stages.push({ channelIds: leftSide, delayMs: 0 });
   if (rightSide.length > 0) stages.push({ channelIds: rightSide, delayMs: offsetMs });
@@ -175,10 +167,7 @@ export function matchChannelTemplate(channelIds: string[]): string | null {
   const sorted = [...channelIds].sort();
   for (const template of CHANNEL_TEMPLATES) {
     const templateIds = template.channels.map((ch) => ch.id).sort();
-    if (
-      sorted.length === templateIds.length &&
-      sorted.every((id, i) => id === templateIds[i])
-    ) {
+    if (sorted.length === templateIds.length && sorted.every((id, i) => id === templateIds[i])) {
       return template.name;
     }
   }

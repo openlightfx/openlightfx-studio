@@ -15,11 +15,7 @@ export type InterpolationMode = 'STEP' | 'LINEAR';
 
 export type BoundaryBehavior = 'BOUNDARY_UNSPECIFIED' | 'LEAVE' | 'OFF' | 'ON';
 
-export type PreshowState =
-  | 'PRESHOW_UNSPECIFIED'
-  | 'PRESHOW_DIM'
-  | 'PRESHOW_OFF'
-  | 'PRESHOW_WARM';
+export type PreshowState = 'PRESHOW_UNSPECIFIED' | 'PRESHOW_DIM' | 'PRESHOW_OFF' | 'PRESHOW_WARM';
 
 export type CreditsBehavior =
   | 'CREDITS_UNSPECIFIED'

@@ -72,10 +72,9 @@ export class SceneDetectionController {
     }
 
     // Spin up the worker
-    const worker = new Worker(
-      new URL('./scene-detection.worker.ts', import.meta.url),
-      { type: 'module' },
-    );
+    const worker = new Worker(new URL('./scene-detection.worker.ts', import.meta.url), {
+      type: 'module',
+    });
     this.worker = worker;
 
     worker.onerror = (event) => {
@@ -115,7 +114,16 @@ export class SceneDetectionController {
     worker.postMessage(startMsg);
 
     // Begin seeking through the video
-    this.processFrames(video, canvas, ctx, sampleIntervalMs, sampleWidth, sampleHeight, totalDurationMs, worker);
+    this.processFrames(
+      video,
+      canvas,
+      ctx,
+      sampleIntervalMs,
+      sampleWidth,
+      sampleHeight,
+      totalDurationMs,
+      worker
+    );
   }
 
   cancel(): void {
@@ -142,7 +150,7 @@ export class SceneDetectionController {
     sampleWidth: number,
     sampleHeight: number,
     totalDurationMs: number,
-    worker: Worker,
+    worker: Worker
   ): Promise<void> {
     const totalSamples = Math.ceil(totalDurationMs / sampleIntervalMs);
 

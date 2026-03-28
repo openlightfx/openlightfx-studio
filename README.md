@@ -72,17 +72,17 @@ docker compose -f docker-compose.ci.yml run build-linux
 
 ## Available Scripts
 
-| Command | Description |
-| --- | --- |
-| `npm run dev` | Start SvelteKit dev server |
-| `npm run build` | Production build |
-| `npm run preview` | Preview production build |
-| `npm run check` | Run svelte-check (type checking) |
-| `npm run lint` | Run Prettier + ESLint |
-| `npm run format` | Auto-format with Prettier |
-| `npm run proto:compile` | Regenerate protobuf JS/TS bindings |
-| `npm run electron:dev` | Launch Electron + SvelteKit dev server |
-| `npm run electron:build` | Production Electron build |
+| Command                  | Description                            |
+| ------------------------ | -------------------------------------- |
+| `npm run dev`            | Start SvelteKit dev server             |
+| `npm run build`          | Production build                       |
+| `npm run preview`        | Preview production build               |
+| `npm run check`          | Run svelte-check (type checking)       |
+| `npm run lint`           | Run Prettier + ESLint                  |
+| `npm run format`         | Auto-format with Prettier              |
+| `npm run proto:compile`  | Regenerate protobuf JS/TS bindings     |
+| `npm run electron:dev`   | Launch Electron + SvelteKit dev server |
+| `npm run electron:build` | Production Electron build              |
 
 ## Architecture
 
@@ -90,14 +90,14 @@ OpenLightFX Studio is a **SvelteKit + Svelte 5** single-page application built w
 
 ### Tech Stack
 
-| Layer | Technology |
-| --- | --- |
-| Framework | SvelteKit 2.16 / Svelte 5 |
-| Language | TypeScript 5 |
-| Styling | Tailwind CSS 3.4 |
-| Bundler | Vite 6 |
-| Serialization | protobufjs 7.4 |
-| Runtime | Node.js 22+ |
+| Layer         | Technology                |
+| ------------- | ------------------------- |
+| Framework     | SvelteKit 2.16 / Svelte 5 |
+| Language      | TypeScript 5              |
+| Styling       | Tailwind CSS 3.4          |
+| Bundler       | Vite 6                    |
+| Serialization | protobufjs 7.4            |
+| Runtime       | Node.js 22+               |
 
 ### Folder Structure
 
@@ -140,10 +140,10 @@ See the proto file for the full schema.
 
 ## Related Projects
 
-| Project | Description |
-| --- | --- |
-| [OpenLightFX Emby Plugin](https://github.com/openlightfx/openlightfx-emby) | Real-time playback engine with bulb discovery and smart bulb drivers |
-| [OpenLightFX Marketplace](https://github.com/openlightfx/openlightfx-marketplace) | Community platform for sharing and downloading lighting tracks |
+| Project                                                                           | Description                                                          |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| [OpenLightFX Emby Plugin](https://github.com/openlightfx/openlightfx-emby)        | Real-time playback engine with bulb discovery and smart bulb drivers |
+| [OpenLightFX Marketplace](https://github.com/openlightfx/openlightfx-marketplace) | Community platform for sharing and downloading lighting tracks       |
 
 ## Contributing
 

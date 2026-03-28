@@ -2,12 +2,7 @@
 // Project I/O Service — save/load project files, export/import .lightfx
 // ============================================================
 
-import type {
-  LightFXTrack,
-  ChannelGroup,
-  Keyframe,
-  EffectKeyframe,
-} from '$lib/types/index.js';
+import type { LightFXTrack, ChannelGroup, Keyframe, EffectKeyframe } from '$lib/types/index.js';
 import type { ProjectFile } from '$lib/types/project.js';
 import type { SceneMarker } from '$lib/types/timeline.js';
 import { encodeLightFXTrack, decodeLightFXTrack } from './protobuf.js';
@@ -25,8 +20,7 @@ export async function saveProjectFile(project: ProjectFile): Promise<void> {
   const json = JSON.stringify(project, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
   const fileName =
-    sanitizeFileName(project.track?.metadata?.title || 'untitled') +
-    '.lightfx-project';
+    sanitizeFileName(project.track?.metadata?.title || 'untitled') + '.lightfx-project';
 
   if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
     try {
@@ -79,7 +73,7 @@ export async function loadProjectFile(file: File): Promise<ProjectFile> {
 export function exportLightFXTrack(
   track: LightFXTrack,
   channelGroups: ChannelGroup[],
-  sceneMarkers: SceneMarker[],
+  sceneMarkers: SceneMarker[]
 ): Uint8Array {
   // Expand channel groups into per-channel keyframes
   const expandedTrack = expandChannelGroups(track, channelGroups);
@@ -89,7 +83,7 @@ export function exportLightFXTrack(
     const kfMax = expandedTrack.keyframes.reduce((max, kf) => Math.max(max, kf.timestampMs), 0);
     const efMax = expandedTrack.effectKeyframes.reduce(
       (max, ef) => Math.max(max, ef.timestampMs + ef.durationMs),
-      0,
+      0
     );
     const derived = Math.max(kfMax, efMax);
     if (derived > 0) {
@@ -104,14 +98,14 @@ export function exportLightFXTrack(
   expandedTrack.keyframes.sort((a, b) =>
     a.channelId === b.channelId
       ? a.timestampMs - b.timestampMs
-      : a.channelId.localeCompare(b.channelId),
+      : a.channelId.localeCompare(b.channelId)
   );
 
   // Sort effect keyframes similarly
   expandedTrack.effectKeyframes.sort((a, b) =>
     a.channelId === b.channelId
       ? a.timestampMs - b.timestampMs
-      : a.channelId.localeCompare(b.channelId),
+      : a.channelId.localeCompare(b.channelId)
   );
 
   // Validate
@@ -142,10 +136,7 @@ export async function importLightFXFile(file: File): Promise<LightFXTrack> {
  * For each group, the primary channel's keyframes are replicated to member channels
  * with offsets applied based on the group mode.
  */
-function expandChannelGroups(
-  track: LightFXTrack,
-  channelGroups: ChannelGroup[],
-): LightFXTrack {
+function expandChannelGroups(track: LightFXTrack, channelGroups: ChannelGroup[]): LightFXTrack {
   if (!channelGroups || channelGroups.length === 0) {
     return deepCloneTrack(track);
   }
@@ -156,12 +147,8 @@ function expandChannelGroups(
     if (group.channelIds.length < 2) continue;
 
     const primaryChannelId = group.channelIds[0];
-    const primaryKeyframes = result.keyframes.filter(
-      (kf) => kf.channelId === primaryChannelId,
-    );
-    const primaryEffects = result.effectKeyframes.filter(
-      (ek) => ek.channelId === primaryChannelId,
-    );
+    const primaryKeyframes = result.keyframes.filter((kf) => kf.channelId === primaryChannelId);
+    const primaryEffects = result.effectKeyframes.filter((ek) => ek.channelId === primaryChannelId);
 
     for (let i = 1; i < group.channelIds.length; i++) {
       const targetChannelId = group.channelIds[i];
@@ -169,9 +156,7 @@ function expandChannelGroups(
       const timingOffset = offset?.timingOffsetMs ?? 0;
 
       // Skip channels that already have explicit keyframes
-      const existingKfs = result.keyframes.filter(
-        (kf) => kf.channelId === targetChannelId,
-      );
+      const existingKfs = result.keyframes.filter((kf) => kf.channelId === targetChannelId);
       if (existingKfs.length > 0) continue;
 
       // Replicate keyframes
@@ -186,7 +171,7 @@ function expandChannelGroups(
 
       // Replicate effects
       const existingEffects = result.effectKeyframes.filter(
-        (ek) => ek.channelId === targetChannelId,
+        (ek) => ek.channelId === targetChannelId
       );
       if (existingEffects.length > 0) continue;
 
@@ -209,7 +194,11 @@ function expandChannelGroups(
 function deepCloneTrack(track: LightFXTrack): LightFXTrack {
   return {
     version: track.version,
-    metadata: { ...track.metadata, movieReference: { ...track.metadata.movieReference }, tags: [...track.metadata.tags] },
+    metadata: {
+      ...track.metadata,
+      movieReference: { ...track.metadata.movieReference },
+      tags: [...track.metadata.tags],
+    },
     channels: track.channels.map((ch) => ({ ...ch, defaultColor: { ...ch.defaultColor } })),
     keyframes: track.keyframes.map((kf) => ({ ...kf, color: { ...kf.color } })),
     effectKeyframes: track.effectKeyframes.map((ek) => ({
@@ -224,10 +213,12 @@ function deepCloneTrack(track: LightFXTrack): LightFXTrack {
 }
 
 function sanitizeFileName(name: string): string {
-  return name
-    .replace(/[^a-zA-Z0-9 _\-()]/g, '')
-    .replace(/\s+/g, '_')
-    .substring(0, 100) || 'untitled';
+  return (
+    name
+      .replace(/[^a-zA-Z0-9 _\-()]/g, '')
+      .replace(/\s+/g, '_')
+      .substring(0, 100) || 'untitled'
+  );
 }
 
 function triggerDownload(blob: Blob, fileName: string): void {

@@ -41,16 +41,26 @@
     const w = containerWidth;
     const h = containerHeight;
     switch (hint) {
-      case 'SPATIAL_LEFT': return { x: w * 0.08, y: h * 0.08 };
-      case 'SPATIAL_CENTER': return { x: w * 0.5, y: h * 0.04 };
-      case 'SPATIAL_RIGHT': return { x: w * 0.92, y: h * 0.08 };
-      case 'SPATIAL_SURROUND_LEFT': return { x: w * 0.08, y: h * 0.92 };
-      case 'SPATIAL_SURROUND_RIGHT': return { x: w * 0.92, y: h * 0.92 };
-      case 'SPATIAL_AMBIENT': return { x: w * 0.5, y: h * 0.5 };
-      case 'SPATIAL_CEILING': return { x: w * 0.5, y: h * 0.04 };
-      case 'SPATIAL_FLOOR': return { x: w * 0.5, y: h * 0.96 };
-      case 'SPATIAL_BEHIND_SCREEN': return { x: w * 0.5, y: h * 0.08 };
-      default: return { x: w * 0.5, y: h * 0.5 };
+      case 'SPATIAL_LEFT':
+        return { x: w * 0.08, y: h * 0.08 };
+      case 'SPATIAL_CENTER':
+        return { x: w * 0.5, y: h * 0.04 };
+      case 'SPATIAL_RIGHT':
+        return { x: w * 0.92, y: h * 0.08 };
+      case 'SPATIAL_SURROUND_LEFT':
+        return { x: w * 0.08, y: h * 0.92 };
+      case 'SPATIAL_SURROUND_RIGHT':
+        return { x: w * 0.92, y: h * 0.92 };
+      case 'SPATIAL_AMBIENT':
+        return { x: w * 0.5, y: h * 0.5 };
+      case 'SPATIAL_CEILING':
+        return { x: w * 0.5, y: h * 0.04 };
+      case 'SPATIAL_FLOOR':
+        return { x: w * 0.5, y: h * 0.96 };
+      case 'SPATIAL_BEHIND_SCREEN':
+        return { x: w * 0.5, y: h * 0.08 };
+      default:
+        return { x: w * 0.5, y: h * 0.5 };
     }
   }
 
@@ -74,8 +84,7 @@
     // Check if a keyframe exists near the playhead for this channel
     const nearbyKeyframe = keyframes.find(
       (kf) =>
-        kf.channelId === channel.id &&
-        Math.abs(kf.timestampMs - currentTimeMs) <= frameDurationMs
+        kf.channelId === channel.id && Math.abs(kf.timestampMs - currentTimeMs) <= frameDurationMs
     );
 
     const items: ContextMenuItem[] = [

@@ -22,7 +22,8 @@
     const stops: string[] = [];
     const count = 10;
     for (let i = 0; i <= count; i++) {
-      const k = MIN_COLOR_TEMPERATURE + (i / count) * (MAX_COLOR_TEMPERATURE - MIN_COLOR_TEMPERATURE);
+      const k =
+        MIN_COLOR_TEMPERATURE + (i / count) * (MAX_COLOR_TEMPERATURE - MIN_COLOR_TEMPERATURE);
       const pct = (i / count) * 100;
       stops.push(`${rgbToCssString(kelvinToRgb(k))} ${pct}%`);
     }

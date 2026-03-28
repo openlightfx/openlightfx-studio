@@ -174,7 +174,7 @@ function readElementHeader(view: DataView, offset: number): EbmlElement | null {
 function* iterateChildren(
   view: DataView,
   dataOffset: number,
-  dataSize: number,
+  dataSize: number
 ): Generator<EbmlElement> {
   let pos = dataOffset;
   const end = Math.min(dataOffset + dataSize, view.byteLength);
@@ -288,7 +288,7 @@ function applySimpleTag(
   view: DataView,
   offset: number,
   size: number,
-  tags: VideoContainerTags,
+  tags: VideoContainerTags
 ): void {
   let name = '';
   let value = '';
@@ -329,7 +329,7 @@ function applySimpleTag(
  */
 export async function parseEbml(
   file: File,
-  format: 'mkv' | 'webm',
+  format: 'mkv' | 'webm'
 ): Promise<VideoContainerMetadata> {
   const result: VideoContainerMetadata = {
     durationMs: 0,
@@ -358,7 +358,11 @@ export async function parseEbml(
     // so we only iterate through what we actually read.
     const segmentDataEnd = Math.min(segment.dataOffset + segment.dataSize, view.byteLength);
 
-    for (const child of iterateChildren(view, segment.dataOffset, segmentDataEnd - segment.dataOffset)) {
+    for (const child of iterateChildren(
+      view,
+      segment.dataOffset,
+      segmentDataEnd - segment.dataOffset
+    )) {
       switch (child.id) {
         case ID_SEGMENT_INFO: {
           const info = parseSegmentInfo(view, child.dataOffset, child.dataSize);

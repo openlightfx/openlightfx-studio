@@ -29,10 +29,18 @@
   }
 
   // --- Field handlers ---
-  function handleTitle(value: string) { update({ title: value }); }
-  function handleDescription(value: string) { update({ description: value }); }
-  function handleAuthor(value: string) { update({ author: value }); }
-  function handleTrackVersion(value: string) { update({ trackVersion: value }); }
+  function handleTitle(value: string) {
+    update({ title: value });
+  }
+  function handleDescription(value: string) {
+    update({ description: value });
+  }
+  function handleAuthor(value: string) {
+    update({ author: value });
+  }
+  function handleTrackVersion(value: string) {
+    update({ trackVersion: value });
+  }
 
   function handleImdbId(value: string) {
     update({
@@ -95,7 +103,10 @@
   }
 
   // --- Safety info helpers ---
-  const INTENSITY_BADGE_VARIANT: Record<IntensityRating, 'success' | 'warning' | 'danger' | 'default'> = {
+  const INTENSITY_BADGE_VARIANT: Record<
+    IntensityRating,
+    'success' | 'warning' | 'danger' | 'default'
+  > = {
     INTENSITY_UNSPECIFIED: 'default',
     SUBTLE: 'success',
     MODERATE: 'warning',
@@ -138,10 +149,30 @@
 <div class="flex flex-col gap-4">
   <!-- Basic Metadata -->
   <section class="flex flex-col gap-3">
-    <TextInput value={metadata.title} label="Title" placeholder="Track title" oninput={handleTitle} />
-    <TextInput value={metadata.description} label="Description" placeholder="Track description" oninput={handleDescription} />
-    <TextInput value={metadata.author} label="Author" placeholder="Author name" oninput={handleAuthor} />
-    <TextInput value={metadata.trackVersion} label="Version" placeholder="1.0.0" oninput={handleTrackVersion} />
+    <TextInput
+      value={metadata.title}
+      label="Title"
+      placeholder="Track title"
+      oninput={handleTitle}
+    />
+    <TextInput
+      value={metadata.description}
+      label="Description"
+      placeholder="Track description"
+      oninput={handleDescription}
+    />
+    <TextInput
+      value={metadata.author}
+      label="Author"
+      placeholder="Author name"
+      oninput={handleAuthor}
+    />
+    <TextInput
+      value={metadata.trackVersion}
+      label="Version"
+      placeholder="1.0.0"
+      oninput={handleTrackVersion}
+    />
     <TextInput
       value={metadata.movieReference.imdbId}
       label="IMDB ID"
@@ -157,7 +188,9 @@
     <span class="text-xs font-medium text-textMuted">Tags</span>
     <div class="flex flex-wrap gap-1.5">
       {#each metadata.tags as tag (tag)}
-        <span class="inline-flex items-center gap-1 rounded-full bg-surface2 px-2 py-0.5 text-xs text-text-base">
+        <span
+          class="inline-flex items-center gap-1 rounded-full bg-surface2 px-2 py-0.5 text-xs text-text-base"
+        >
           {tag}
           <button
             onclick={() => removeTag(tag)}
@@ -165,7 +198,13 @@
             title="Remove tag"
             aria-label="Remove tag {tag}"
           >
-            <svg class="h-3 w-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              class="h-3 w-3"
+              viewBox="0 0 12 12"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <path d="M3 3l6 6M9 3l-6 6" />
             </svg>
           </button>
@@ -199,14 +238,33 @@
         viewBox="0 0 20 20"
         fill="currentColor"
       >
-        <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+        <path
+          fill-rule="evenodd"
+          d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+          clip-rule="evenodd"
+        />
       </svg>
     </button>
 
     {#if showBehavior}
-      <Select value={metadata.startBehavior} options={boundaryOptions} label="Start Behavior" onchange={handleStartBehavior} />
-      <Select value={metadata.endBehavior} options={boundaryOptions} label="End Behavior" onchange={handleEndBehavior} />
-      <Select value={metadata.preshowState} options={preshowOptions} label="Preshow State" onchange={handlePreshowState} />
+      <Select
+        value={metadata.startBehavior}
+        options={boundaryOptions}
+        label="Start Behavior"
+        onchange={handleStartBehavior}
+      />
+      <Select
+        value={metadata.endBehavior}
+        options={boundaryOptions}
+        label="End Behavior"
+        onchange={handleEndBehavior}
+      />
+      <Select
+        value={metadata.preshowState}
+        options={preshowOptions}
+        label="Preshow State"
+        onchange={handlePreshowState}
+      />
 
       <TextInput
         value={String(metadata.preshowDurationMs)}
@@ -224,16 +282,19 @@
         oninput={handleCreditsStart}
       />
 
-      <Select value={metadata.creditsBehavior} options={creditsOptions} label="Credits Behavior" onchange={handleCreditsBehavior} />
+      <Select
+        value={metadata.creditsBehavior}
+        options={creditsOptions}
+        label="Credits Behavior"
+        onchange={handleCreditsBehavior}
+      />
     {/if}
   </section>
 
   <hr class="border-surface2" />
 
   <!-- Movie Metadata Button -->
-  <Button variant="secondary" size="sm" onclick={handleOpenMovieMetadata}>
-    Movie Metadata…
-  </Button>
+  <Button variant="secondary" size="sm" onclick={handleOpenMovieMetadata}>Movie Metadata…</Button>
 
   <hr class="border-surface2" />
 
@@ -250,7 +311,11 @@
         viewBox="0 0 20 20"
         fill="currentColor"
       >
-        <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+        <path
+          fill-rule="evenodd"
+          d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+          clip-rule="evenodd"
+        />
       </svg>
     </button>
 
@@ -266,21 +331,31 @@
 
         <div class="flex items-center justify-between">
           <span class="text-xs text-textMuted">Contains Flashing</span>
-          <span class="text-xs font-medium {safetyInfo.containsFlashing ? 'text-warning' : 'text-success'}">
+          <span
+            class="text-xs font-medium {safetyInfo.containsFlashing
+              ? 'text-warning'
+              : 'text-success'}"
+          >
             {safetyInfo.containsFlashing ? 'Yes' : 'No'}
           </span>
         </div>
 
         <div class="flex items-center justify-between">
           <span class="text-xs text-textMuted">Contains Strobing</span>
-          <span class="text-xs font-medium {safetyInfo.containsStrobing ? 'text-danger' : 'text-success'}">
+          <span
+            class="text-xs font-medium {safetyInfo.containsStrobing
+              ? 'text-danger'
+              : 'text-success'}"
+          >
             {safetyInfo.containsStrobing ? 'Yes' : 'No'}
           </span>
         </div>
 
         <div class="flex items-center justify-between">
           <span class="text-xs text-textMuted">Max Flash Frequency</span>
-          <span class="text-xs font-mono text-text-base">{safetyInfo.maxFlashFrequencyHz.toFixed(1)} Hz</span>
+          <span class="text-xs font-mono text-text-base"
+            >{safetyInfo.maxFlashFrequencyHz.toFixed(1)} Hz</span
+          >
         </div>
 
         <div class="flex items-center justify-between">

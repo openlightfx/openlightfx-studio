@@ -6,7 +6,7 @@ services:
       - ./:/app
       - node_modules:/app/node_modules
     ports:
-      - "5174:5173"
+      - '5174:5173'
     env_file:
       - .env.dev
     command: sh -c "npm install && npm run dev"

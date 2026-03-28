@@ -3,7 +3,11 @@
   import { projectStore } from '$lib/stores/project.svelte.js';
   import { videoStore } from '$lib/stores/video.svelte.js';
   import { uiStore } from '$lib/stores/ui.svelte.js';
-  import { validateTrack, type ValidationResult, type ValidationIssue } from '$lib/services/validation.js';
+  import {
+    validateTrack,
+    type ValidationResult,
+    type ValidationIssue,
+  } from '$lib/services/validation.js';
   import { exportLightFXTrack } from '$lib/services/project-io.js';
   import { saveProjectFile } from '$lib/services/project-io.js';
   import { computeSafetyInfo } from '$lib/services/safety.js';
@@ -28,12 +32,12 @@
         keyframes: [...track.keyframes].sort((a, b) =>
           a.channelId === b.channelId
             ? a.timestampMs - b.timestampMs
-            : a.channelId.localeCompare(b.channelId),
+            : a.channelId.localeCompare(b.channelId)
         ),
         effectKeyframes: [...track.effectKeyframes].sort((a, b) =>
           a.channelId === b.channelId
             ? a.timestampMs - b.timestampMs
-            : a.channelId.localeCompare(b.channelId),
+            : a.channelId.localeCompare(b.channelId)
         ),
         safetyInfo: computeSafetyInfo(track),
       };
@@ -64,14 +68,12 @@
 
   const durationMismatch = $derived(
     videoStore.state.isLoaded &&
-    metadata.durationMs > 0 &&
-    Math.abs(metadata.durationMs - videoStore.state.durationMs) > 5000
+      metadata.durationMs > 0 &&
+      Math.abs(metadata.durationMs - videoStore.state.durationMs) > 5000
   );
 
   const missingMetadata = $derived(
-    !metadata.movieReference.imdbId ||
-    !metadata.movieReference.title ||
-    !metadata.description
+    !metadata.movieReference.imdbId || !metadata.movieReference.title || !metadata.description
   );
 
   async function handleExportLightFX() {
@@ -80,8 +82,13 @@
     try {
       const bytes = exportLightFXTrack(track, channelGroups, sceneMarkers);
       const blob = new Blob(
-        [(bytes.buffer as ArrayBuffer).slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)],
-        { type: 'application/octet-stream' },
+        [
+          (bytes.buffer as ArrayBuffer).slice(
+            bytes.byteOffset,
+            bytes.byteOffset + bytes.byteLength
+          ),
+        ],
+        { type: 'application/octet-stream' }
       );
       const fileName =
         (metadata.title || 'untitled').replace(/[^a-zA-Z0-9 _\-()]/g, '').replace(/\s+/g, '_') +
@@ -137,7 +144,9 @@
   <div class="flex flex-col gap-4">
     <!-- Track Summary -->
     <div class="rounded-md border border-surface2 bg-surface2/50 p-3">
-      <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-textMuted">Track Summary</h3>
+      <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-textMuted">
+        Track Summary
+      </h3>
       <div class="grid grid-cols-2 gap-y-1.5 text-sm">
         <span class="text-textMuted">Title</span>
         <span class="text-text-base">{metadata.title || '(Untitled)'}</span>
@@ -146,7 +155,9 @@
         <span class="text-textMuted">Keyframes</span>
         <span class="text-text-base">{totalKeyframes}</span>
         <span class="text-textMuted">Duration</span>
-        <span class="text-text-base">{metadata.durationMs > 0 ? formatDuration(metadata.durationMs) : 'Not set'}</span>
+        <span class="text-text-base"
+          >{metadata.durationMs > 0 ? formatDuration(metadata.durationMs) : 'Not set'}</span
+        >
       </div>
     </div>
 
@@ -159,7 +170,9 @@
 
     <!-- Missing Metadata Prompt -->
     {#if missingMetadata}
-      <div class="flex items-center justify-between rounded-md border border-accent/30 bg-accent/10 px-3 py-2">
+      <div
+        class="flex items-center justify-between rounded-md border border-accent/30 bg-accent/10 px-3 py-2"
+      >
         <span class="text-sm text-accent">Movie metadata is incomplete.</span>
         <Button variant="ghost" size="sm" onclick={handleOpenMetadata}>Edit Metadata</Button>
       </div>
@@ -168,7 +181,9 @@
     <!-- Validation Results -->
     {#if validationResult}
       <div>
-        <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-textMuted">Validation</h3>
+        <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-textMuted">
+          Validation
+        </h3>
         {#if errors.length === 0 && warnings.length === 0}
           <p class="text-sm text-success">✓ All validation checks passed</p>
         {:else}

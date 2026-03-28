@@ -59,10 +59,7 @@ const PRESHOW_STATE_MAP: Record<PreshowState, number> = {
   PRESHOW_WARM: 3,
 };
 
-const PRESHOW_STATE_REVERSE = invertMap(PRESHOW_STATE_MAP) as Record<
-  number,
-  PreshowState
->;
+const PRESHOW_STATE_REVERSE = invertMap(PRESHOW_STATE_MAP) as Record<number, PreshowState>;
 
 const CREDITS_BEHAVIOR_MAP: Record<CreditsBehavior, number> = {
   CREDITS_UNSPECIFIED: 0,
@@ -72,10 +69,7 @@ const CREDITS_BEHAVIOR_MAP: Record<CreditsBehavior, number> = {
   CREDITS_OFF: 4,
 };
 
-const CREDITS_BEHAVIOR_REVERSE = invertMap(CREDITS_BEHAVIOR_MAP) as Record<
-  number,
-  CreditsBehavior
->;
+const CREDITS_BEHAVIOR_REVERSE = invertMap(CREDITS_BEHAVIOR_MAP) as Record<number, CreditsBehavior>;
 
 const INTENSITY_RATING_MAP: Record<IntensityRating, number> = {
   INTENSITY_UNSPECIFIED: 0,
@@ -85,10 +79,7 @@ const INTENSITY_RATING_MAP: Record<IntensityRating, number> = {
   EXTREME: 4,
 };
 
-const INTENSITY_RATING_REVERSE = invertMap(INTENSITY_RATING_MAP) as Record<
-  number,
-  IntensityRating
->;
+const INTENSITY_RATING_REVERSE = invertMap(INTENSITY_RATING_MAP) as Record<number, IntensityRating>;
 
 const COLOR_MODE_MAP: Record<ColorMode, number> = {
   RGB: 1,
@@ -129,13 +120,10 @@ const EFFECT_TYPE_MAP: Record<EffectType, number> = {
   SPARK: 13,
 };
 
-const EFFECT_TYPE_REVERSE = invertMap(EFFECT_TYPE_MAP) as Record<
-  number,
-  EffectType
->;
+const EFFECT_TYPE_REVERSE = invertMap(EFFECT_TYPE_MAP) as Record<number, EffectType>;
 
 function invertMap<K extends string | number, V extends string | number>(
-  map: Record<K, V>,
+  map: Record<K, V>
 ): Record<V, K> {
   const result: Record<string | number, K> = {};
   for (const [k, v] of Object.entries(map)) {
@@ -187,9 +175,7 @@ function trackToProto(track: LightFXTrack): Record<string, unknown> {
   };
 }
 
-function metadataToProto(
-  m: TrackMetadata,
-): Record<string, unknown> {
+function metadataToProto(m: TrackMetadata): Record<string, unknown> {
   return {
     title: m.title,
     description: m.description,
@@ -207,9 +193,7 @@ function metadataToProto(
   };
 }
 
-function movieReferenceToProto(
-  mr: MovieReference,
-): Record<string, unknown> {
+function movieReferenceToProto(mr: MovieReference): Record<string, unknown> {
   return {
     imdbId: mr.imdbId,
     title: mr.title,

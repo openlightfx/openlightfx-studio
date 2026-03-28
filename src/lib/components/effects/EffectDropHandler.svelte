@@ -1,6 +1,12 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import type { EffectType, EffectKeyframe, Keyframe, RGBColor, Channel } from '$lib/types/track.js';
+  import type {
+    EffectType,
+    EffectKeyframe,
+    Keyframe,
+    RGBColor,
+    Channel,
+  } from '$lib/types/track.js';
   import type { SpreadPattern } from '$lib/types/effects.js';
   import {
     getEffectDefinition,
@@ -171,8 +177,7 @@
           projectStore.addEffectKeyframe(effectKf);
 
           // Insert restore keyframe after the effect concludes (STU-059h1)
-          const restoreTimestampMs =
-            dropTimestampMs + cumulativeDelayMs + def.defaultDurationMs;
+          const restoreTimestampMs = dropTimestampMs + cumulativeDelayMs + def.defaultDurationMs;
           const priorState = getPriorState(channelId, dropTimestampMs + cumulativeDelayMs);
 
           projectStore.addKeyframe(channelId, restoreTimestampMs, {
@@ -222,9 +227,7 @@
 
     // Show info toast for skipped channels (STU-059c)
     if (skippedChannels.length > 0) {
-      toastStore.info(
-        `Effect applied. Skipped missing channels: ${skippedChannels.join(', ')}`
-      );
+      toastStore.info(`Effect applied. Skipped missing channels: ${skippedChannels.join(', ')}`);
     } else {
       const affectedCount = pattern
         ? [...spreadChannelIds].filter((id) => existingChannelIds.has(id)).length
@@ -235,7 +238,9 @@
     }
   }
 
-  function buildDefaultParams(def: import('$lib/types/effects.js').EffectDefinition): Record<string, number> {
+  function buildDefaultParams(
+    def: import('$lib/types/effects.js').EffectDefinition
+  ): Record<string, number> {
     const params: Record<string, number> = {};
     for (const p of def.params) {
       params[p.key] = p.default;
@@ -245,10 +250,6 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div
-  class="contents"
-  ondragover={handleDragOver}
-  ondrop={handleDrop}
->
+<div class="contents" ondragover={handleDragOver} ondrop={handleDrop}>
   {@render children()}
 </div>

@@ -94,9 +94,7 @@ function computeIntensityRating(effectTypes: EffectType[]): IntensityRating {
   return 'SUBTLE';
 }
 
-function computeMaxFlashFrequency(
-  effects: LightFXTrack['effectKeyframes'],
-): number {
+function computeMaxFlashFrequency(effects: LightFXTrack['effectKeyframes']): number {
   let maxHz = 0;
 
   for (const effect of effects) {
@@ -104,9 +102,7 @@ function computeMaxFlashFrequency(
     if (!effect.durationMs || effect.durationMs <= 0) continue;
 
     const flashCount =
-      effect.effectParams?.params?.flash_count ??
-      DEFAULT_FLASH_COUNT[effect.effectType] ??
-      1;
+      effect.effectParams?.params?.flash_count ?? DEFAULT_FLASH_COUNT[effect.effectType] ?? 1;
 
     const hz = (flashCount / effect.durationMs) * 1000;
     if (hz > maxHz) {

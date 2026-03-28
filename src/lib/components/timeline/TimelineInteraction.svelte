@@ -68,7 +68,8 @@
     // Content area - figure out which channel lane
     const channelIdx = Math.floor((y - RULER_HEIGHT + vp.scrollY) / CHANNEL_LANE_HEIGHT);
     const channels = projectStore.channels;
-    const channelId = channelIdx >= 0 && channelIdx < channels.length ? channels[channelIdx].id : undefined;
+    const channelId =
+      channelIdx >= 0 && channelIdx < channels.length ? channels[channelIdx].id : undefined;
 
     // Check scene markers first (thin vertical lines, generous hit area)
     const sceneMarkers = projectStore.sceneMarkers;
@@ -90,7 +91,8 @@
       const keyframes = projectStore.keyframes.filter((kf) => kf.channelId === channelId);
       const kfHalfW = KEYFRAME_MARKER_WIDTH / 2 + 2; // extra padding for hit
       const kfHalfH = KEYFRAME_MARKER_HEIGHT / 2 + 2;
-      const laneCenterY = RULER_HEIGHT + channelIdx * CHANNEL_LANE_HEIGHT - vp.scrollY + CHANNEL_LANE_HEIGHT / 2;
+      const laneCenterY =
+        RULER_HEIGHT + channelIdx * CHANNEL_LANE_HEIGHT - vp.scrollY + CHANNEL_LANE_HEIGHT / 2;
 
       for (const kf of keyframes) {
         const kfX = CHANNEL_HEADER_WIDTH + (kf.timestampMs - vp.scrollX) * vp.pxPerMs;
@@ -109,7 +111,8 @@
       const effects = projectStore.effectKeyframes.filter((ef) => ef.channelId === channelId);
       for (const ef of effects) {
         const efX1 = CHANNEL_HEADER_WIDTH + (ef.timestampMs - vp.scrollX) * vp.pxPerMs;
-        const efX2 = CHANNEL_HEADER_WIDTH + (ef.timestampMs + ef.durationMs - vp.scrollX) * vp.pxPerMs;
+        const efX2 =
+          CHANNEL_HEADER_WIDTH + (ef.timestampMs + ef.durationMs - vp.scrollX) * vp.pxPerMs;
         const laneTop = RULER_HEIGHT + channelIdx * CHANNEL_LANE_HEIGHT - vp.scrollY;
         if (x >= efX1 && x <= efX2 && y >= laneTop && y <= laneTop + CHANNEL_LANE_HEIGHT) {
           return {
@@ -135,7 +138,8 @@
   function snapToPlayhead(pxPosition: number, timestampMs: number): number {
     if (!uiStore.state.snappingEnabled) return timestampMs;
     const vp = timelineStore.viewport;
-    const cursorPx = CHANNEL_HEADER_WIDTH + (videoStore.state.currentTimeMs - vp.scrollX) * vp.pxPerMs;
+    const cursorPx =
+      CHANNEL_HEADER_WIDTH + (videoStore.state.currentTimeMs - vp.scrollX) * vp.pxPerMs;
     if (Math.abs(pxPosition - cursorPx) <= KEYFRAME_SNAP_DISTANCE) {
       return videoStore.state.currentTimeMs;
     }

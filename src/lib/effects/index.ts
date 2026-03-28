@@ -9,10 +9,7 @@ export {
 
 export { EFFECT_DEFINITIONS, EFFECT_DEFINITION_MAP } from './definitions.js';
 
-export {
-  getSpreadPattern,
-  matchChannelTemplate,
-} from './spread-patterns.js';
+export { getSpreadPattern, matchChannelTemplate } from './spread-patterns.js';
 
 export { clamp, lerp, lerpColor } from './color-utils.js';
 
