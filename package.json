@@ -10,9 +10,7 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "lint": "prettier --check . && eslint .",
     "format": "prettier --write .",
-    "proto:compile": "pbjs -t static-module -w es6 -o src/lib/proto/lightfx.js proto/lightfx.proto && pbts -o src/lib/proto/lightfx.d.ts src/lib/proto/lightfx.js",
-    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron src/electron/main.ts\"",
-    "electron:build": "npm run build && electron-builder"
+    "proto:compile": "pbjs -t static-module -w es6 -o src/lib/proto/lightfx.js proto/lightfx.proto && pbts -o src/lib/proto/lightfx.d.ts src/lib/proto/lightfx.js"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
@@ -26,14 +24,18 @@
     "tailwindcss": "^3.4"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/svelte": "^5.3.1",
     "@typescript-eslint/eslint-plugin": "^8",
     "eslint": "^9",
     "eslint-plugin-svelte": "^2",
+    "jsdom": "^29.0.1",
     "prettier": "^3",
     "prettier-plugin-svelte": "^3",
     "protobufjs-cli": "^1.1",
     "svelte-check": "^4.0",
     "typescript": "^5",
-    "vite": "^6"
+    "vite": "^6",
+    "vitest": "^4.1.2"
   }
 }
