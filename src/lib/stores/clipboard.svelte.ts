@@ -1,0 +1,24 @@
+import type { ClipboardBuffer } from '$lib/types/ui.js';
+import type { Keyframe } from '$lib/types/track.js';
+
+class ClipboardStore {
+  buffer = $state<ClipboardBuffer | null>(null);
+
+  get hasContent(): boolean { return this.buffer !== null; }
+
+  copyKeyframes(keyframes: Keyframe[], sourceChannelId: string): void {
+    if (keyframes.length === 0) return;
+    const sorted = [...keyframes].sort((a, b) => a.timestampMs - b.timestampMs);
+    const baseTimestampMs = sorted[0].timestampMs;
+    this.buffer = {
+      type: 'keyframes',
+      sourceChannelId,
+      data: sorted.map((kf) => ({ ...kf, color: { ...kf.color } })),
+      baseTimestampMs,
+    };
+  }
+
+  clear(): void { this.buffer = null; }
+}
+
+export const clipboardStore = new ClipboardStore();
