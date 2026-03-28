@@ -1,0 +1,142 @@
+<script lang="ts">
+  import TopBar from './TopBar.svelte';
+  import StatusBar from './StatusBar.svelte';
+  import { projectStore } from '$lib/stores/project.svelte.js';
+
+  let {
+    saveProviderName = 'Local',
+    onnewproject,
+    onopen,
+    onsave,
+    onexport,
+    oncommandpalette,
+  }: {
+    saveProviderName?: string;
+    onnewproject?: () => void;
+    onopen?: () => void;
+    onsave?: () => void;
+    onexport?: () => void;
+    oncommandpalette?: () => void;
+  } = $props();
+
+  // ── Resizable split: video panel + timeline area ─────────────────────────
+  // Stored as percentage of the "inner" area (between TopBar/PlaybackControls/Minimap/StatusBar).
+  // Default: 40% video, 60% timeline.
+  let videoPct = $state(40);
+  const MIN_PCT = 15;
+  const MAX_PCT = 75;
+
+  let isDragging = $state(false);
+  let containerEl = $state<HTMLDivElement | null>(null);
+
+  function onDragStart(e: PointerEvent) {
+    isDragging = true;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  function onDragMove(e: PointerEvent) {
+    if (!isDragging || !containerEl) return;
+
+    const rect = containerEl.getBoundingClientRect();
+    // The draggable area is the inner rows: subtract topbar (48px), playback (48px), minimap (60px), statusbar (24px), and the handle itself (8px).
+    const FIXED_PX = 48 + 48 + 60 + 24 + 8;
+    const innerHeight = rect.height - FIXED_PX;
+    if (innerHeight <= 0) return;
+
+    const relY = e.clientY - rect.top - 48; // offset below TopBar
+    const pct = Math.round((relY / innerHeight) * 100);
+    videoPct = Math.max(MIN_PCT, Math.min(MAX_PCT, pct));
+  }
+
+  function onDragEnd(e: PointerEvent) {
+    isDragging = false;
+    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+  }
+</script>
+
+<!--
+  CSS Grid layout:
+    Row 0: TopBar (auto)
+    Row 1: VideoPanel (flex, fills videoPct of the resizable area)
+    Row 2: drag handle (8px)
+    Row 3: PlaybackControls (auto ~48px)
+    Row 4: Timeline (flex, fills remaining resizable area)
+    Row 5: Minimap (auto ~60px)
+    Row 6: StatusBar (auto)
+-->
+<div
+  bind:this={containerEl}
+  role="application"
+  aria-label="OpenLightFX Studio"
+  class="h-screen w-screen bg-bg text-text-base overflow-hidden flex flex-col"
+  style="display: grid; grid-template-rows: auto 1fr 8px auto 1fr auto auto;"
+  onpointermove={isDragging ? onDragMove : undefined}
+>
+  <!-- Row 0: TopBar -->
+  <TopBar
+    projectName={projectStore.displayName}
+    isDirty={projectStore.isDirty}
+    {saveProviderName}
+    {onnewproject}
+    {onopen}
+    {onsave}
+    {onexport}
+    {oncommandpalette}
+  />
+
+  <!-- Row 1: Video Panel (placeholder) -->
+  <div class="bg-bg overflow-hidden min-h-0" style="height: {videoPct}%;">
+    <!-- TODO Task 12: VideoPanel component -->
+    <div class="h-full flex items-center justify-center text-textMuted text-sm">
+      <span>Video Panel (Task 12)</span>
+    </div>
+  </div>
+
+  <!-- Row 2: Drag handle between video and timeline -->
+  <div
+    class="relative flex items-center justify-center cursor-row-resize flex-shrink-0 group z-10"
+    class:bg-accent={isDragging}
+    class:bg-surface3={!isDragging}
+    role="separator"
+    aria-orientation="horizontal"
+    aria-label="Resize video and timeline panels"
+    onpointerdown={onDragStart}
+    onpointermove={onDragMove}
+    onpointerup={onDragEnd}
+    onpointercancel={onDragEnd}
+  >
+    <!-- Visual grip dots -->
+    <div class="flex gap-1 opacity-40 group-hover:opacity-80 transition-opacity">
+      {#each [0, 1, 2] as _}
+        <span class="w-1 h-1 rounded-full bg-textMuted"></span>
+      {/each}
+    </div>
+  </div>
+
+  <!-- Row 3: Playback Controls (placeholder) -->
+  <div class="bg-surface border-t border-surface3 flex-shrink-0 h-12">
+    <!-- TODO Task 12: PlaybackControls component -->
+    <div class="h-full flex items-center justify-center text-textMuted text-sm">
+      <span>Playback Controls (Task 12)</span>
+    </div>
+  </div>
+
+  <!-- Row 4: Timeline (placeholder) -->
+  <div class="bg-bg overflow-hidden min-h-0">
+    <!-- TODO Task 14: Timeline canvas component -->
+    <div class="h-full flex items-center justify-center text-textMuted text-sm">
+      <span>Timeline (Task 14)</span>
+    </div>
+  </div>
+
+  <!-- Row 5: Minimap (placeholder) -->
+  <div class="bg-surface border-t border-surface3 flex-shrink-0 h-[60px]">
+    <!-- TODO Task 15: Minimap component -->
+    <div class="h-full flex items-center justify-center text-textMuted text-sm">
+      <span>Minimap (Task 15)</span>
+    </div>
+  </div>
+
+  <!-- Row 6: StatusBar -->
+  <StatusBar {saveProviderName} />
+</div>
