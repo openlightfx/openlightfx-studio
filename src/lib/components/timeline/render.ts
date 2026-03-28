@@ -1,7 +1,13 @@
 import type { Keyframe, Channel } from '$lib/types/index.js';
 import type { SceneMarker } from '$lib/types/timeline.js';
+import type { EffectKeyframe } from '$lib/types/track.js';
 import { CHANNEL_LANE_HEIGHT, RULER_HEIGHT, KEYFRAME_MARKER_RADIUS } from '$lib/types/timeline.js';
 import { rgbToCssString } from '$lib/services/color-utils.js';
+import { getEffectDisplayInfo } from '$lib/services/effect-defaults.js';
+
+const EFFECT_BLOCK_HEIGHT = 24;
+const EFFECT_BLOCK_Y_OFFSET = (CHANNEL_LANE_HEIGHT - EFFECT_BLOCK_HEIGHT) / 2 + 4;
+const MIN_EFFECT_BLOCK_WIDTH = 6;
 
 export interface RenderViewport {
   pxPerMs: number;
@@ -129,6 +135,92 @@ export function drawSelectionRect(ctx: CanvasRenderingContext2D, rect: { startX:
   ctx.strokeStyle = 'rgba(108, 99, 255, 0.5)';
   ctx.lineWidth = 1;
   ctx.strokeRect(x, y, w, h);
+}
+
+export function drawEffectBlocks(
+  ctx: CanvasRenderingContext2D,
+  effects: EffectKeyframe[],
+  channels: Channel[],
+  vp: RenderViewport,
+  selectedIds: Set<string>,
+): void {
+  const channelIndex = new Map(channels.map((c, i) => [c.id, i]));
+
+  for (const effect of effects) {
+    const x = msToPx(effect.timestampMs, vp);
+    const rawW = effect.durationMs * vp.pxPerMs;
+    const w = Math.max(rawW, MIN_EFFECT_BLOCK_WIDTH);
+
+    // Cull offscreen
+    if (x + w < 0 || x > vp.width) continue;
+
+    const lane = channelIndex.get(effect.channelId);
+    if (lane === undefined) continue;
+
+    const y = RULER_HEIGHT + lane * CHANNEL_LANE_HEIGHT + EFFECT_BLOCK_Y_OFFSET;
+    const info = getEffectDisplayInfo(effect.effectType);
+    const isSelected = selectedIds.has(effect.id);
+
+    ctx.save();
+
+    // Semi-transparent fill
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = info.color;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, EFFECT_BLOCK_HEIGHT, 4);
+    ctx.fill();
+
+    // Diagonal stripe overlay — clip to block shape
+    ctx.globalAlpha = 0.15;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, EFFECT_BLOCK_HEIGHT, 4);
+    ctx.clip();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    const stripeSpacing = 8;
+    const stripeExtent = w + EFFECT_BLOCK_HEIGHT;
+    for (let offset = -EFFECT_BLOCK_HEIGHT; offset < stripeExtent; offset += stripeSpacing) {
+      ctx.beginPath();
+      ctx.moveTo(x + offset, y);
+      ctx.lineTo(x + offset + EFFECT_BLOCK_HEIGHT, y + EFFECT_BLOCK_HEIGHT);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+
+    // Label (icon + label) if block is wide enough
+    if (w > 40) {
+      ctx.save();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '10px Inter, system-ui';
+      ctx.textBaseline = 'middle';
+      // Clip text to block bounds
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, EFFECT_BLOCK_HEIGHT, 4);
+      ctx.clip();
+      ctx.fillText(`${info.icon} ${info.label}`, x + 6, y + EFFECT_BLOCK_HEIGHT / 2);
+      ctx.restore();
+    }
+
+    // Selection stroke + glow ring
+    if (isSelected) {
+      ctx.save();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, EFFECT_BLOCK_HEIGHT, 4);
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(108, 99, 255, 0.6)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.roundRect(x - 2, y - 2, w + 4, EFFECT_BLOCK_HEIGHT + 4, 6);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
 }
 
 function getGridInterval(pxPerMs: number): number {
