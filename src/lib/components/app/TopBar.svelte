@@ -6,6 +6,7 @@
     projectName,
     isDirty,
     saveProviderName = 'Local',
+    onrename,
     onnewproject,
     onopen,
     onsave,
@@ -15,6 +16,7 @@
     projectName: string;
     isDirty: boolean;
     saveProviderName?: string;
+    onrename?: (name: string) => void;
     onnewproject?: () => void;
     onopen?: () => void;
     onsave?: () => void;
@@ -40,8 +42,10 @@
 
   function commitEdit() {
     isEditingName = false;
-    // Parent can respond to the name change via onsave or a separate prop if needed
-    // For now we just update local state — caller can bind projectName if needed
+    const trimmed = editValue.trim();
+    if (trimmed && trimmed !== projectName) {
+      onrename?.(trimmed);
+    }
   }
 
   function cancelEdit() {

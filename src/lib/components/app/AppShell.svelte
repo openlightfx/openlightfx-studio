@@ -5,6 +5,7 @@
 
   let {
     saveProviderName = 'Local',
+    onrename,
     onnewproject,
     onopen,
     onsave,
@@ -12,6 +13,7 @@
     oncommandpalette,
   }: {
     saveProviderName?: string;
+    onrename?: (name: string) => void;
     onnewproject?: () => void;
     onopen?: () => void;
     onsave?: () => void;
@@ -68,8 +70,8 @@
   bind:this={containerEl}
   role="application"
   aria-label="OpenLightFX Studio"
-  class="h-screen w-screen bg-bg text-text-base overflow-hidden flex flex-col"
-  style="display: grid; grid-template-rows: auto 1fr 8px auto 1fr auto auto;"
+  class="h-screen w-screen bg-bg text-text-base overflow-hidden"
+  style="display: grid; grid-template-rows: auto {videoPct}fr 8px auto {100 - videoPct}fr auto auto;"
   onpointermove={isDragging ? onDragMove : undefined}
 >
   <!-- Row 0: TopBar -->
@@ -77,6 +79,7 @@
     projectName={projectStore.displayName}
     isDirty={projectStore.isDirty}
     {saveProviderName}
+    {onrename}
     {onnewproject}
     {onopen}
     {onsave}
@@ -85,7 +88,7 @@
   />
 
   <!-- Row 1: Video Panel (placeholder) -->
-  <div class="bg-bg overflow-hidden min-h-0" style="height: {videoPct}%;">
+  <div class="bg-bg overflow-hidden min-h-0">
     <!-- TODO Task 12: VideoPanel component -->
     <div class="h-full flex items-center justify-center text-textMuted text-sm">
       <span>Video Panel (Task 12)</span>
