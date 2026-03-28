@@ -4,6 +4,7 @@
   import { toastStore } from '$lib/stores/toast.svelte.js';
   import { uiStore } from '$lib/stores/ui.svelte.js';
   import { SUPPORTED_VIDEO_TYPES } from '$lib/types/video.js';
+  import Eyedropper from '$lib/components/video/Eyedropper.svelte';
 
   let videoEl = $state<HTMLVideoElement | null>(null);
   let isDragOver = $state(false);
@@ -88,7 +89,10 @@
     ></video>
 
     <!-- TODO Task 25: LightingOverlay — render here when uiStore.overlayEnabled && videoStore.isLoaded -->
-    <!-- TODO Task 20: Eyedropper overlay — render here when uiStore.eyedropperActive && videoStore.isLoaded -->
+    <!-- Eyedropper overlay -->
+    {#if videoStore.isLoaded}
+      <Eyedropper />
+    {/if}
   </div>
 
   <!-- Placeholder when no video loaded -->
