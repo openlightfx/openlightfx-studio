@@ -8,3 +8,7 @@ export { EditChannelCommand, type ChannelEditStore } from './edit-channel.js';
 export { ReorderChannelsCommand, type ChannelOrderStore } from './reorder-channels.js';
 export { EditMetadataCommand, type MetadataStore } from './edit-metadata.js';
 export { CompositeCommand } from './composite.js';
+export { AddEffectCommand, type EffectKeyframeStore } from './add-effect.js';
+export { DeleteEffectCommand } from './delete-effect.js';
+export { EditEffectCommand } from './edit-effect.js';
+export { MoveEffectCommand } from './move-effect.js';
