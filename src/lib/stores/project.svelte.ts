@@ -1,12 +1,13 @@
 import type { ProjectFile, CandidateMovieMetadata } from '$lib/types/project.js';
-import type { Channel, Keyframe, TrackMetadata } from '$lib/types/track.js';
+import type { Channel, EffectKeyframe, Keyframe, TrackMetadata } from '$lib/types/track.js';
 import type { KeyframeStore } from '$lib/commands/add-keyframe.js';
+import type { EffectKeyframeStore } from '$lib/commands/add-effect.js';
 import type { ChannelStore } from '$lib/commands/add-channel.js';
 import type { ChannelEditStore } from '$lib/commands/edit-channel.js';
 import type { ChannelOrderStore } from '$lib/commands/reorder-channels.js';
 import type { MetadataStore } from '$lib/commands/edit-metadata.js';
 
-class ProjectStore implements KeyframeStore, ChannelStore, ChannelEditStore, ChannelOrderStore, MetadataStore {
+class ProjectStore implements KeyframeStore, ChannelStore, ChannelEditStore, ChannelOrderStore, MetadataStore, EffectKeyframeStore {
   file = $state<ProjectFile>(null!);
   isDirty = $state(false);
   displayName = $state('Untitled Project');
@@ -36,6 +37,11 @@ class ProjectStore implements KeyframeStore, ChannelStore, ChannelEditStore, Cha
     if (kf) Object.assign(kf, patch);
     this.markDirty();
   }
+
+  getEffectKeyframes(): EffectKeyframe[] { return this.file.track.effectKeyframes; }
+  addEffectKeyframe(kf: EffectKeyframe): void { this.file.track.effectKeyframes.push(kf); this.markDirty(); }
+  removeEffectKeyframe(id: string): void { this.file.track.effectKeyframes = this.file.track.effectKeyframes.filter((k) => k.id !== id); this.markDirty(); }
+  updateEffectKeyframe(id: string, patch: Partial<EffectKeyframe>): void { const kf = this.file.track.effectKeyframes.find((k) => k.id === id); if (kf) Object.assign(kf, patch); this.markDirty(); }
 
   getChannels(): Channel[] { return this.file.track.channels; }
   addChannel(ch: Channel): void {
