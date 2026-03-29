@@ -56,7 +56,15 @@ export class EditChannelGroupCommand implements Command {
     this.previousValues = {};
     for (const key of Object.keys(this.patch) as (keyof ChannelGroup)[]) {
       const val = g[key];
-      (this.previousValues as Record<string, unknown>)[key] = Array.isArray(val) ? [...val] : typeof val === 'object' && val !== null ? { ...val } : val;
+      let copy: unknown;
+      if (Array.isArray(val)) {
+        copy = [...(val as unknown[])];
+      } else if (typeof val === 'object' && val !== null) {
+        copy = { ...(val as object) };
+      } else {
+        copy = val;
+      }
+      (this.previousValues as Record<string, unknown>)[key] = copy;
     }
     this.store.updateChannelGroup(this.groupId, this.patch);
   }
