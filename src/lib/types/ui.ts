@@ -13,7 +13,8 @@ export interface UIState {
 export type ModalType =
   | 'movie-metadata' | 'export' | 'publish' | 'welcome'
   | 'keyboard-shortcuts' | 'channel-template' | 'confirm-delete'
-  | 'about' | 'new-project' | 'track-metadata';
+  | 'about' | 'new-project' | 'track-metadata'
+  | 'scene-detection' | 'effect-catalog' | 'channel-group';
 
 export interface Toast {
   id: string;

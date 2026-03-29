@@ -20,6 +20,8 @@ class VideoStore {
   private videoElement: HTMLVideoElement | null = null;
   private rafId: number | null = null;
 
+  get element(): HTMLVideoElement | null { return this.videoElement; }
+
   bindElement(el: HTMLVideoElement): void {
     this.videoElement = el;
     el.addEventListener('loadedmetadata', () => {
