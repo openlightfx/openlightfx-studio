@@ -57,6 +57,18 @@ class TimelineStore {
     }
   }
 
+  selectEffect(id: string, additive = false): void {
+    if (additive) {
+      if (this.selectedEffectIds.includes(id)) {
+        this.selectedEffectIds = this.selectedEffectIds.filter((e) => e !== id);
+      } else {
+        this.selectedEffectIds = [...this.selectedEffectIds, id];
+      }
+    } else {
+      this.selectedEffectIds = [id];
+    }
+  }
+
   clearSelection(): void {
     this.selectedKeyframeIds = [];
     this.selectedEffectIds = [];

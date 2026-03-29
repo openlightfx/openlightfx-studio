@@ -66,8 +66,18 @@ function makeTimelineStore(overrides: Partial<TimelineStoreInterface> = {}): Tim
     viewportWidth: 1000,
     viewportHeight: 600,
     selectedKeyframeIds: [],
+    selectedEffectIds: [],
     selectionRect: null,
     activeChannelId: null,
+    selectEffect: vi.fn((id: string, additive = false) => {
+      if (additive) {
+        if (!store.selectedEffectIds.includes(id)) {
+          store.selectedEffectIds = [...store.selectedEffectIds, id];
+        }
+      } else {
+        store.selectedEffectIds = [id];
+      }
+    }),
     selectKeyframe: vi.fn((id: string, additive = false) => {
       if (additive) {
         if (!store.selectedKeyframeIds.includes(id)) {

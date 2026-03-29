@@ -1,4 +1,4 @@
-import type { Channel, Keyframe } from '$lib/types/track.js';
+import type { Channel, Keyframe, EffectKeyframe } from '$lib/types/track.js';
 import type { TimelineHitResult, TimelineDragState } from '$lib/types/timeline.js';
 import type { ContextMenuItem } from '$lib/types/ui.js';
 import {
@@ -16,6 +16,12 @@ import { DeleteKeyframeCommand } from '$lib/commands/delete-keyframe.js';
 import { CompositeCommand } from '$lib/commands/composite.js';
 import { generateId } from '$lib/services/id.js';
 import type { KeyframeStore } from '$lib/commands/add-keyframe.js';
+import type { EffectKeyframeStore } from '$lib/commands/add-effect.js';
+import { MoveEffectCommand } from '$lib/commands/move-effect.js';
+
+const EFFECT_BLOCK_HEIGHT = 24;
+const EFFECT_BLOCK_Y_OFFSET = (CHANNEL_LANE_HEIGHT - EFFECT_BLOCK_HEIGHT) / 2 + 4; // = 14
+const MIN_EFFECT_BLOCK_WIDTH = 6;
 
 // ---------------------------------------------------------------------------
 // Store interfaces (subset used here)
@@ -28,9 +34,11 @@ export interface TimelineStoreInterface {
   viewportWidth: number;
   viewportHeight: number;
   selectedKeyframeIds: string[];
+  selectedEffectIds: string[];
   selectionRect: { startX: number; startY: number; endX: number; endY: number } | null;
   activeChannelId: string | null;
   selectKeyframe(id: string, additive?: boolean): void;
+  selectEffect(id: string, additive?: boolean): void;
   clearSelection(): void;
   zoom(factor: number, centerMs?: number): void;
   scrollTo(ms: number): void;
@@ -57,6 +65,7 @@ export function hitTest(
   viewport: RenderViewport,
   channels: Channel[],
   keyframes: Keyframe[],
+  effects: EffectKeyframe[] = [],
 ): TimelineHitResult {
   const timestampMs = pxToMs(x, viewport);
 
@@ -105,6 +114,23 @@ export function hitTest(
     };
   }
 
+  // Effect block hit detection — keyframes take priority (checked first above)
+  const laneEffects = effects.filter((ef) => ef.channelId === channel.id);
+  const effectBlockY = RULER_HEIGHT + laneIndex * CHANNEL_LANE_HEIGHT + EFFECT_BLOCK_Y_OFFSET;
+  for (const ef of laneEffects) {
+    const efX = msToPx(ef.timestampMs, viewport);
+    const efWidth = Math.max(MIN_EFFECT_BLOCK_WIDTH, ef.durationMs * viewport.pxPerMs);
+    if (x >= efX && x <= efX + efWidth && y >= effectBlockY && y <= effectBlockY + EFFECT_BLOCK_HEIGHT) {
+      return {
+        type: 'effect',
+        channelId: channel.id,
+        effectKeyframeId: ef.id,
+        timestampMs: ef.timestampMs,
+        y: effectBlockY + EFFECT_BLOCK_HEIGHT / 2,
+      };
+    }
+  }
+
   return {
     type: 'empty',
     channelId: channel.id,
@@ -122,6 +148,7 @@ export function handlePointerDown(
   hitResult: TimelineHitResult,
   timelineStore: TimelineStoreInterface,
   keyframes: Keyframe[],
+  effects: EffectKeyframe[] = [],
 ): TimelineDragState | null {
   const { type } = hitResult;
 
@@ -164,6 +191,28 @@ export function handlePointerDown(
 
     return {
       type: 'keyframe',
+      startX: e.offsetX,
+      startY: e.offsetY,
+      startTimestampMs: hitResult.timestampMs,
+      targetIds: [...selectedIds],
+      originalTimestamps,
+    };
+  }
+
+  if (type === 'effect' && hitResult.effectKeyframeId) {
+    const isCtrlCmd = e.ctrlKey || e.metaKey;
+    timelineStore.selectEffect(hitResult.effectKeyframeId, isCtrlCmd);
+
+    // Build drag state for all currently selected effects
+    const selectedIds = timelineStore.selectedEffectIds;
+    const originalTimestamps = new Map<string, number>();
+    for (const id of selectedIds) {
+      const ef = effects.find((k) => k.id === id);
+      if (ef) originalTimestamps.set(id, ef.timestampMs);
+    }
+
+    return {
+      type: 'effect',
       startX: e.offsetX,
       startY: e.offsetY,
       startTimestampMs: hitResult.timestampMs,
@@ -215,6 +264,7 @@ export function handlePointerMove(
   dragState: TimelineDragState | null,
   timelineStore: TimelineStoreInterface,
   store: KeyframeStore,
+  effectStore?: EffectKeyframeStore,
 ): void {
   if (!dragState) return;
 
@@ -233,6 +283,22 @@ export function handlePointerMove(
       const origMs = dragState.originalTimestamps.get(id);
       if (origMs !== undefined) {
         store.updateKeyframe(id, { timestampMs: Math.max(0, origMs + deltaMs) });
+      }
+    }
+  } else if (dragState.type === 'effect' && effectStore) {
+    const viewport: RenderViewport = {
+      pxPerMs: timelineStore.pxPerMs,
+      scrollX: timelineStore.scrollX,
+      width: timelineStore.viewportWidth,
+      height: timelineStore.viewportHeight,
+    };
+    const currentMs = pxToMs(e.offsetX, viewport);
+    const deltaMs = currentMs - dragState.startTimestampMs;
+
+    for (const id of dragState.targetIds) {
+      const origMs = dragState.originalTimestamps.get(id);
+      if (origMs !== undefined) {
+        effectStore.updateEffectKeyframe(id, { timestampMs: Math.max(0, origMs + deltaMs) });
       }
     }
   } else if (dragState.type === 'selection-rect' && timelineStore.selectionRect) {
@@ -266,6 +332,8 @@ export function handlePointerUp(
   store: KeyframeStore,
   channels: Channel[],
   keyframes: Keyframe[],
+  effectStore?: EffectKeyframeStore,
+  effects: EffectKeyframe[] = [],
 ): void {
   if (!dragState) return;
 
@@ -304,8 +372,39 @@ export function handlePointerUp(
     } else {
       undoStore.execute(new CompositeCommand(`Move ${commands.length} keyframes`, commands));
     }
+  } else if (dragState.type === 'effect' && dragState.targetIds.length > 0 && effectStore) {
+    const viewport: RenderViewport = {
+      pxPerMs: timelineStore.pxPerMs,
+      scrollX: timelineStore.scrollX,
+      width: timelineStore.viewportWidth,
+      height: timelineStore.viewportHeight,
+    };
+    const currentMs = pxToMs(e.offsetX, viewport);
+    const deltaMs = currentMs - dragState.startTimestampMs;
+
+    if (Math.abs(deltaMs) < 1) {
+      for (const [id, origMs] of dragState.originalTimestamps) {
+        effectStore.updateEffectKeyframe(id, { timestampMs: origMs });
+      }
+      return;
+    }
+
+    for (const [id, origMs] of dragState.originalTimestamps) {
+      effectStore.updateEffectKeyframe(id, { timestampMs: origMs });
+    }
+
+    const commands = dragState.targetIds.map((id) => {
+      const origMs = dragState.originalTimestamps.get(id) ?? 0;
+      return new MoveEffectCommand(id, Math.max(0, origMs + deltaMs), effectStore);
+    });
+
+    if (commands.length === 1) {
+      undoStore.execute(commands[0]);
+    } else {
+      undoStore.execute(new CompositeCommand(`Move ${commands.length} effects`, commands));
+    }
   } else if (dragState.type === 'selection-rect') {
-    // Finalize: select all keyframes whose rendered position falls within the rect
+    // Finalize: select all keyframes and effects whose rendered position falls within the rect
     if (timelineStore.selectionRect) {
       const rect = timelineStore.selectionRect;
       const x1 = Math.min(rect.startX, rect.endX);
@@ -330,6 +429,17 @@ export function handlePointerUp(
         const kfY = RULER_HEIGHT + laneIdx * CHANNEL_LANE_HEIGHT + CHANNEL_LANE_HEIGHT / 2;
         if (kfX >= x1 && kfX <= x2 && kfY >= y1 && kfY <= y2) {
           timelineStore.selectKeyframe(kf.id, true);
+        }
+      }
+
+      // Also select effects within the rect
+      for (const ef of effects) {
+        const efX = msToPx(ef.timestampMs, viewport);
+        const laneIdx = channelIndex.get(ef.channelId);
+        if (laneIdx === undefined) continue;
+        const efY = RULER_HEIGHT + laneIdx * CHANNEL_LANE_HEIGHT + EFFECT_BLOCK_Y_OFFSET + EFFECT_BLOCK_HEIGHT / 2;
+        if (efX >= x1 && efX <= x2 && efY >= y1 && efY <= y2) {
+          timelineStore.selectEffect(ef.id, true);
         }
       }
 
