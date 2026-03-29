@@ -9,6 +9,10 @@
   import KeyboardShortcutsDialog from '$lib/components/dialogs/KeyboardShortcutsDialog.svelte';
   import TrackMetadataModal from '$lib/components/properties/TrackMetadataModal.svelte';
   import MovieMetadataModal from '$lib/components/properties/MovieMetadataModal.svelte';
+  import SceneDetectionDialog from '$lib/components/dialogs/SceneDetectionDialog.svelte';
+  import ChannelGroupDialog from '$lib/components/channels/ChannelGroupDialog.svelte';
+  import EffectCatalog from '$lib/components/effects/EffectCatalog.svelte';
+  import Modal from '$lib/components/shared/Modal.svelte';
 
   import { projectStore } from '$lib/stores/project.svelte.js';
   import { uiStore } from '$lib/stores/ui.svelte.js';
@@ -176,6 +180,14 @@
   <TrackMetadataModal onclose={() => uiStore.closeModal()} />
 {:else if uiStore.activeModal === 'movie-metadata'}
   <MovieMetadataModal onclose={() => uiStore.closeModal()} />
+{:else if uiStore.activeModal === 'scene-detection'}
+  <SceneDetectionDialog onclose={() => uiStore.closeModal()} />
+{:else if uiStore.activeModal === 'channel-group'}
+  <ChannelGroupDialog onclose={() => uiStore.closeModal()} />
+{:else if uiStore.activeModal === 'effect-catalog'}
+  <Modal title="Add Effect" onclose={() => uiStore.closeModal()}>
+    <EffectCatalog onclose={() => uiStore.closeModal()} />
+  </Modal>
 {/if}
 
 <!-- Toast notifications -->

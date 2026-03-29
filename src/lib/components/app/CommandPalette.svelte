@@ -155,6 +155,39 @@
       category: 'file',
       action: () => { uiStore.openModal('publish'); close(); },
     },
+    // Layer 2 — Effects & Scene Detection
+    {
+      id: 'effects.add',
+      label: 'Add Effect',
+      keys: '',
+      category: 'keyframe',
+      action: () => { uiStore.openModal('effect-catalog'); close(); },
+    },
+    {
+      id: 'scenes.detect',
+      label: 'Detect Scenes',
+      keys: '',
+      category: 'keyframe',
+      action: () => { uiStore.openModal('scene-detection'); close(); },
+    },
+    {
+      id: 'channels.create-group',
+      label: 'Create Channel Group',
+      keys: '',
+      category: 'keyframe',
+      action: () => { uiStore.openModal('channel-group'); close(); },
+    },
+    {
+      id: 'keyframe.add-scene-marker',
+      label: 'Add Scene Marker at Playhead',
+      keys: 'M',
+      category: 'keyframe',
+      action: () => {
+        // This is handled by keyboard shortcuts (M key) — just close palette
+        // The actual marker creation happens in keyboard-shortcuts.ts
+        close();
+      },
+    },
   ];
 
   // ── State ────────────────────────────────────────────────────────────────────
