@@ -1,6 +1,8 @@
 import type { Channel, Keyframe, EffectKeyframe } from '$lib/types/track.js';
-import type { TimelineHitResult, TimelineDragState } from '$lib/types/timeline.js';
+import type { TimelineHitResult, TimelineDragState, SceneMarker } from '$lib/types/timeline.js';
 import type { ContextMenuItem } from '$lib/types/ui.js';
+import type { SceneMarkerStore } from '$lib/commands/add-scene-marker.js';
+import { AddSceneMarkerCommand } from '$lib/commands/add-scene-marker.js';
 import {
   CHANNEL_LANE_HEIGHT,
   CHANNEL_HEADER_WIDTH,
@@ -68,8 +70,22 @@ export function hitTest(
   channels: Channel[],
   keyframes: Keyframe[],
   effects: EffectKeyframe[] = [],
+  sceneMarkers: SceneMarker[] = [],
 ): TimelineHitResult {
   const timestampMs = pxToMs(x, viewport);
+
+  // Scene marker hit test (thin vertical line, 4px tolerance, spans below ruler)
+  for (const marker of sceneMarkers) {
+    const markerX = msToPx(marker.timestampMs, viewport);
+    if (Math.abs(x - markerX) <= 4 && y >= RULER_HEIGHT) {
+      return {
+        type: 'scene-marker',
+        sceneMarkerId: marker.id,
+        timestampMs: marker.timestampMs,
+        y,
+      };
+    }
+  }
 
   // Ruler band
   if (y < RULER_HEIGHT) {
@@ -221,6 +237,11 @@ export function handlePointerDown(
       targetIds: [...selectedIds],
       originalTimestamps,
     };
+  }
+
+  if (type === 'scene-marker' && hitResult.sceneMarkerId) {
+    timelineStore.clearSelection();
+    return null;
   }
 
   if (type === 'ruler') {
@@ -511,6 +532,7 @@ export function handleContextMenu(
   undoStore: UndoStoreInterface,
   store: KeyframeStore,
   timelineStore: TimelineStoreInterface,
+  sceneMarkerStore?: SceneMarkerStore,
 ): ContextMenuItem[] {
   e.preventDefault();
 
@@ -569,11 +591,23 @@ export function handleContextMenu(
   }
 
   if (hitResult.type === 'ruler') {
+    const timestampMs = hitResult.timestampMs;
     return [
       {
         id: 'add-scene-marker',
         label: 'Add Scene Marker',
         enabled: true,
+        action: () => {
+          if (sceneMarkerStore) {
+            const marker = {
+              id: generateId(),
+              timestampMs,
+              label: 'Marker',
+              type: 'MARKER_MANUAL' as const,
+            };
+            undoStore.execute(new AddSceneMarkerCommand(marker, sceneMarkerStore));
+          }
+        },
       },
     ];
   }
