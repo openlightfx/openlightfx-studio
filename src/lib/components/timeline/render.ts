@@ -223,6 +223,24 @@ export function drawEffectBlocks(
   }
 }
 
+export function drawSnapIndicator(
+  ctx: CanvasRenderingContext2D,
+  timeMs: number,
+  vp: RenderViewport,
+  height: number,
+): void {
+  const x = msToPx(timeMs, vp);
+  if (x < 0 || x > vp.width) return;
+  ctx.strokeStyle = 'rgba(250, 204, 21, 0.8)'; // yellow snap line
+  ctx.lineWidth = 1;
+  ctx.setLineDash([2, 2]);
+  ctx.beginPath();
+  ctx.moveTo(x, RULER_HEIGHT);
+  ctx.lineTo(x, height);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
 function getGridInterval(pxPerMs: number): number {
   const candidates = [100, 250, 500, 1000, 2000, 5000, 10000, 30000, 60000, 300000];
   for (const ms of candidates) {

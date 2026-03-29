@@ -18,6 +18,8 @@ import { generateId } from '$lib/services/id.js';
 import type { KeyframeStore } from '$lib/commands/add-keyframe.js';
 import type { EffectKeyframeStore } from '$lib/commands/add-effect.js';
 import { MoveEffectCommand } from '$lib/commands/move-effect.js';
+import { findSnapPoint, type SnapTarget } from '$lib/services/snapping.js';
+import { KEYFRAME_SNAP_DISTANCE } from '$lib/types/timeline.js';
 
 const EFFECT_BLOCK_HEIGHT = 24;
 const EFFECT_BLOCK_Y_OFFSET = (CHANNEL_LANE_HEIGHT - EFFECT_BLOCK_HEIGHT) / 2 + 4; // = 14
@@ -265,8 +267,10 @@ export function handlePointerMove(
   timelineStore: TimelineStoreInterface,
   store: KeyframeStore,
   effectStore?: EffectKeyframeStore,
-): void {
-  if (!dragState) return;
+  snapTargets?: SnapTarget[] | null,
+  snappingEnabled?: boolean,
+): number | null {
+  if (!dragState) return null;
 
   if (dragState.type === 'keyframe') {
     // Preview move: compute delta and update keyframe timestamps temporarily
@@ -279,12 +283,22 @@ export function handlePointerMove(
     const currentMs = pxToMs(e.offsetX, viewport);
     const deltaMs = currentMs - dragState.startTimestampMs;
 
+    let snappedMs: number | null = null;
     for (const id of dragState.targetIds) {
       const origMs = dragState.originalTimestamps.get(id);
       if (origMs !== undefined) {
-        store.updateKeyframe(id, { timestampMs: Math.max(0, origMs + deltaMs) });
+        let targetMs = Math.max(0, origMs + deltaMs);
+        if (snappingEnabled && snapTargets) {
+          const snap = findSnapPoint(targetMs, snapTargets, KEYFRAME_SNAP_DISTANCE, timelineStore.pxPerMs);
+          if (snap) {
+            targetMs = snap.timestampMs;
+            snappedMs = snap.timestampMs;
+          }
+        }
+        store.updateKeyframe(id, { timestampMs: targetMs });
       }
     }
+    return snappedMs;
   } else if (dragState.type === 'effect' && effectStore) {
     const viewport: RenderViewport = {
       pxPerMs: timelineStore.pxPerMs,
@@ -295,12 +309,22 @@ export function handlePointerMove(
     const currentMs = pxToMs(e.offsetX, viewport);
     const deltaMs = currentMs - dragState.startTimestampMs;
 
+    let snappedMs: number | null = null;
     for (const id of dragState.targetIds) {
       const origMs = dragState.originalTimestamps.get(id);
       if (origMs !== undefined) {
-        effectStore.updateEffectKeyframe(id, { timestampMs: Math.max(0, origMs + deltaMs) });
+        let targetMs = Math.max(0, origMs + deltaMs);
+        if (snappingEnabled && snapTargets) {
+          const snap = findSnapPoint(targetMs, snapTargets, KEYFRAME_SNAP_DISTANCE, timelineStore.pxPerMs);
+          if (snap) {
+            targetMs = snap.timestampMs;
+            snappedMs = snap.timestampMs;
+          }
+        }
+        effectStore.updateEffectKeyframe(id, { timestampMs: targetMs });
       }
     }
+    return snappedMs;
   } else if (dragState.type === 'selection-rect' && timelineStore.selectionRect) {
     timelineStore.selectionRect = {
       ...timelineStore.selectionRect,
@@ -318,6 +342,7 @@ export function handlePointerMove(
     const deltaMs = dragState.startTimestampMs - currentMs;
     timelineStore.scrollBy(deltaMs);
   }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
