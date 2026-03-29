@@ -6,6 +6,7 @@
   import { EditChannelCommand } from '$lib/commands/edit-channel.js';
   import { rgbToCssString } from '$lib/services/color-utils.js';
   import { CHANNEL_LANE_HEIGHT, CHANNEL_HEADER_WIDTH, RULER_HEIGHT } from '$lib/types/timeline.js';
+  import ChannelPopover from '$lib/components/properties/ChannelPopover.svelte';
 
   interface Props {
     scrollY?: number;
@@ -80,6 +81,11 @@
   }
 
   const channels = $derived(projectStore.file?.track.channels ?? []);
+
+  // Channel popover state
+  let channelPopoverOpen = $state(false);
+  let channelPopoverId = $state('');
+  let channelPopoverAnchor = $state({ x: 0, y: 0, width: 0, height: 0 });
 </script>
 
 <div
@@ -110,6 +116,13 @@
       class:hover:bg-[#20203a]={!isActive}
       style="height: {CHANNEL_LANE_HEIGHT}px;"
       role="row"
+      oncontextmenu={(e) => {
+        e.preventDefault();
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        channelPopoverId = channel.id;
+        channelPopoverAnchor = { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
+        channelPopoverOpen = true;
+      }}
     >
       <!-- Drag grip (stubbed) -->
       <div
@@ -207,3 +220,9 @@
     </div>
   {/if}
 </div>
+
+<ChannelPopover
+  channelId={channelPopoverId}
+  anchorRect={channelPopoverAnchor}
+  bind:isOpen={channelPopoverOpen}
+/>

@@ -21,6 +21,12 @@
   } from './interaction.js';
   import type { TimelineDragState } from '$lib/types/timeline.js';
 
+  let {
+    onscenemarkerclick,
+  }: {
+    onscenemarkerclick?: (markerId: string, anchorRect: { x: number; y: number; width: number; height: number }) => void;
+  } = $props();
+
   let canvasEl = $state<HTMLCanvasElement | null>(null);
   let containerEl = $state<HTMLDivElement | null>(null);
   let dragState = $state<TimelineDragState | null>(null);
@@ -143,8 +149,21 @@
     const channels = projectStore.file?.track.channels ?? [];
     const keyframes = projectStore.file?.track.keyframes ?? [];
     const effects = projectStore.file?.track.effectKeyframes ?? [];
+    const markers = projectStore.file?.sceneMarkers ?? [];
 
-    const hit = hitTest(e.offsetX, e.offsetY, vp, channels, keyframes, effects);
+    const hit = hitTest(e.offsetX, e.offsetY, vp, channels, keyframes, effects, markers);
+
+    // Notify parent if a scene marker was clicked
+    if (hit.type === 'scene-marker' && hit.sceneMarkerId && onscenemarkerclick) {
+      const canvasRect = canvas.getBoundingClientRect();
+      onscenemarkerclick(hit.sceneMarkerId, {
+        x: canvasRect.left + e.offsetX,
+        y: canvasRect.top + e.offsetY,
+        width: 1,
+        height: 1,
+      });
+    }
+
     dragState = handlePointerDown(e, hit, timelineStore, keyframes, effects);
   }
 
@@ -171,8 +190,9 @@
     const channels = projectStore.file?.track.channels ?? [];
     const keyframes = projectStore.file?.track.keyframes ?? [];
     const effects = projectStore.file?.track.effectKeyframes ?? [];
+    const markers = projectStore.file?.sceneMarkers ?? [];
 
-    const hit = hitTest(e.offsetX, e.offsetY, vp, channels, keyframes, effects);
+    const hit = hitTest(e.offsetX, e.offsetY, vp, channels, keyframes, effects, markers);
     handleDoubleClick(e, hit, undoStore, projectStore);
   }
 </script>
