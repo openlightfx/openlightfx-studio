@@ -1,0 +1,121 @@
+{
+  "formatVersion": 1,
+  "projectId": "test-fixture",
+  "track": {
+    "version": 1,
+    "metadata": {
+      "title": "Test Project",
+      "description": "Fixture for Playwright e2e tests",
+      "movieReference": {
+        "imdbId": "",
+        "title": "",
+        "year": 0,
+        "runtimeMinutes": 0
+      },
+      "author": "Test",
+      "tags": [],
+      "durationMs": 0,
+      "startBehavior": "LEAVE",
+      "endBehavior": "LEAVE",
+      "preshowDurationMs": 0,
+      "preshowState": "PRESHOW_UNSPECIFIED",
+      "creditsStartMs": 0,
+      "creditsBehavior": "CREDITS_UNSPECIFIED",
+      "trackVersion": "1.0"
+    },
+    "channels": [
+      {
+        "id": "left",
+        "displayName": "Left",
+        "description": "Left channel",
+        "defaultColor": { "r": 0, "g": 0, "b": 0 },
+        "defaultBrightness": 0,
+        "spatialHint": "SPATIAL_LEFT",
+        "optional": false
+      },
+      {
+        "id": "right",
+        "displayName": "Right",
+        "description": "Right channel",
+        "defaultColor": { "r": 0, "g": 0, "b": 0 },
+        "defaultBrightness": 0,
+        "spatialHint": "SPATIAL_RIGHT",
+        "optional": false
+      }
+    ],
+    "keyframes": [
+      {
+        "id": "kf-left-0",
+        "channelId": "left",
+        "timestampMs": 0,
+        "colorMode": "RGB",
+        "color": { "r": 255, "g": 0, "b": 0 },
+        "colorTemperature": 6500,
+        "brightness": 1,
+        "transitionMs": 0,
+        "interpolation": "STEP",
+        "powerOn": true
+      },
+      {
+        "id": "kf-left-5000",
+        "channelId": "left",
+        "timestampMs": 5000,
+        "colorMode": "RGB",
+        "color": { "r": 0, "g": 0, "b": 255 },
+        "colorTemperature": 6500,
+        "brightness": 1,
+        "transitionMs": 0,
+        "interpolation": "STEP",
+        "powerOn": true
+      },
+      {
+        "id": "kf-right-0",
+        "channelId": "right",
+        "timestampMs": 0,
+        "colorMode": "RGB",
+        "color": { "r": 0, "g": 255, "b": 0 },
+        "colorTemperature": 6500,
+        "brightness": 1,
+        "transitionMs": 0,
+        "interpolation": "STEP",
+        "powerOn": true
+      },
+      {
+        "id": "kf-right-5000",
+        "channelId": "right",
+        "timestampMs": 5000,
+        "colorMode": "RGB",
+        "color": { "r": 255, "g": 255, "b": 255 },
+        "colorTemperature": 6500,
+        "brightness": 1,
+        "transitionMs": 0,
+        "interpolation": "STEP",
+        "powerOn": true
+      }
+    ],
+    "effectKeyframes": [],
+    "safetyInfo": {
+      "containsFlashing": false,
+      "containsStrobing": false,
+      "maxFlashFrequencyHz": 0,
+      "maxBrightnessDelta": 0,
+      "warningText": "",
+      "intensityRating": "SUBTLE"
+    }
+  },
+  "channelGroups": [],
+  "sceneMarkers": [],
+  "undoHistory": [],
+  "undoPointer": 0,
+  "uiState": {
+    "timelineZoom": 1,
+    "timelineScrollX": 0,
+    "timelineScrollY": 0,
+    "selectedChannelId": null,
+    "selectedKeyframeIds": [],
+    "overlayEnabled": true
+  },
+  "videoFilePath": "",
+  "candidateMetadata": {},
+  "lastModified": "2026-03-29T00:00:00.000Z"
+}
