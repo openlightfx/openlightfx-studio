@@ -12,3 +12,4 @@ export { AddEffectCommand, type EffectKeyframeStore } from './add-effect.js';
 export { DeleteEffectCommand } from './delete-effect.js';
 export { EditEffectCommand } from './edit-effect.js';
 export { MoveEffectCommand } from './move-effect.js';
+export { AddChannelGroupCommand, DeleteChannelGroupCommand, EditChannelGroupCommand, type ChannelGroupStore } from './channel-group.js';

@@ -7,9 +7,11 @@ import type { ChannelEditStore } from '$lib/commands/edit-channel.js';
 import type { ChannelOrderStore } from '$lib/commands/reorder-channels.js';
 import type { MetadataStore } from '$lib/commands/edit-metadata.js';
 import type { SceneMarkerStore } from '$lib/commands/add-scene-marker.js';
+import type { ChannelGroupStore } from '$lib/commands/channel-group.js';
 import type { SceneMarker } from '$lib/types/timeline.js';
+import type { ChannelGroup } from '$lib/types/channels.js';
 
-class ProjectStore implements KeyframeStore, ChannelStore, ChannelEditStore, ChannelOrderStore, MetadataStore, EffectKeyframeStore, SceneMarkerStore {
+class ProjectStore implements KeyframeStore, ChannelStore, ChannelEditStore, ChannelOrderStore, MetadataStore, EffectKeyframeStore, SceneMarkerStore, ChannelGroupStore {
   file = $state<ProjectFile>(null!);
   isDirty = $state(false);
   displayName = $state('Untitled Project');
@@ -90,6 +92,21 @@ class ProjectStore implements KeyframeStore, ChannelStore, ChannelEditStore, Cha
   }
   removeSceneMarker(id: string): void {
     this.file.sceneMarkers = this.file.sceneMarkers.filter((m) => m.id !== id);
+    this.markDirty();
+  }
+
+  getChannelGroups(): ChannelGroup[] { return this.file.channelGroups; }
+  addChannelGroup(group: ChannelGroup): void {
+    this.file.channelGroups.push(group);
+    this.markDirty();
+  }
+  removeChannelGroup(id: string): void {
+    this.file.channelGroups = this.file.channelGroups.filter((g) => g.id !== id);
+    this.markDirty();
+  }
+  updateChannelGroup(id: string, patch: Partial<ChannelGroup>): void {
+    const g = this.file.channelGroups.find((g) => g.id === id);
+    if (g) Object.assign(g, patch);
     this.markDirty();
   }
 }
