@@ -19,6 +19,7 @@
   import { videoStore } from '$lib/stores/video.svelte.js';
   import { snapshotStore } from '$lib/stores/snapshot.svelte.js';
   import { undoStore } from '$lib/stores/undo.svelte.js';
+  import { timelineStore } from '$lib/stores/timeline.svelte.js';
 
   import { createSaveProvider } from '$lib/save/index.js';
   import { initKeyboardShortcuts } from '$lib/services/keyboard-shortcuts.js';
@@ -83,6 +84,17 @@
 
     // 4. Keyboard shortcuts
     const cleanupKeyboard = initKeyboardShortcuts();
+
+    // Expose stores for e2e testing
+    if (typeof window !== 'undefined') {
+      (window as any).__stores = {
+        projectStore,
+        timelineStore,
+        videoStore,
+        undoStore,
+        uiStore,
+      };
+    }
 
     // 5. Auto-save snapshot
     snapshotStore.startAutoSave(() => projectStore.file);
