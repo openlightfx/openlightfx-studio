@@ -2,6 +2,7 @@
   import { projectStore } from '$lib/stores/project.svelte.js';
   import { timelineStore } from '$lib/stores/timeline.svelte.js';
   import { undoStore } from '$lib/stores/undo.svelte.js';
+  import { uiStore } from '$lib/stores/ui.svelte.js';
   import { EditChannelCommand } from '$lib/commands/edit-channel.js';
   import { rgbToCssString } from '$lib/services/color-utils.js';
   import { CHANNEL_LANE_HEIGHT, CHANNEL_HEADER_WIDTH, RULER_HEIGHT } from '$lib/types/timeline.js';
@@ -12,6 +13,9 @@
   }
 
   let { scrollY = 0, onScrollY }: Props = $props();
+
+  // Track which group is being edited (for channel group dialog)
+  let editingGroupId = $state<string | null>(null);
 
   // Track which channel is being edited
   let editingChannelId = $state<string | null>(null);
@@ -98,6 +102,7 @@
     {@const isMuted = timelineStore.mutedChannelIds.has(channel.id)}
     {@const isActive = timelineStore.activeChannelId === channel.id}
     {@const colorDot = rgbToCssString(channel.defaultColor)}
+    {@const group = projectStore.file?.channelGroups.find((g) => g.channelIds.includes(channel.id))}
 
     <div
       class="channel-row flex items-center gap-1 px-2 border-b border-[#252540] transition-colors"
@@ -152,6 +157,18 @@
           >{channel.displayName}</span>
         {/if}
       </div>
+
+      <!-- Channel group indicator -->
+      {#if group}
+        <button
+          class="flex-shrink-0 ml-1 text-xs px-1 py-0.5 rounded bg-accent/20 text-accent hover:bg-accent/30 transition-colors leading-none"
+          title="{group.name} ({group.mode.replace('GROUP_', '')})"
+          onclick={() => { editingGroupId = group.id; uiStore.openModal('channel-group'); }}
+          aria-label="Edit group: {group.name}"
+        >
+          {group.mode === 'GROUP_MIRROR' ? '↔' : group.mode === 'GROUP_SPREAD' ? '→' : '↻'}
+        </button>
+      {/if}
 
       <!-- Solo button -->
       <button
