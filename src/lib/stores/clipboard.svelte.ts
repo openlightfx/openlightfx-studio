@@ -1,5 +1,5 @@
 import type { ClipboardBuffer } from '$lib/types/ui.js';
-import type { Keyframe } from '$lib/types/track.js';
+import type { Keyframe, EffectKeyframe } from '$lib/types/track.js';
 
 class ClipboardStore {
   buffer = $state<ClipboardBuffer | null>(null);
@@ -14,6 +14,24 @@ class ClipboardStore {
       type: 'keyframes',
       sourceChannelId,
       data: sorted.map((kf) => ({ ...kf, color: { ...kf.color } })),
+      baseTimestampMs,
+    };
+  }
+
+  copyEffects(effects: EffectKeyframe[], sourceChannelId: string): void {
+    if (effects.length === 0) return;
+    const sorted = [...effects].sort((a, b) => a.timestampMs - b.timestampMs);
+    const baseTimestampMs = sorted[0].timestampMs;
+    this.buffer = {
+      type: 'effect',
+      sourceChannelId,
+      data: sorted.map((ef) => ({
+        ...ef,
+        primaryColor: { ...ef.primaryColor },
+        secondaryColor: { ...ef.secondaryColor },
+        fallbackColor: { ...ef.fallbackColor },
+        effectParams: { params: { ...ef.effectParams.params } },
+      })),
       baseTimestampMs,
     };
   }

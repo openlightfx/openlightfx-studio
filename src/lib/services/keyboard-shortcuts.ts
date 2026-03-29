@@ -1,11 +1,16 @@
 import type { ShortcutCategory } from '$lib/types/ui.js';
+import type { Keyframe } from '$lib/types/track.js';
 import { videoStore } from '$lib/stores/video.svelte.js';
 import { undoStore } from '$lib/stores/undo.svelte.js';
 import { uiStore } from '$lib/stores/ui.svelte.js';
 import { timelineStore } from '$lib/stores/timeline.svelte.js';
 import { projectStore } from '$lib/stores/project.svelte.js';
+import { clipboardStore } from '$lib/stores/clipboard.svelte.js';
 import { DeleteKeyframeCommand } from '$lib/commands/delete-keyframe.js';
 import { CompositeCommand } from '$lib/commands/composite.js';
+import { PasteKeyframesCommand } from '$lib/commands/paste-keyframes.js';
+import { generateId } from '$lib/services/id.js';
+import { AddSceneMarkerCommand } from '$lib/commands/add-scene-marker.js';
 
 // ── Mac detection ─────────────────────────────────────────────────────────────
 const isMac =
@@ -82,6 +87,47 @@ function buildShortcuts(): ShortcutDef[] {
       action: () => undoStore.redo(),
     },
     {
+      id: 'edit.copy',
+      label: 'Copy',
+      keys: `${MOD}C`,
+      key: 'c',
+      ctrl: true,
+      category: 'edit',
+      action: () => {
+        if (!projectStore.file) return;
+        const selectedKfIds = timelineStore.selectedKeyframeIds;
+        if (selectedKfIds.length > 0) {
+          const kfs = projectStore.getKeyframes().filter((kf) => selectedKfIds.includes(kf.id));
+          const channelId = timelineStore.activeChannelId ?? kfs[0]?.channelId ?? '';
+          clipboardStore.copyKeyframes(kfs, channelId);
+        }
+      },
+    },
+    {
+      id: 'edit.paste',
+      label: 'Paste',
+      keys: `${MOD}V`,
+      key: 'v',
+      ctrl: true,
+      category: 'edit',
+      action: () => {
+        if (!projectStore.file || !clipboardStore.hasContent) return;
+        const buffer = clipboardStore.buffer!;
+        if (buffer.type === 'keyframes') {
+          const targetChannel = timelineStore.activeChannelId ?? buffer.sourceChannelId;
+          const cmd = new PasteKeyframesCommand(
+            buffer.data as Keyframe[],
+            targetChannel,
+            videoStore.currentTimeMs,
+            buffer.baseTimestampMs,
+            generateId,
+            projectStore,
+          );
+          undoStore.execute(cmd);
+        }
+      },
+    },
+    {
       id: 'edit.select-all',
       label: 'Select All Keyframes',
       keys: `${MOD}A`,
@@ -122,6 +168,23 @@ function buildShortcuts(): ShortcutDef[] {
         const cmds = ids.map((id) => new DeleteKeyframeCommand(id, projectStore));
         undoStore.execute(new CompositeCommand(`Delete ${ids.length} keyframe(s)`, cmds));
         timelineStore.clearSelection();
+      },
+    },
+    {
+      id: 'keyframe.add-scene-marker',
+      label: 'Add Scene Marker',
+      keys: 'M',
+      key: 'm',
+      category: 'keyframe',
+      action: () => {
+        if (!projectStore.file) return;
+        const marker = {
+          id: generateId(),
+          timestampMs: videoStore.currentTimeMs,
+          label: `Marker ${projectStore.file.sceneMarkers.length + 1}`,
+          type: 'MARKER_MANUAL' as const,
+        };
+        undoStore.execute(new AddSceneMarkerCommand(marker, projectStore));
       },
     },
 
