@@ -6,8 +6,10 @@ import type { ChannelStore } from '$lib/commands/add-channel.js';
 import type { ChannelEditStore } from '$lib/commands/edit-channel.js';
 import type { ChannelOrderStore } from '$lib/commands/reorder-channels.js';
 import type { MetadataStore } from '$lib/commands/edit-metadata.js';
+import type { SceneMarkerStore } from '$lib/commands/add-scene-marker.js';
+import type { SceneMarker } from '$lib/types/timeline.js';
 
-class ProjectStore implements KeyframeStore, ChannelStore, ChannelEditStore, ChannelOrderStore, MetadataStore, EffectKeyframeStore {
+class ProjectStore implements KeyframeStore, ChannelStore, ChannelEditStore, ChannelOrderStore, MetadataStore, EffectKeyframeStore, SceneMarkerStore {
   file = $state<ProjectFile>(null!);
   isDirty = $state(false);
   displayName = $state('Untitled Project');
@@ -78,6 +80,16 @@ class ProjectStore implements KeyframeStore, ChannelStore, ChannelEditStore, Cha
     this.videoFile = file;
     this.videoObjectUrl = URL.createObjectURL(file);
     this.file.videoFilePath = file.name;
+    this.markDirty();
+  }
+
+  getSceneMarkers(): SceneMarker[] { return this.file.sceneMarkers; }
+  addSceneMarker(marker: SceneMarker): void {
+    this.file.sceneMarkers.push(marker);
+    this.markDirty();
+  }
+  removeSceneMarker(id: string): void {
+    this.file.sceneMarkers = this.file.sceneMarkers.filter((m) => m.id !== id);
     this.markDirty();
   }
 }
