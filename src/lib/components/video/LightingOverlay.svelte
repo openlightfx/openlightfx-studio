@@ -3,7 +3,7 @@
   import { projectStore } from '$lib/stores/project.svelte.js';
   import { timelineStore } from '$lib/stores/timeline.svelte.js';
   import { uiStore } from '$lib/stores/ui.svelte.js';
-  import { getChannelStateAtTime, getKeyframesForChannel } from '$lib/services/interpolation.js';
+  import { getChannelStateAtTime, getKeyframesForChannel, getEffectStateAtTime } from '$lib/services/interpolation.js';
   import { rgbToCssString } from '$lib/services/color-utils.js';
   import type { SpatialHint } from '$lib/types/track.js';
 
@@ -85,6 +85,29 @@
       ctx.fillRect(0, 0, width, height);
     }
 
+    // Effect overlay pass
+    const allEffects = projectStore.file.track.effectKeyframes;
+
+    for (const channel of channels) {
+      if (!timelineStore.isChannelAudible(channel.id)) continue;
+
+      const effectState = getEffectStateAtTime(allEffects, channel.id, timeMs);
+      if (!effectState || effectState.brightness <= 0) continue;
+
+      const { x: normX, y: normY, radiusMultiplier } = getSpatialPosition(channel.spatialHint);
+      const cx = normX * width;
+      const cy = normY * height;
+      const radius = radiusMultiplier * width;
+
+      ctx.globalCompositeOperation = 'screen';
+      const alpha = effectState.brightness * 0.8;
+      const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+      gradient.addColorStop(0, rgbToCssString(effectState.color, alpha));
+      gradient.addColorStop(1, rgbToCssString(effectState.color, 0));
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+    }
+
     // Reset composite operation
     ctx.globalCompositeOperation = 'source-over';
   }
@@ -151,6 +174,7 @@
     const _keyframes = projectStore.file?.track.keyframes;
     const _solo = timelineStore.soloChannelIds;
     const _muted = timelineStore.mutedChannelIds;
+    const _effects = projectStore.file?.track.effectKeyframes;
 
     if (!videoStore.isPlaying && uiStore.overlayEnabled) {
       drawFrame();
