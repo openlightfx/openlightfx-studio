@@ -66,8 +66,9 @@
       </p>
 
       <div>
-        <label class="block text-xs text-textMuted mb-1">Sensitivity</label>
+        <label for="scene-sensitivity" class="block text-xs text-textMuted mb-1">Sensitivity</label>
         <select
+          id="scene-sensitivity"
           class="w-full bg-surface2 text-text-base rounded-lg px-3 py-2 text-sm border border-surface3 focus:outline-none focus:ring-2 focus:ring-accent/50"
           bind:value={sensitivity}
         >

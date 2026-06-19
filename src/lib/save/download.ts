@@ -1,13 +1,16 @@
 import type { SaveProvider, SaveProviderType } from '$lib/types/save.js';
 import type { ProjectFile } from '$lib/types/project.js';
-import { projectToJson, jsonToProject } from '$lib/services/project-io.js';
+import { projectToJson, jsonToProject, trackToProject } from '$lib/services/project-io.js';
+import { decodeLightFXTrack } from '$lib/services/protobuf.js';
 
 export class DownloadProvider implements SaveProvider {
   readonly type: SaveProviderType = 'download';
   readonly displayName = 'Download';
   readonly canAutoSave = false;
 
-  hasFile(): boolean { return false; }
+  hasFile(): boolean {
+    return false;
+  }
 
   async save(project: ProjectFile): Promise<void> {
     return this.saveAs(project);
@@ -28,12 +31,21 @@ export class DownloadProvider implements SaveProvider {
     return new Promise((resolve, reject) => {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = '.lightfx-project';
+      input.accept = '.lightfx-project,.lightfx';
       input.onchange = async () => {
         const file = input.files?.[0];
-        if (!file) { reject(new Error('No file selected')); return; }
-        const text = await file.text();
-        resolve(jsonToProject(text));
+        if (!file) {
+          reject(new Error('No file selected'));
+          return;
+        }
+        if (file.name.endsWith('.lightfx')) {
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          const track = await decodeLightFXTrack(bytes);
+          resolve(trackToProject(track));
+        } else {
+          const text = await file.text();
+          resolve(jsonToProject(text));
+        }
       };
       input.click();
     });

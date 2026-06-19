@@ -10,7 +10,7 @@
     children: Snippet;
   } = $props();
 
-  let popoverEl: HTMLDivElement;
+  let popoverEl = $state<HTMLDivElement | undefined>(undefined);
   let style = $state('');
   let isBottomSheet = $state(false);
 
@@ -47,10 +47,8 @@
 </script>
 
 {#if isBottomSheet}
-  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-  <div class="fixed inset-0 z-50 bg-black/40" onclick={onclose}>
-    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-    <div bind:this={popoverEl} class="fixed bottom-0 left-0 right-0 z-50 bg-surface rounded-t-2xl border-t border-surface3 p-4 max-h-[70vh] overflow-y-auto animate-slide-up" onclick={(e) => e.stopPropagation()}>
+  <div class="fixed inset-0 z-50 bg-black/40" role="presentation" onclick={onclose}>
+    <div bind:this={popoverEl} class="fixed bottom-0 left-0 right-0 z-50 bg-surface rounded-t-2xl border-t border-surface3 p-4 max-h-[70vh] overflow-y-auto animate-slide-up" role="presentation" onclick={(e) => e.stopPropagation()}>
       <div class="w-10 h-1 bg-surface3 rounded-full mx-auto mb-3"></div>
       {@render children()}
     </div>

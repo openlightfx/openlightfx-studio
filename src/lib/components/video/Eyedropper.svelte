@@ -5,7 +5,7 @@
   import { timelineStore } from '$lib/stores/timeline.svelte.js';
   import { undoStore } from '$lib/stores/undo.svelte.js';
   import { toastStore } from '$lib/stores/toast.svelte.js';
-  import { extractToneMappedFrame } from '$lib/services/frame-extractor.js';
+  import { extractAndTonemapFrame } from '$lib/services/frame-extractor.js';
   import { EditKeyframeCommand } from '$lib/commands/edit-keyframe.js';
   import { CompositeCommand } from '$lib/commands/composite.js';
   import { rgbToHex } from '$lib/services/color-utils.js';
@@ -17,6 +17,8 @@
   let overlayEl = $state<HTMLDivElement | null>(null);
   // Offscreen canvas holding the extracted frame at original resolution
   let offscreenCanvas = $state<HTMLCanvasElement | null>(null);
+  // Full-size display canvas shown to the user in the overlay
+  let displayCanvas = $state<HTMLCanvasElement | null>(null);
   // Magnifier lens canvas (100x100 visible)
   let lensCanvas = $state<HTMLCanvasElement | null>(null);
 
@@ -63,35 +65,29 @@
     isReady = false;
 
     try {
-      const blob = await extractToneMappedFrame(
+      const videoEl = videoStore.element;
+      if (!videoEl) throw new Error('No video element');
+
+      const imageData = await extractAndTonemapFrame(
         videoStore.file,
+        videoEl,
         videoStore.currentTimeMs,
         videoStore.isHdr
       );
 
-      // Draw extracted frame onto offscreen canvas
-      const imgUrl = URL.createObjectURL(blob);
-      const img = new Image();
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = () => reject(new Error('Failed to load extracted frame'));
-        img.src = imgUrl;
-      });
-
-      URL.revokeObjectURL(imgUrl);
-
-      // Create offscreen canvas at the image's natural resolution
       const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      const ctx = canvas.getContext('2d');
+      canvas.width = imageData.width;
+      canvas.height = imageData.height;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
       if (!ctx) throw new Error('Could not get 2D context');
-      ctx.drawImage(img, 0, 0);
+      ctx.putImageData(imageData, 0, 0);
       offscreenCanvas = canvas;
 
       isReady = true;
     } catch (err) {
-      toastStore.error('Failed to extract frame for eyedropper.');
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('[Eyedropper] Frame extraction failed:', err);
+      toastStore.error(`Failed to extract frame for eyedropper: ${message}`);
       uiStore.toggleEyedropper();
     } finally {
       isLoading = false;
@@ -102,7 +98,17 @@
     isLoading = false;
     isReady = false;
     offscreenCanvas = null;
+    displayCanvas = null;
   }
+
+  // Blit the tone-mapped frame into the visible display canvas whenever both are ready
+  $effect(() => {
+    if (!offscreenCanvas || !displayCanvas) return;
+    displayCanvas.width = offscreenCanvas.width;
+    displayCanvas.height = offscreenCanvas.height;
+    const ctx = displayCanvas.getContext('2d');
+    ctx?.drawImage(offscreenCanvas, 0, 0);
+  });
 
   // Sample a pixel from the offscreen canvas given overlay-relative coordinates
   function samplePixel(overlayX: number, overlayY: number): RGBColor {
@@ -142,11 +148,7 @@
     const srcY = overlayY * scaleY - srcH / 2;
 
     ctx.clearRect(0, 0, LENS_SIZE, LENS_SIZE);
-    ctx.drawImage(
-      offscreenCanvas,
-      srcX, srcY, srcW, srcH,
-      0, 0, LENS_SIZE, LENS_SIZE
-    );
+    ctx.drawImage(offscreenCanvas, srcX, srcY, srcW, srcH, 0, 0, LENS_SIZE, LENS_SIZE);
   }
 
   function handlePointerMove(e: PointerEvent) {
@@ -190,7 +192,9 @@
           undoStore.execute(new CompositeCommand('Apply eyedropper color', commands));
         }
 
-        toastStore.success(`Color ${rgbToHex(color)} applied to ${keyframes.length} keyframe${keyframes.length > 1 ? 's' : ''}`);
+        toastStore.success(
+          `Color ${rgbToHex(color)} applied to ${keyframes.length} keyframe${keyframes.length > 1 ? 's' : ''}`
+        );
       } else {
         toastStore.success(`Color picked: ${rgbToHex(color)}`);
       }
@@ -259,21 +263,25 @@
 <svelte:window onkeydown={handleKeyDown} />
 
 {#if uiStore.eyedropperActive}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div
     bind:this={overlayEl}
     class="absolute inset-0 z-20"
     style="cursor: crosshair;"
     onpointermove={handlePointerMove}
     onclick={handleClick}
+    onkeydown={handleKeyDown}
     role="application"
     aria-label="Eyedropper — click to sample color"
+    tabindex="-1"
   >
     <!-- Loading state -->
     {#if isLoading}
       <div class="absolute inset-0 flex items-center justify-center bg-black/60">
         <div class="flex flex-col items-center gap-2">
-          <div class="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
+          <div
+            class="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin"
+          ></div>
           <span class="text-sm text-text-base">Extracting frame…</span>
         </div>
       </div>
@@ -281,10 +289,13 @@
 
     <!-- Magnifier lens + hex label, shown when ready -->
     {#if isReady}
-      <div
-        class="absolute pointer-events-none"
-        style="left: {lensLeft}px; top: {lensTop}px;"
-      >
+      <!-- Tone-mapped frame fills the overlay, replacing the browser's HDR rendering -->
+      <canvas
+        bind:this={displayCanvas}
+        class="absolute inset-0 w-full h-full"
+      ></canvas>
+
+      <div class="absolute pointer-events-none" style="left: {lensLeft}px; top: {lensTop}px;">
         <!-- Lens canvas -->
         <canvas
           bind:this={lensCanvas}
@@ -299,9 +310,13 @@
           class="absolute inset-0 flex items-center justify-center pointer-events-none"
           style="border-radius: 50%;"
         >
-          <div class="w-px h-3 bg-white/70 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-full"></div>
+          <div
+            class="w-px h-3 bg-white/70 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-full"
+          ></div>
           <div class="w-px h-3 bg-white/70 absolute top-1/2 left-1/2 -translate-x-1/2"></div>
-          <div class="w-3 h-px bg-white/70 absolute top-1/2 left-1/2 -translate-y-1/2 -translate-x-full"></div>
+          <div
+            class="w-3 h-px bg-white/70 absolute top-1/2 left-1/2 -translate-y-1/2 -translate-x-full"
+          ></div>
           <div class="w-3 h-px bg-white/70 absolute top-1/2 left-1/2 -translate-y-1/2"></div>
         </div>
 

@@ -14,19 +14,19 @@ test.describe('Keyframe editing via popover', () => {
 
   test('popover opens when keyframe is selected', async ({ page }) => {
     await timeline.clickKeyframe(0, 0);
-    const popover = page.locator('.fixed.z-50.bg-surface.rounded-xl.shadow-2xl');
+    const popover = page.locator('.fixed.z-50.bg-surface.rounded-xl.shadow-2xl').first();
     await expect(popover).toBeVisible({ timeout: 3_000 });
   });
 
   test('brightness slider changes keyframe brightness', async ({ page }) => {
     await timeline.clickKeyframe(0, 0);
-    const popover = page.locator('.fixed.z-50.bg-surface.rounded-xl.shadow-2xl');
+    const popover = page.locator('.fixed.z-50.bg-surface.rounded-xl.shadow-2xl').first();
     await expect(popover).toBeVisible();
 
     const brightnessSlider = popover.locator('label:has-text("Bright")').locator('..').locator('input[type="range"]');
     await brightnessSlider.evaluate((el: HTMLInputElement) => {
       el.value = '50';
-      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
     });
     await page.waitForTimeout(200);
 
@@ -36,7 +36,7 @@ test.describe('Keyframe editing via popover', () => {
 
   test('interpolation dropdown changes keyframe interpolation', async ({ page }) => {
     await timeline.clickKeyframe(0, 0);
-    const popover = page.locator('.fixed.z-50.bg-surface.rounded-xl.shadow-2xl');
+    const popover = page.locator('.fixed.z-50.bg-surface.rounded-xl.shadow-2xl').first();
     await expect(popover).toBeVisible();
 
     const select = popover.locator('label:has-text("Interp")').locator('..').locator('select');
@@ -49,7 +49,7 @@ test.describe('Keyframe editing via popover', () => {
 
   test('power toggle changes keyframe powerOn', async ({ page }) => {
     await timeline.clickKeyframe(0, 0);
-    const popover = page.locator('.fixed.z-50.bg-surface.rounded-xl.shadow-2xl');
+    const popover = page.locator('.fixed.z-50.bg-surface.rounded-xl.shadow-2xl').first();
     await expect(popover).toBeVisible();
 
     const toggle = popover.locator('button[role="switch"]');
@@ -63,13 +63,13 @@ test.describe('Keyframe editing via popover', () => {
 
   test('transition slider changes keyframe transition', async ({ page }) => {
     await timeline.clickKeyframe(0, 0);
-    const popover = page.locator('.fixed.z-50.bg-surface.rounded-xl.shadow-2xl');
+    const popover = page.locator('.fixed.z-50.bg-surface.rounded-xl.shadow-2xl').first();
     await expect(popover).toBeVisible();
 
     const transitionSlider = popover.locator('label:has-text("Trans")').locator('..').locator('input[type="range"]');
     await transitionSlider.evaluate((el: HTMLInputElement) => {
       el.value = '500';
-      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
     });
     await page.waitForTimeout(200);
 
@@ -81,14 +81,14 @@ test.describe('Keyframe editing via popover', () => {
     await timeline.clickKeyframe(0, 0);
     await timeline.clickKeyframe(0, 1, { ctrlKey: true });
 
-    const popover = page.locator('.fixed.z-50.bg-surface.rounded-xl.shadow-2xl');
+    const popover = page.locator('.fixed.z-50.bg-surface.rounded-xl.shadow-2xl').first();
     await expect(popover).toBeVisible();
     await expect(popover.getByText('2 selected')).toBeVisible();
   });
 
   test('popover closes when deselecting', async ({ page }) => {
     await timeline.clickKeyframe(0, 0);
-    const popover = page.locator('.fixed.z-50.bg-surface.rounded-xl.shadow-2xl');
+    const popover = page.locator('.fixed.z-50.bg-surface.rounded-xl.shadow-2xl').first();
     await expect(popover).toBeVisible();
 
     await timeline.clickEmpty();

@@ -26,21 +26,40 @@
       label: 'New Project',
       keys: 'Ctrl+N',
       category: 'file',
-      action: () => { uiStore.openModal('new-project'); close(); },
+      action: () => {
+        uiStore.openModal('new-project');
+        close();
+      },
+    },
+    {
+      id: 'file.open',
+      label: 'Open Project',
+      keys: 'Ctrl+O',
+      category: 'file',
+      action: () => {
+        document.dispatchEvent(new CustomEvent('openlightfx:open'));
+        close();
+      },
     },
     {
       id: 'file.export',
       label: 'Export',
       keys: 'Ctrl+E',
       category: 'file',
-      action: () => { uiStore.openModal('export'); close(); },
+      action: () => {
+        uiStore.openModal('export');
+        close();
+      },
     },
     {
       id: 'file.movie-metadata',
       label: 'Movie Metadata',
       keys: '',
       category: 'file',
-      action: () => { uiStore.openModal('movie-metadata'); close(); },
+      action: () => {
+        uiStore.openModal('movie-metadata');
+        close();
+      },
     },
     // Edit
     {
@@ -48,21 +67,30 @@
       label: 'Undo',
       keys: 'Ctrl+Z',
       category: 'edit',
-      action: () => { undoStore.undo(); close(); },
+      action: () => {
+        undoStore.undo();
+        close();
+      },
     },
     {
       id: 'edit.redo',
       label: 'Redo',
       keys: 'Ctrl+Shift+Z',
       category: 'edit',
-      action: () => { undoStore.redo(); close(); },
+      action: () => {
+        undoStore.redo();
+        close();
+      },
     },
     {
       id: 'edit.deselect',
       label: 'Deselect All',
       keys: 'Escape',
       category: 'edit',
-      action: () => { timelineStore.clearSelection(); close(); },
+      action: () => {
+        timelineStore.clearSelection();
+        close();
+      },
     },
     // Playback
     {
@@ -70,21 +98,30 @@
       label: 'Play / Pause',
       keys: 'Space',
       category: 'playback',
-      action: () => { videoStore.togglePlayback(); close(); },
+      action: () => {
+        videoStore.togglePlayback();
+        close();
+      },
     },
     {
       id: 'playback.step-forward',
       label: 'Step Forward',
       keys: '→',
       category: 'playback',
-      action: () => { videoStore.stepForward(); close(); },
+      action: () => {
+        videoStore.stepForward();
+        close();
+      },
     },
     {
       id: 'playback.step-backward',
       label: 'Step Backward',
       keys: '←',
       category: 'playback',
-      action: () => { videoStore.stepBackward(); close(); },
+      action: () => {
+        videoStore.stepBackward();
+        close();
+      },
     },
     // Timeline
     {
@@ -92,14 +129,20 @@
       label: 'Zoom In',
       keys: '+',
       category: 'timeline',
-      action: () => { timelineStore.zoom(1.5); close(); },
+      action: () => {
+        timelineStore.zoom(1.5);
+        close();
+      },
     },
     {
       id: 'timeline.zoom-out',
       label: 'Zoom Out',
       keys: '-',
       category: 'timeline',
-      action: () => { timelineStore.zoom(1 / 1.5); close(); },
+      action: () => {
+        timelineStore.zoom(1 / 1.5);
+        close();
+      },
     },
     {
       id: 'timeline.zoom-fit',
@@ -117,28 +160,50 @@
       label: 'Toggle Overlay',
       keys: 'O',
       category: 'view',
-      action: () => { uiStore.toggleOverlay(); close(); },
+      action: () => {
+        uiStore.toggleOverlay();
+        close();
+      },
     },
     {
       id: 'view.toggle-snapping',
       label: 'Toggle Snapping',
       keys: 'S',
       category: 'view',
-      action: () => { uiStore.toggleSnapping(); close(); },
+      action: () => {
+        uiStore.toggleSnapping();
+        close();
+      },
+    },
+    {
+      id: 'view.toggle-dark-mode',
+      label: 'Toggle Dark Mode',
+      keys: '',
+      category: 'view',
+      action: () => {
+        uiStore.toggleDarkMode();
+        close();
+      },
     },
     {
       id: 'view.keyboard-shortcuts',
       label: 'Keyboard Shortcuts',
       keys: '?',
       category: 'view',
-      action: () => { uiStore.openModal('keyboard-shortcuts'); close(); },
+      action: () => {
+        uiStore.openModal('keyboard-shortcuts');
+        close();
+      },
     },
     {
       id: 'view.about',
       label: 'About',
       keys: '',
       category: 'view',
-      action: () => { uiStore.openModal('about'); close(); },
+      action: () => {
+        uiStore.openModal('about');
+        close();
+      },
     },
     // Channels
     {
@@ -146,14 +211,20 @@
       label: 'Add Channel from Template',
       keys: '',
       category: 'keyframe',
-      action: () => { uiStore.openModal('channel-template'); close(); },
+      action: () => {
+        uiStore.openModal('channel-template');
+        close();
+      },
     },
     {
       id: 'channels.publish',
       label: 'Publish',
       keys: '',
       category: 'file',
-      action: () => { uiStore.openModal('publish'); close(); },
+      action: () => {
+        uiStore.openModal('publish');
+        close();
+      },
     },
     // Layer 2 — Effects & Scene Detection
     {
@@ -161,21 +232,30 @@
       label: 'Add Effect',
       keys: '',
       category: 'keyframe',
-      action: () => { uiStore.openModal('effect-catalog'); close(); },
+      action: () => {
+        uiStore.openModal('effect-catalog');
+        close();
+      },
     },
     {
       id: 'scenes.detect',
       label: 'Detect Scenes',
       keys: '',
       category: 'keyframe',
-      action: () => { uiStore.openModal('scene-detection'); close(); },
+      action: () => {
+        uiStore.openModal('scene-detection');
+        close();
+      },
     },
     {
       id: 'channels.create-group',
       label: 'Create Channel Group',
       keys: '',
       category: 'keyframe',
-      action: () => { uiStore.openModal('channel-group'); close(); },
+      action: () => {
+        uiStore.openModal('channel-group');
+        close();
+      },
     },
     {
       id: 'keyframe.add-scene-marker',
@@ -199,7 +279,9 @@
   const filtered = $derived.by(() => {
     const q = query.trim().toLowerCase();
     const results = q
-      ? commands.filter((c) => c.label.toLowerCase().includes(q) || c.category.toLowerCase().includes(q))
+      ? commands.filter(
+          (c) => c.label.toLowerCase().includes(q) || c.category.toLowerCase().includes(q)
+        )
       : commands;
     return results.slice(0, 10);
   });
@@ -240,7 +322,8 @@
         break;
       case 'ArrowUp':
         e.preventDefault();
-        activeIndex = (activeIndex - 1 + Math.max(1, filtered.length)) % Math.max(1, filtered.length);
+        activeIndex =
+          (activeIndex - 1 + Math.max(1, filtered.length)) % Math.max(1, filtered.length);
         scrollItemIntoView(activeIndex);
         break;
       case 'Enter':
@@ -284,15 +367,15 @@
 
 {#if isOpen}
   <!-- Backdrop -->
-  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
   <div
     class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm animate-fade-in"
+    role="presentation"
     onclick={close}
   >
     <!-- Palette panel — stop click propagation so backdrop doesn't catch it -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       class="relative mx-auto mt-16 w-full max-w-[600px] px-4"
+      role="presentation"
       onclick={(e) => e.stopPropagation()}
     >
       <div
@@ -335,7 +418,8 @@
 
           <kbd
             class="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded bg-surface2 text-textMuted text-xs font-mono border border-surface3 flex-shrink-0"
-          >Esc</kbd>
+            >Esc</kbd
+          >
         </div>
 
         <!-- Results list -->
@@ -347,9 +431,7 @@
           class="max-h-[360px] overflow-y-auto py-1"
         >
           {#if filtered.length === 0}
-            <li class="px-4 py-8 text-center text-textMuted text-sm">
-              No commands found
-            </li>
+            <li class="px-4 py-8 text-center text-textMuted text-sm">No commands found</li>
           {:else}
             {#each filtered as cmd, i (cmd.id)}
               <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -361,7 +443,9 @@
                 class:bg-surface2={i === activeIndex}
                 class:text-text-base={i === activeIndex}
                 class:text-textMuted={i !== activeIndex}
-                onmouseenter={() => { activeIndex = i; }}
+                onmouseenter={() => {
+                  activeIndex = i;
+                }}
                 onclick={() => execute(i)}
               >
                 <!-- Label -->
@@ -392,7 +476,9 @@
         </ul>
 
         <!-- Footer hint -->
-        <div class="flex items-center gap-4 px-4 py-2 border-t border-surface3 text-xs text-textMuted/60">
+        <div
+          class="flex items-center gap-4 px-4 py-2 border-t border-surface3 text-xs text-textMuted/60"
+        >
           <span><kbd class="font-mono">↑↓</kbd> navigate</span>
           <span><kbd class="font-mono">↵</kbd> select</span>
           <span><kbd class="font-mono">Esc</kbd> dismiss</span>

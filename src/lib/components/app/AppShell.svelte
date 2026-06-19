@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import TopBar from './TopBar.svelte';
   import StatusBar from './StatusBar.svelte';
   import CommandPalette from './CommandPalette.svelte';
@@ -6,6 +7,11 @@
   import PlaybackControls from '$lib/components/video/PlaybackControls.svelte';
   import TimelinePanel from '$lib/components/timeline/TimelinePanel.svelte';
   import { projectStore } from '$lib/stores/project.svelte.js';
+  import {
+    RULER_HEIGHT,
+    CHANNEL_LANE_HEIGHT,
+    MINIMAP_DEFAULT_HEIGHT,
+  } from '$lib/types/timeline.js';
 
   let {
     saveProviderName = 'Local',
@@ -34,7 +40,7 @@
 
   // ── Resizable split: video panel + timeline area ─────────────────────────
   // Stored as percentage of the "inner" area (between TopBar/PlaybackControls/Minimap/StatusBar).
-  // Default: 40% video, 60% timeline.
+  // Auto-computed to fit channels; user can still drag the handle to override.
   let videoPct = $state(40);
   const MIN_PCT = 15;
   const MAX_PCT = 75;
@@ -65,6 +71,27 @@
     isDragging = false;
     (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
   }
+
+  // Auto-size the video/timeline split to fit the channel count
+  let lastAutoChannelCount = -1;
+
+  $effect(() => {
+    const count = projectStore.file?.track.channels.length ?? 0;
+    const el = containerEl;
+    if (!el || count === lastAutoChannelCount) return;
+    lastAutoChannelCount = count;
+
+    untrack(() => {
+      const rect = el.getBoundingClientRect();
+      const FIXED_PX = 48 + 48 + 24 + 8; // TopBar + PlaybackControls + StatusBar + drag handle
+      const innerHeight = rect.height - FIXED_PX;
+      if (innerHeight <= 0) return;
+
+      const timelineNeeded = RULER_HEIGHT + count * CHANNEL_LANE_HEIGHT + MINIMAP_DEFAULT_HEIGHT;
+      const pct = Math.round(((innerHeight - timelineNeeded) / innerHeight) * 100);
+      videoPct = Math.max(MIN_PCT, Math.min(MAX_PCT, pct));
+    });
+  });
 </script>
 
 <!--

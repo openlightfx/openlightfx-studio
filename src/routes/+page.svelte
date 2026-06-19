@@ -83,7 +83,7 @@
     }
 
     // 4. Keyboard shortcuts
-    const cleanupKeyboard = initKeyboardShortcuts();
+    const cleanupKeyboard = initKeyboardShortcuts({ onOpen: handleOpen, onSave: handleSave });
 
     // Expose stores for e2e testing
     if (typeof window !== 'undefined') {
@@ -172,7 +172,9 @@
   onopen={handleOpen}
   onsave={handleSave}
   onexport={() => uiStore.openModal('export')}
-  oncommandpalette={() => { /* CommandPalette handles its own Ctrl+K listener */ }}
+  oncommandpalette={() => {
+    /* CommandPalette handles its own Ctrl+K listener */
+  }}
 />
 
 <!-- ── Modals ─────────────────────────────────────────────────────────────────── -->

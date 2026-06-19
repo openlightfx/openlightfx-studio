@@ -8,7 +8,7 @@ export class TimelinePage {
   constructor(private page: Page) {}
 
   private get canvas(): Locator {
-    return this.page.locator('.timeline-panel canvas');
+    return this.page.locator('.timeline-panel canvas').first();
   }
 
   /** Read pxPerMs and scrollX from the timeline store. */
@@ -34,9 +34,13 @@ export class TimelinePage {
     if (!box) throw new Error('Canvas not visible');
     const absX = box.x + pos.x;
     const absY = box.y + pos.y;
-    await this.page.mouse.click(absX, absY, {
-      modifiers: modifiers?.ctrlKey ? ['Control'] : undefined,
-    });
+    if (modifiers?.ctrlKey) {
+      await this.page.keyboard.down('Control');
+    }
+    await this.page.mouse.click(absX, absY);
+    if (modifiers?.ctrlKey) {
+      await this.page.keyboard.up('Control');
+    }
     await this.page.waitForTimeout(100);
   }
 

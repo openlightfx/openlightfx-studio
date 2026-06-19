@@ -1,11 +1,5 @@
 import type { Keyframe } from '$lib/types/track.js';
-
-export interface ChannelGroupOffset {
-  channelId: string;
-  hueOffset: number;
-  brightnessOffset: number;
-  timingOffsetMs: number;
-}
+import type { ChannelGroupOffset } from '$lib/types/channels.js';
 
 export function applyMirror(
   source: Keyframe,

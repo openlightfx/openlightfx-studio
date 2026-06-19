@@ -1,6 +1,7 @@
 import type { ProjectFile } from '$lib/types/project.js';
 import { LS_KEY_SNAPSHOT_PREFIX, AUTO_SAVE_INTERVAL_MS } from '$lib/types/ui.js';
 import { projectToJson, jsonToProject } from '$lib/services/project-io.js';
+import { undoStore } from './undo.svelte.js';
 
 /** Threshold above which serialization is offloaded to a worker (bytes). */
 const WORKER_THRESHOLD = 500 * 1024; // 500 KB
@@ -26,18 +27,22 @@ class SnapshotStore {
 
   private getWorker(): Worker {
     if (!this.worker) {
-      this.worker = new Worker(
-        new URL('$lib/workers/snapshot.worker.ts', import.meta.url),
-        { type: 'module' },
-      );
+      this.worker = new Worker(new URL('$lib/workers/snapshot.worker.ts', import.meta.url), {
+        type: 'module',
+      });
     }
     return this.worker;
   }
 
   save(project: ProjectFile): void {
     try {
-      const key = LS_KEY_SNAPSHOT_PREFIX + project.projectId;
-      const json = projectToJson(project);
+      const withUndo: ProjectFile = {
+        ...project,
+        undoHistory: undoStore.serialize(),
+        undoPointer: undoStore.undoStack.length,
+      };
+      const key = LS_KEY_SNAPSHOT_PREFIX + withUndo.projectId;
+      const json = projectToJson(withUndo);
 
       // For large payloads, offload serialization to worker
       if (json.length > WORKER_THRESHOLD) {
@@ -45,13 +50,17 @@ class SnapshotStore {
         w.onmessage = (e: MessageEvent) => {
           try {
             localStorage.setItem(key, e.data.json);
-          } catch { /* localStorage full */ }
+          } catch {
+            /* localStorage full */
+          }
         };
-        w.postMessage({ project });
+        w.postMessage({ project: withUndo });
       } else {
         localStorage.setItem(key, json);
       }
-    } catch { /* localStorage full — silently ignore */ }
+    } catch {
+      /* localStorage full — silently ignore */
+    }
   }
 
   restore(projectId: string): ProjectFile | null {

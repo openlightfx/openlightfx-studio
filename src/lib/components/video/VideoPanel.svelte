@@ -4,6 +4,7 @@
   import { toastStore } from '$lib/stores/toast.svelte.js';
   import { uiStore } from '$lib/stores/ui.svelte.js';
   import { SUPPORTED_VIDEO_TYPES } from '$lib/types/video.js';
+  import { probeVideo } from '$lib/services/frame-extractor.js';
   import Eyedropper from '$lib/components/video/Eyedropper.svelte';
   import LightingOverlay from '$lib/components/video/LightingOverlay.svelte';
 
@@ -35,27 +36,42 @@
   function handleDragLeave(e: DragEvent) {
     // Only clear if leaving the panel entirely (not entering a child)
     const related = e.relatedTarget as Node | null;
-    const panel = (e.currentTarget as HTMLElement);
+    const panel = e.currentTarget as HTMLElement;
     if (!related || !panel.contains(related)) {
       isDragOver = false;
     }
   }
 
-  function handleDrop(e: DragEvent) {
+  async function handleDrop(e: DragEvent) {
+    console.log('[VideoPanel] handleDrop fired');
     e.preventDefault();
     isDragOver = false;
 
     const file = e.dataTransfer?.files?.[0];
+    console.log('[VideoPanel] file:', file?.name, 'type:', file?.type, 'size:', file?.size);
     if (!file) return;
 
     if (!SUPPORTED_VIDEO_TYPES.includes(file.type)) {
+      console.log('[VideoPanel] rejected — type not in SUPPORTED_VIDEO_TYPES:', SUPPORTED_VIDEO_TYPES);
       toastStore.error(`Unsupported file type: ${file.type || file.name}. Use MP4, WebM, or MKV.`);
       return;
     }
 
+    console.log('[VideoPanel] loading video file');
     projectStore.setVideoFile(file);
     const objectUrl = projectStore.videoObjectUrl!;
     videoStore.loadFile(file, objectUrl);
+
+    console.log('[VideoPanel] starting probeVideo');
+    try {
+      const result = await probeVideo(file);
+      console.log('[VideoPanel] probeVideo result:', JSON.stringify(result));
+      videoStore.applyProbeResult(result);
+      console.log('[VideoPanel] isHdr after probe:', videoStore.isHdr);
+    } catch (err) {
+      toastStore.error(`Video probe failed: ${err instanceof Error ? err.message : String(err)}`);
+      console.error('[VideoPanel] Video probe failed:', err);
+    }
   }
 
   // Computed aspect ratio style
@@ -99,7 +115,9 @@
 
   <!-- Placeholder when no video loaded -->
   {#if !videoStore.isLoaded && !videoStore.isLoading}
-    <div class="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none">
+    <div
+      class="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none"
+    >
       <svg
         xmlns="http://www.w3.org/2000/svg"
         class="w-12 h-12 text-textMuted opacity-40"
@@ -109,7 +127,11 @@
         stroke-width="1.5"
         aria-hidden="true"
       >
-        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9A2.25 2.25 0 0013.5 5.25h-9A2.25 2.25 0 002.25 7.5v9A2.25 2.25 0 004.5 18.75z" />
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9A2.25 2.25 0 0013.5 5.25h-9A2.25 2.25 0 002.25 7.5v9A2.25 2.25 0 004.5 18.75z"
+        />
       </svg>
       <p class="text-textMuted text-sm">Drop a video file here</p>
       <p class="text-textMuted text-xs opacity-60">MP4, WebM, MKV</p>
@@ -119,13 +141,17 @@
   <!-- Loading spinner -->
   {#if videoStore.isLoading}
     <div class="absolute inset-0 flex items-center justify-center bg-black/60 pointer-events-none">
-      <div class="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
+      <div
+        class="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin"
+      ></div>
     </div>
   {/if}
 
   <!-- Drag-over overlay -->
   {#if isDragOver}
-    <div class="absolute inset-0 flex flex-col items-center justify-center bg-accent/10 pointer-events-none">
+    <div
+      class="absolute inset-0 flex flex-col items-center justify-center bg-accent/10 pointer-events-none"
+    >
       <svg
         xmlns="http://www.w3.org/2000/svg"
         class="w-10 h-10 text-accent"
@@ -135,7 +161,11 @@
         stroke-width="2"
         aria-hidden="true"
       >
-        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"
+        />
       </svg>
       <p class="text-accent font-medium mt-2">Drop to load video</p>
     </div>

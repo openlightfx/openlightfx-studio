@@ -1,6 +1,7 @@
 <script lang="ts">
   import Button from '$lib/components/shared/Button.svelte';
   import IconButton from '$lib/components/shared/IconButton.svelte';
+  import { undoStore } from '$lib/stores/undo.svelte.js';
 
   let {
     projectName,
@@ -124,11 +125,39 @@
       </svg>
     </IconButton>
 
+    <IconButton label="Undo" onclick={() => undoStore.undo()} disabled={!undoStore.canUndo}>
+      <svg
+        class="w-4 h-4"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M3 7h7a3 3 0 0 1 0 6H9" />
+        <path d="M6 4 3 7l3 3" />
+      </svg>
+    </IconButton>
+
+    <IconButton label="Redo" onclick={() => undoStore.redo()} disabled={!undoStore.canRedo}>
+      <svg
+        class="w-4 h-4"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M13 7H6a3 3 0 0 0 0 6h1" />
+        <path d="M10 4l3 3-3 3" />
+      </svg>
+    </IconButton>
+
     <div class="w-px h-6 bg-surface3 mx-1 flex-shrink-0"></div>
 
-    <Button variant="primary" size="sm" onclick={onexport}>
-      Export
-    </Button>
+    <Button variant="primary" size="sm" onclick={onexport}>Export</Button>
 
     <div class="w-px h-6 bg-surface3 mx-1 flex-shrink-0"></div>
 
@@ -139,14 +168,21 @@
       title="Open command palette"
       aria-label="Open command palette (Cmd+K)"
     >
-      <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <svg
+        class="w-3.5 h-3.5"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+      >
         <circle cx="7" cy="7" r="5" />
         <path d="m13 13-2.5-2.5" stroke-linecap="round" />
       </svg>
       <span>Search</span>
       <kbd
         class="hidden sm:inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-surface3 text-textMuted text-xs font-mono"
-      >⌘K</kbd>
+        >⌘K</kbd
+      >
     </button>
   </div>
 </header>

@@ -82,6 +82,29 @@ export function newProject(templateChannels: ChannelTemplateEntry[]): ProjectFil
   };
 }
 
+export function trackToProject(track: LightFXTrack): ProjectFile {
+  return {
+    formatVersion: PROJECT_FORMAT_VERSION,
+    projectId: generateId(),
+    track,
+    channelGroups: [],
+    sceneMarkers: [],
+    undoHistory: [],
+    undoPointer: 0,
+    uiState: {
+      timelineZoom: 1,
+      timelineScrollX: 0,
+      timelineScrollY: 0,
+      selectedChannelId: null,
+      selectedKeyframeIds: [],
+      overlayEnabled: true,
+    },
+    videoFilePath: '',
+    candidateMetadata: {},
+    lastModified: new Date().toISOString(),
+  };
+}
+
 export function projectToJson(project: ProjectFile): string {
   return JSON.stringify(project, null, 2);
 }

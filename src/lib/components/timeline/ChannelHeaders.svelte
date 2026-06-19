@@ -4,6 +4,7 @@
   import { undoStore } from '$lib/stores/undo.svelte.js';
   import { uiStore } from '$lib/stores/ui.svelte.js';
   import { EditChannelCommand } from '$lib/commands/edit-channel.js';
+  import { ReorderChannelsCommand } from '$lib/commands/reorder-channels.js';
   import { rgbToCssString } from '$lib/services/color-utils.js';
   import { CHANNEL_LANE_HEIGHT, CHANNEL_HEADER_WIDTH, RULER_HEIGHT } from '$lib/types/timeline.js';
   import ChannelPopover from '$lib/components/properties/ChannelPopover.svelte';
@@ -48,9 +49,7 @@
   function commitEdit(channelId: string) {
     const trimmed = editingName.trim();
     if (trimmed && trimmed !== getChannelName(channelId)) {
-      undoStore.execute(
-        new EditChannelCommand(channelId, { displayName: trimmed }, projectStore),
-      );
+      undoStore.execute(new EditChannelCommand(channelId, { displayName: trimmed }, projectStore));
     }
     editingChannelId = null;
     editingName = '';
@@ -82,6 +81,53 @@
 
   const channels = $derived(projectStore.file?.track.channels ?? []);
 
+  // Drag-to-reorder state
+  let draggedChannelId = $state<string | null>(null);
+  let dropTargetIndex = $state<number | null>(null);
+
+  function handleDragStart(e: DragEvent, channelId: string) {
+    draggedChannelId = channelId;
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', channelId);
+    }
+  }
+
+  function handleDragOver(e: DragEvent, index: number) {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    dropTargetIndex = index;
+  }
+
+  function handleDragLeave() {
+    dropTargetIndex = null;
+  }
+
+  function handleDrop(e: DragEvent, targetIndex: number) {
+    e.preventDefault();
+    dropTargetIndex = null;
+    if (!draggedChannelId) return;
+
+    const currentOrder = channels.map((c) => c.id);
+    const fromIndex = currentOrder.indexOf(draggedChannelId);
+    if (fromIndex === -1 || fromIndex === targetIndex) {
+      draggedChannelId = null;
+      return;
+    }
+
+    const newOrder = [...currentOrder];
+    const [moved] = newOrder.splice(fromIndex, 1);
+    newOrder.splice(targetIndex, 0, moved);
+
+    undoStore.execute(new ReorderChannelsCommand(newOrder, projectStore));
+    draggedChannelId = null;
+  }
+
+  function handleDragEnd() {
+    draggedChannelId = null;
+    dropTargetIndex = null;
+  }
+
   // Channel popover state
   let channelPopoverOpen = $state(false);
   let channelPopoverId = $state('');
@@ -103,24 +149,41 @@
   </div>
 
   <!-- Channel rows -->
-  {#each channels as channel (channel.id)}
+  {#each channels as channel, index (channel.id)}
     {@const isSolo = timelineStore.soloChannelIds.has(channel.id)}
     {@const isMuted = timelineStore.mutedChannelIds.has(channel.id)}
     {@const isActive = timelineStore.activeChannelId === channel.id}
     {@const colorDot = rgbToCssString(channel.defaultColor)}
     {@const group = projectStore.file?.channelGroups.find((g) => g.channelIds.includes(channel.id))}
 
+    {#if dropTargetIndex === index && draggedChannelId !== channel.id}
+      <div class="h-0.5 bg-accent rounded-full mx-2"></div>
+    {/if}
+
     <div
       class="channel-row flex items-center gap-1 px-2 border-b border-[#252540] transition-colors"
       class:bg-[#252540]={isActive}
       class:hover:bg-[#20203a]={!isActive}
+      class:opacity-50={draggedChannelId === channel.id}
       style="height: {CHANNEL_LANE_HEIGHT}px;"
       role="row"
+      tabindex="0"
+      draggable="true"
+      ondragstart={(e) => handleDragStart(e, channel.id)}
+      ondragover={(e) => handleDragOver(e, index)}
+      ondragleave={handleDragLeave}
+      ondrop={(e) => handleDrop(e, index)}
+      ondragend={handleDragEnd}
       oncontextmenu={(e) => {
         e.preventDefault();
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
         channelPopoverId = channel.id;
-        channelPopoverAnchor = { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
+        channelPopoverAnchor = {
+          x: rect.left,
+          y: rect.top,
+          width: rect.width,
+          height: rect.height,
+        };
         channelPopoverOpen = true;
       }}
     >
@@ -131,12 +194,12 @@
         aria-label="Drag to reorder channel"
       >
         <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor" aria-hidden="true">
-          <circle cx="3" cy="3" r="1.5"/>
-          <circle cx="7" cy="3" r="1.5"/>
-          <circle cx="3" cy="7" r="1.5"/>
-          <circle cx="7" cy="7" r="1.5"/>
-          <circle cx="3" cy="11" r="1.5"/>
-          <circle cx="7" cy="11" r="1.5"/>
+          <circle cx="3" cy="3" r="1.5" />
+          <circle cx="7" cy="3" r="1.5" />
+          <circle cx="3" cy="7" r="1.5" />
+          <circle cx="7" cy="7" r="1.5" />
+          <circle cx="3" cy="11" r="1.5" />
+          <circle cx="7" cy="11" r="1.5" />
         </svg>
       </div>
 
@@ -165,9 +228,12 @@
             ondblclick={() => startEdit(channel.id, channel.displayName)}
             role="button"
             tabindex="0"
-            onkeydown={(e) => { if (e.key === 'Enter' || e.key === 'F2') startEdit(channel.id, channel.displayName); }}
+            onkeydown={(e) => {
+              if (e.key === 'Enter' || e.key === 'F2') startEdit(channel.id, channel.displayName);
+            }}
             aria-label="Channel name: {channel.displayName}. Double-click to edit."
-          >{channel.displayName}</span>
+            >{channel.displayName}</span
+          >
         {/if}
       </div>
 
@@ -176,7 +242,10 @@
         <button
           class="flex-shrink-0 ml-1 text-xs px-1 py-0.5 rounded bg-accent/20 text-accent hover:bg-accent/30 transition-colors leading-none"
           title="{group.name} ({group.mode.replace('GROUP_', '')})"
-          onclick={() => { editingGroupId = group.id; uiStore.openModal('channel-group'); }}
+          onclick={() => {
+            editingGroupId = group.id;
+            uiStore.openModal('channel-group');
+          }}
           aria-label="Edit group: {group.name}"
         >
           {group.mode === 'GROUP_MIRROR' ? '↔' : group.mode === 'GROUP_SPREAD' ? '→' : '↻'}
@@ -194,8 +263,8 @@
         onclick={() => timelineStore.toggleSolo(channel.id)}
         title={isSolo ? 'Unsolo channel' : 'Solo channel'}
         aria-label={isSolo ? 'Unsolo channel' : 'Solo channel'}
-        aria-pressed={isSolo}
-      >S</button>
+        aria-pressed={isSolo}>S</button
+      >
 
       <!-- Mute button -->
       <button
@@ -208,8 +277,8 @@
         onclick={() => timelineStore.toggleMute(channel.id)}
         title={isMuted ? 'Unmute channel' : 'Mute channel'}
         aria-label={isMuted ? 'Unmute channel' : 'Mute channel'}
-        aria-pressed={isMuted}
-      >M</button>
+        aria-pressed={isMuted}>M</button
+      >
     </div>
   {/each}
 
@@ -221,8 +290,10 @@
   {/if}
 </div>
 
-<ChannelPopover
-  channelId={channelPopoverId}
-  anchorRect={channelPopoverAnchor}
-  bind:isOpen={channelPopoverOpen}
-/>
+{#if channelPopoverOpen}
+  <ChannelPopover
+    channelId={channelPopoverId}
+    anchorRect={channelPopoverAnchor}
+    bind:isOpen={channelPopoverOpen}
+  />
+{/if}

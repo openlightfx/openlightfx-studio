@@ -19,7 +19,9 @@
     projectStore.file?.sceneMarkers.find((m) => m.id === markerId) ?? null
   );
 
-  let editLabel = $state(marker?.label ?? '');
+  let editLabel = $state(
+    projectStore.file?.sceneMarkers.find((m) => m.id === markerId)?.label ?? ''
+  );
 
   $effect(() => {
     editLabel = marker?.label ?? '';
@@ -60,8 +62,9 @@
       </div>
 
       <div>
-        <label class="block text-xs text-textMuted mb-1">Label</label>
+        <label for="sm-label" class="block text-xs text-textMuted mb-1">Label</label>
         <input
+          id="sm-label"
           type="text"
           class="w-full px-3 py-2 bg-surface2 border border-surface3 rounded text-sm text-text-base"
           bind:value={editLabel}

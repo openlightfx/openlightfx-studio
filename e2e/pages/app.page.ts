@@ -1,9 +1,13 @@
 import { type Page, type Locator } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE_PATH = path.resolve(__dirname, '../fixtures/test-project.json');
 const VIDEO_PATH = path.resolve(__dirname, '../fixtures/test-video.mp4');
+
+export { VIDEO_PATH };
 
 export class AppPage {
   constructor(public readonly page: Page) {}
@@ -18,6 +22,12 @@ export class AppPage {
     await this.page.waitForSelector('canvas', { timeout: 15_000 });
     // Wait a tick for Svelte effects to settle
     await this.page.waitForTimeout(500);
+    // Set a predictable zoom level for tests (0.2 px/ms = 5000ms spans 1000px)
+    await this.page.evaluate(() => {
+      (window as any).__stores.timelineStore.pxPerMs = 0.2;
+      (window as any).__stores.timelineStore.scrollX = 0;
+    });
+    await this.page.waitForTimeout(100);
   }
 
   /** Navigate without seeding — shows NewProjectDialog. */
@@ -67,7 +77,7 @@ export class AppPage {
   }
 
   get canvas(): Locator {
-    return this.page.locator('.timeline-panel canvas');
+    return this.page.locator('.timeline-panel canvas').first();
   }
 
   get channelHeaders(): Locator {

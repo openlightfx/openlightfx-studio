@@ -41,7 +41,7 @@ export interface TimelineHitResult {
 }
 
 export interface TimelineDragState {
-  type: 'keyframe' | 'effect' | 'scene-marker' | 'selection-rect' | 'scroll';
+  type: 'keyframe' | 'effect' | 'scene-marker' | 'selection-rect' | 'scroll' | 'seek';
   startX: number;
   startY: number;
   startTimestampMs: number;

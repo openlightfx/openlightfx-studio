@@ -14,7 +14,7 @@ test.describe('Color picker', () => {
     colorPicker = new ColorPickerPage(page);
     await app.boot();
     await timeline.clickKeyframe(0, 0);
-    await page.locator('.fixed.z-50.bg-surface.rounded-xl.shadow-2xl').waitFor({ state: 'visible' });
+    await page.locator('.fixed.z-50.bg-surface.rounded-xl.shadow-2xl').first().waitFor({ state: 'visible' });
   });
 
   test('expand color picker shows color wheel', async () => {
@@ -61,16 +61,18 @@ test.describe('Color picker', () => {
     expect(color).toEqual({ r: 255, g: 0, b: 0 });
   });
 
-  test('switch to Kelvin mode shows kelvin slider', async () => {
+  test('switch to Kelvin mode shows kelvin slider', async ({ page }) => {
     await colorPicker.toggleExpand();
     await colorPicker.selectMode('Kelvin');
+    await page.waitForTimeout(300);
     expect(await colorPicker.isKelvinSliderVisible()).toBe(true);
     expect(await colorPicker.isWheelVisible()).toBe(false);
   });
 
-  test('Kelvin slider sets color temperature', async () => {
+  test('Kelvin slider sets color temperature', async ({ page }) => {
     await colorPicker.toggleExpand();
     await colorPicker.selectMode('Kelvin');
+    await page.waitForTimeout(300);
     await colorPicker.setKelvin(3000);
     const mode = await colorPicker.getKeyframeColorMode('kf-left-0');
     expect(mode).toBe('COLOR_TEMPERATURE');

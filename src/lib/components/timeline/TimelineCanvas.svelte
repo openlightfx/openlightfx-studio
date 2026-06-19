@@ -3,6 +3,8 @@
   import { videoStore } from '$lib/stores/video.svelte.js';
   import { timelineStore } from '$lib/stores/timeline.svelte.js';
   import { undoStore } from '$lib/stores/undo.svelte.js';
+  import { uiStore } from '$lib/stores/ui.svelte.js';
+  import { computeSnapTargets } from '$lib/services/snapping.js';
   import {
     drawBackground,
     drawKeyframes,
@@ -10,6 +12,7 @@
     drawPlayhead,
     drawSceneMarkers,
     drawSelectionRect,
+    pxToMs,
     type RenderViewport,
   } from './render.js';
   import {
@@ -20,16 +23,38 @@
     handleDoubleClick,
   } from './interaction.js';
   import type { TimelineDragState } from '$lib/types/timeline.js';
+  import { CHANNEL_LANE_HEIGHT, RULER_HEIGHT } from '$lib/types/timeline.js';
 
   let {
     onscenemarkerclick,
   }: {
-    onscenemarkerclick?: (markerId: string, anchorRect: { x: number; y: number; width: number; height: number }) => void;
+    onscenemarkerclick?: (
+      markerId: string,
+      anchorRect: { x: number; y: number; width: number; height: number }
+    ) => void;
   } = $props();
 
   let canvasEl = $state<HTMLCanvasElement | null>(null);
   let containerEl = $state<HTMLDivElement | null>(null);
   let dragState = $state<TimelineDragState | null>(null);
+
+  // Compute snap targets reactively when snapping is enabled
+  const snapTargets = $derived.by(() => {
+    if (!uiStore.snappingEnabled) return null;
+    const file = projectStore.file;
+    if (!file) return null;
+    return computeSnapTargets(
+      file.track.keyframes,
+      file.track.effectKeyframes,
+      file.sceneMarkers,
+      videoStore.durationMs,
+      videoStore.frameRate
+    );
+  });
+
+  // Content height based on channel count — drives auto-sizing and enables scrolling
+  const channelCount = $derived(projectStore.file?.track.channels.length ?? 0);
+  const contentHeight = $derived(RULER_HEIGHT + channelCount * CHANNEL_LANE_HEIGHT);
 
   // Build viewport from store values
   function getViewport(width: number, height: number): RenderViewport {
@@ -164,11 +189,31 @@
       });
     }
 
+    // Clicking any target seeks the playhead to that position
+    if (hit.type === 'empty' || hit.type === 'ruler' || hit.type === 'keyframe' || hit.type === 'effect') {
+      videoStore.seek(Math.max(0, hit.timestampMs));
+    }
+
     dragState = handlePointerDown(e, hit, timelineStore, keyframes, effects);
   }
 
   function onPointerMove(e: PointerEvent): void {
-    handlePointerMove(e, dragState, timelineStore, projectStore, projectStore);
+    // Ruler seek drag: continuously scrub the playhead
+    if (dragState?.type === 'seek') {
+      const vp = getViewport(timelineStore.viewportWidth, timelineStore.viewportHeight);
+      const timeMs = pxToMs(e.offsetX, vp);
+      videoStore.seek(Math.max(0, timeMs));
+      return;
+    }
+    handlePointerMove(
+      e,
+      dragState,
+      timelineStore,
+      projectStore,
+      projectStore,
+      snapTargets,
+      uiStore.snappingEnabled
+    );
   }
 
   function onPointerUp(e: PointerEvent): void {
@@ -181,7 +226,17 @@
     const keyframes = projectStore.file?.track.keyframes ?? [];
     const effects = projectStore.file?.track.effectKeyframes ?? [];
 
-    handlePointerUp(e, dragState, timelineStore, undoStore, projectStore, channels, keyframes, projectStore, effects);
+    handlePointerUp(
+      e,
+      dragState,
+      timelineStore,
+      undoStore,
+      projectStore,
+      channels,
+      keyframes,
+      projectStore,
+      effects
+    );
     dragState = null;
   }
 
@@ -197,7 +252,7 @@
   }
 </script>
 
-<div bind:this={containerEl} class="relative w-full h-full overflow-hidden">
+<div bind:this={containerEl} class="relative w-full" style="height: {contentHeight}px">
   <canvas
     bind:this={canvasEl}
     class="block"

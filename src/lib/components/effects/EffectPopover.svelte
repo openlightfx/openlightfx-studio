@@ -24,6 +24,8 @@
   let showSecondaryPicker = $state(false);
   let showFallbackPicker = $state(false);
 
+  const uid = crypto.randomUUID().slice(0, 8);
+
   const selectedEffects = $derived(
     timelineStore.selectedEffectIds
       .map((id) => projectStore.file?.track.effectKeyframes.find((e) => e.id === id))
@@ -112,10 +114,11 @@
 
       <!-- Intensity -->
       <div>
-        <label class="block text-xs text-textMuted mb-1">
+        <label for="{uid}-intensity" class="block text-xs text-textMuted mb-1">
           Intensity: {getMixed('intensity') ?? '—'}%
         </label>
         <input
+          id="{uid}-intensity"
           type="range"
           min="0"
           max="100"
@@ -129,10 +132,11 @@
       <!-- Duration (single only) -->
       {#if single}
         <div>
-          <label class="block text-xs text-textMuted mb-1">
+          <label for="{uid}-duration" class="block text-xs text-textMuted mb-1">
             Duration: {single.durationMs}ms
           </label>
           <input
+            id="{uid}-duration"
             type="range"
             min="50"
             max="10000"
@@ -146,9 +150,10 @@
 
       <!-- Primary color -->
       <div>
-        <label class="block text-xs text-textMuted mb-1">Primary Color</label>
+        <label for="{uid}-primary-color" class="block text-xs text-textMuted mb-1">Primary Color</label>
         <div class="flex items-center gap-2">
           <button
+            id="{uid}-primary-color"
             class="w-8 h-8 rounded border border-surface3 cursor-pointer flex-shrink-0"
             style="background-color: {single ? rgbToCssString(single.primaryColor) : (getMixed('primaryColor') ? rgbToCssString(getMixed('primaryColor') as RGBColor) : '#888')}"
             onclick={() => { showPrimaryPicker = !showPrimaryPicker; showSecondaryPicker = false; showFallbackPicker = false; }}
@@ -172,9 +177,10 @@
 
       <!-- Secondary color -->
       <div>
-        <label class="block text-xs text-textMuted mb-1">Secondary Color</label>
+        <label for="{uid}-secondary-color" class="block text-xs text-textMuted mb-1">Secondary Color</label>
         <div class="flex items-center gap-2">
           <button
+            id="{uid}-secondary-color"
             class="w-8 h-8 rounded border border-surface3 cursor-pointer flex-shrink-0"
             style="background-color: {single ? rgbToCssString(single.secondaryColor) : (getMixed('secondaryColor') ? rgbToCssString(getMixed('secondaryColor') as RGBColor) : '#888')}"
             onclick={() => { showSecondaryPicker = !showSecondaryPicker; showPrimaryPicker = false; showFallbackPicker = false; }}
@@ -200,10 +206,11 @@
       {#if single}
         {#each Object.entries(single.effectParams.params) as [key, value]}
           <div>
-            <label class="block text-xs text-textMuted mb-1 capitalize">
+            <label for="{uid}-param-{key}" class="block text-xs text-textMuted mb-1 capitalize">
               {key.replace(/_/g, ' ')}: {value}
             </label>
             <input
+              id="{uid}-param-{key}"
               type="range"
               min={getParamMin(key)}
               max={getParamMax(key)}
@@ -221,8 +228,9 @@
 
       <!-- Required capability dropdown -->
       <div>
-        <label class="block text-xs text-textMuted mb-1">Required Capability</label>
+        <label for="{uid}-capability" class="block text-xs text-textMuted mb-1">Required Capability</label>
         <select
+          id="{uid}-capability"
           class="w-full bg-surface2 text-text-base text-xs rounded-md px-2 py-1.5 border border-surface3 focus:outline-none focus:ring-2 focus:ring-accent/50"
           value={getMixed('requiredCapability') ?? 'CAPABILITY_ANY'}
           onchange={(e) => applyPatch({ requiredCapability: (e.target as HTMLSelectElement).value as EffectKeyframe['requiredCapability'] })}
@@ -239,9 +247,10 @@
       <!-- Fallback color (single only) -->
       {#if single}
         <div>
-          <label class="block text-xs text-textMuted mb-1">Fallback Color</label>
+          <label for="{uid}-fallback-color" class="block text-xs text-textMuted mb-1">Fallback Color</label>
           <div class="flex items-center gap-2">
             <button
+              id="{uid}-fallback-color"
               class="w-8 h-8 rounded border border-surface3 cursor-pointer flex-shrink-0"
               style="background-color: {rgbToCssString(single.fallbackColor)}"
               onclick={() => { showFallbackPicker = !showFallbackPicker; showPrimaryPicker = false; showSecondaryPicker = false; }}
@@ -262,10 +271,11 @@
 
         <!-- Fallback brightness -->
         <div>
-          <label class="block text-xs text-textMuted mb-1">
+          <label for="{uid}-fallback-brightness" class="block text-xs text-textMuted mb-1">
             Fallback Brightness: {single.fallbackBrightness}%
           </label>
           <input
+            id="{uid}-fallback-brightness"
             type="range"
             min="0"
             max="100"

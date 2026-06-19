@@ -1,5 +1,5 @@
 import type { ShortcutCategory } from '$lib/types/ui.js';
-import type { Keyframe } from '$lib/types/track.js';
+import type { Keyframe, EffectKeyframe } from '$lib/types/track.js';
 import { videoStore } from '$lib/stores/video.svelte.js';
 import { undoStore } from '$lib/stores/undo.svelte.js';
 import { uiStore } from '$lib/stores/ui.svelte.js';
@@ -9,8 +9,14 @@ import { clipboardStore } from '$lib/stores/clipboard.svelte.js';
 import { DeleteKeyframeCommand } from '$lib/commands/delete-keyframe.js';
 import { CompositeCommand } from '$lib/commands/composite.js';
 import { PasteKeyframesCommand } from '$lib/commands/paste-keyframes.js';
+import { AddEffectCommand } from '$lib/commands/add-effect.js';
 import { generateId } from '$lib/services/id.js';
 import { AddSceneMarkerCommand } from '$lib/commands/add-scene-marker.js';
+
+export interface KeyboardShortcutCallbacks {
+  onOpen?: () => void;
+  onSave?: () => void;
+}
 
 // ── Mac detection ─────────────────────────────────────────────────────────────
 const isMac =
@@ -38,7 +44,7 @@ interface ShortcutDef {
 
 // ── Shortcut definitions ──────────────────────────────────────────────────────
 // Defined as a factory so actions always close over the live store singletons.
-function buildShortcuts(): ShortcutDef[] {
+function buildShortcuts(callbacks?: KeyboardShortcutCallbacks): ShortcutDef[] {
   return [
     // ── Playback ──────────────────────────────────────────────────────────────
     {
@@ -100,6 +106,15 @@ function buildShortcuts(): ShortcutDef[] {
           const kfs = projectStore.getKeyframes().filter((kf) => selectedKfIds.includes(kf.id));
           const channelId = timelineStore.activeChannelId ?? kfs[0]?.channelId ?? '';
           clipboardStore.copyKeyframes(kfs, channelId);
+        } else {
+          const selectedEffIds = timelineStore.selectedEffectIds;
+          if (selectedEffIds.length > 0) {
+            const effs = projectStore
+              .getEffectKeyframes()
+              .filter((ef) => selectedEffIds.includes(ef.id));
+            const channelId = timelineStore.activeChannelId ?? effs[0]?.channelId ?? '';
+            clipboardStore.copyEffects(effs, channelId);
+          }
         }
       },
     },
@@ -121,9 +136,24 @@ function buildShortcuts(): ShortcutDef[] {
             videoStore.currentTimeMs,
             buffer.baseTimestampMs,
             generateId,
-            projectStore,
+            projectStore
           );
           undoStore.execute(cmd);
+        } else if (buffer.type === 'effect') {
+          const targetChannel = timelineStore.activeChannelId ?? buffer.sourceChannelId;
+          const baseOffset = videoStore.currentTimeMs - buffer.baseTimestampMs;
+          const effects = (buffer.data as EffectKeyframe[]).map((ef) => ({
+            ...ef,
+            id: generateId(),
+            channelId: targetChannel,
+            timestampMs: Math.max(0, ef.timestampMs + baseOffset),
+            primaryColor: { ...ef.primaryColor },
+            secondaryColor: { ...ef.secondaryColor },
+            fallbackColor: { ...ef.fallbackColor },
+            effectParams: { params: { ...ef.effectParams.params } },
+          }));
+          const cmds = effects.map((ef) => new AddEffectCommand(ef, projectStore));
+          undoStore.execute(new CompositeCommand(`Paste ${effects.length} effect(s)`, cmds));
         }
       },
     },
@@ -196,7 +226,13 @@ function buildShortcuts(): ShortcutDef[] {
       key: 's',
       ctrl: true,
       category: 'file',
-      action: () => uiStore.openModal('export'),
+      action: () => {
+        if (callbacks?.onSave) {
+          callbacks.onSave();
+        } else {
+          uiStore.openModal('export');
+        }
+      },
     },
     {
       id: 'file.save-as',
@@ -224,7 +260,7 @@ function buildShortcuts(): ShortcutDef[] {
       key: 'o',
       ctrl: true,
       category: 'file',
-      action: () => uiStore.openModal('new-project'),
+      action: () => callbacks?.onOpen?.(),
     },
     {
       id: 'file.export',
@@ -244,7 +280,7 @@ function buildShortcuts(): ShortcutDef[] {
       key: 'k',
       ctrl: true,
       category: 'view',
-      action: () => uiStore.openModal('new-project'), // opened by CommandPalette's own listener; this is a fallback label
+      action: () => {},
     },
     {
       id: 'view.toggle-eyedropper',
@@ -326,11 +362,15 @@ function buildShortcuts(): ShortcutDef[] {
   ];
 }
 
-// ── Singleton shortcut list (built once) ─────────────────────────────────────
+// ── Singleton shortcut list (built once per callback set) ─────────────────────
 let shortcuts: ShortcutDef[] | null = null;
+let lastCallbacks: KeyboardShortcutCallbacks | undefined;
 
-function getShortcutDefs(): ShortcutDef[] {
-  if (!shortcuts) shortcuts = buildShortcuts();
+function getShortcutDefs(callbacks?: KeyboardShortcutCallbacks): ShortcutDef[] {
+  if (!shortcuts || callbacks !== lastCallbacks) {
+    lastCallbacks = callbacks;
+    shortcuts = buildShortcuts(callbacks);
+  }
   return shortcuts;
 }
 
@@ -361,20 +401,18 @@ export function getShortcuts(): Array<{
  *
  * Call once during app initialisation (e.g. in `+layout.svelte` `$effect`).
  */
-export function initKeyboardShortcuts(): () => void {
+export function initKeyboardShortcuts(callbacks?: KeyboardShortcutCallbacks): () => void {
   function handleKeydown(e: KeyboardEvent) {
     // Skip when focus is inside a text field (unless explicitly allowed).
     const tag = (document.activeElement as HTMLElement | null)?.tagName ?? '';
     const inInput = tag === 'INPUT' || tag === 'TEXTAREA';
 
-    const defs = getShortcutDefs();
+    const defs = getShortcutDefs(callbacks);
 
     for (const shortcut of defs) {
       if (inInput && !shortcut.allowInInput) continue;
 
-      const ctrlMatch = shortcut.ctrl
-        ? (isMac ? e.metaKey : e.ctrlKey)
-        : !(e.metaKey || e.ctrlKey);
+      const ctrlMatch = shortcut.ctrl ? (isMac ? e.metaKey : e.ctrlKey) : !(e.metaKey || e.ctrlKey);
       const shiftMatch = shortcut.shift ? e.shiftKey : !e.shiftKey;
       const altMatch = shortcut.alt ? e.altKey : !e.altKey;
       const keyMatch = e.key === shortcut.key || e.key.toLowerCase() === shortcut.key.toLowerCase();

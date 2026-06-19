@@ -199,7 +199,9 @@
 </div>
 
 <!-- Popovers and context menu (rendered outside scroll container, use fixed positioning via Popover) -->
-<KeyframePopover anchorRect={keyframePopoverAnchor} bind:isOpen={keyframePopoverOpen} />
+{#if keyframePopoverOpen}
+  <KeyframePopover anchorRect={keyframePopoverAnchor} bind:isOpen={keyframePopoverOpen} />
+{/if}
 
 {#if effectPopoverOpen && effectPopoverAnchor}
   <EffectPopover

@@ -81,8 +81,6 @@ docker compose -f docker-compose.ci.yml run build-linux
 | `npm run lint`           | Run Prettier + ESLint                  |
 | `npm run format`         | Auto-format with Prettier              |
 | `npm run proto:compile`  | Regenerate protobuf JS/TS bindings     |
-| `npm run electron:dev`   | Launch Electron + SvelteKit dev server |
-| `npm run electron:build` | Production Electron build              |
 
 ## Architecture
 
@@ -119,8 +117,7 @@ src/
 │   ├── effects/          # 13 effect renderers + registry
 │   ├── types/            # TypeScript type definitions
 │   └── workers/          # Web Workers (scene detection, snapshots)
-├── routes/               # SvelteKit routes (SPA)
-└── electron/             # Future Electron integration
+└── routes/               # SvelteKit routes (SPA)
 ```
 
 ## Track Format

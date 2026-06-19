@@ -27,8 +27,12 @@ test.describe('Export dialog', () => {
     const dialog = page.locator('[role="dialog"][aria-label="Export Track"]');
     await expect(dialog).toBeVisible();
 
+    // Wait for validation to complete (button becomes enabled)
+    const exportBtn = dialog.getByText('Export .lightfx');
+    await expect(exportBtn).toBeEnabled({ timeout: 5_000 });
+
     const downloadPromise = page.waitForEvent('download', { timeout: 10_000 });
-    await dialog.getByText('Export .lightfx').click();
+    await exportBtn.click();
 
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toContain('.lightfx');

@@ -8,7 +8,7 @@ test.describe('App boot', () => {
 
     const dialog = page.locator('[role="dialog"][aria-label="New Project"]');
     await expect(dialog).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText('Stereo')).toBeVisible();
+    await expect(page.getByText('Stereo', { exact: true })).toBeVisible();
   });
 
   test('restores snapshot and skips dialog on boot', async ({ page }) => {

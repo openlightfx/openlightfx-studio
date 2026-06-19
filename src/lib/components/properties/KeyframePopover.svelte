@@ -99,7 +99,7 @@
 
   $effect(() => {
     syncingFromSelection = true;
-    brightness = sharedBrightness;
+    brightness = sharedBrightness * 100;
     transitionMs = sharedTransitionMs;
     interpolation = sharedInterpolation;
     powerOn = sharedPowerOn;
@@ -130,7 +130,7 @@
   // Slider/select change handlers invoked from native input events
   function handleBrightnessInput(e: Event) {
     if (syncingFromSelection) return;
-    applyPatch({ brightness: Number((e.target as HTMLInputElement).value) });
+    applyPatch({ brightness: Number((e.target as HTMLInputElement).value) / 100 });
   }
 
   function handleTransitionInput(e: Event) {
@@ -237,10 +237,7 @@
       <!-- Power toggle -->
       <div class="flex items-center justify-between" class:opacity-60={powerMixed}>
         <span class="text-xs text-textMuted">{powerMixed ? 'Power —' : 'Power'}</span>
-        <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
-        <div onclick={handlePowerToggle}>
-          <Toggle label="" bind:checked={powerOn} />
-        </div>
+        <Toggle label="" bind:checked={powerOn} onclick={handlePowerToggle} />
       </div>
 
       <!-- Eyedropper button -->

@@ -181,10 +181,7 @@
       <!-- Optional toggle -->
       <div class="flex items-center justify-between">
         <span class="text-xs text-textMuted">Optional</span>
-        <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
-        <div onclick={handleOptionalToggle}>
-          <Toggle label="" bind:checked={optional} />
-        </div>
+        <Toggle label="" bind:checked={optional} onclick={handleOptionalToggle} />
       </div>
 
       <div class="border-t border-surface3"></div>

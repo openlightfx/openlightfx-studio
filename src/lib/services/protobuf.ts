@@ -14,7 +14,7 @@ async function getRoot(): Promise<protobuf.Root> {
     root = protobuf.parse(protoText).root;
   } catch {
     // Browser: try raw import or fetch
-    const protoText = await fetch('/src/proto/lightfx.proto').then((r) => r.text());
+    const protoText = await fetch('/lightfx.proto').then((r) => r.text());
     root = protobuf.parse(protoText).root;
   }
   return root;

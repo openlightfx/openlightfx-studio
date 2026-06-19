@@ -17,6 +17,8 @@ import { MoveKeyframeCommand } from '$lib/commands/move-keyframe.js';
 import { DeleteKeyframeCommand } from '$lib/commands/delete-keyframe.js';
 import { CompositeCommand } from '$lib/commands/composite.js';
 import { generateId } from '$lib/services/id.js';
+import { propagateToGroup } from '$lib/services/group-propagation.js';
+import { projectStore } from '$lib/stores/index.js';
 import type { KeyframeStore } from '$lib/commands/add-keyframe.js';
 import type { EffectKeyframeStore } from '$lib/commands/add-effect.js';
 import { MoveEffectCommand } from '$lib/commands/move-effect.js';
@@ -70,7 +72,7 @@ export function hitTest(
   channels: Channel[],
   keyframes: Keyframe[],
   effects: EffectKeyframe[] = [],
-  sceneMarkers: SceneMarker[] = [],
+  sceneMarkers: SceneMarker[] = []
 ): TimelineHitResult {
   const timestampMs = pxToMs(x, viewport);
 
@@ -138,7 +140,12 @@ export function hitTest(
   for (const ef of laneEffects) {
     const efX = msToPx(ef.timestampMs, viewport);
     const efWidth = Math.max(MIN_EFFECT_BLOCK_WIDTH, ef.durationMs * viewport.pxPerMs);
-    if (x >= efX && x <= efX + efWidth && y >= effectBlockY && y <= effectBlockY + EFFECT_BLOCK_HEIGHT) {
+    if (
+      x >= efX &&
+      x <= efX + efWidth &&
+      y >= effectBlockY &&
+      y <= effectBlockY + EFFECT_BLOCK_HEIGHT
+    ) {
       return {
         type: 'effect',
         channelId: channel.id,
@@ -166,7 +173,7 @@ export function handlePointerDown(
   hitResult: TimelineHitResult,
   timelineStore: TimelineStoreInterface,
   keyframes: Keyframe[],
-  effects: EffectKeyframe[] = [],
+  effects: EffectKeyframe[] = []
 ): TimelineDragState | null {
   const { type } = hitResult;
 
@@ -181,7 +188,8 @@ export function handlePointerDown(
 
     if (isShift && timelineStore.selectedKeyframeIds.length > 0) {
       // Range select: select all keyframes between lastSelected and this one
-      const lastId = timelineStore.selectedKeyframeIds[timelineStore.selectedKeyframeIds.length - 1];
+      const lastId =
+        timelineStore.selectedKeyframeIds[timelineStore.selectedKeyframeIds.length - 1];
       const last = keyframes.find((k) => k.id === lastId);
       const current = keyframes.find((k) => k.id === hitResult.keyframeId);
 
@@ -189,7 +197,10 @@ export function handlePointerDown(
         const minMs = Math.min(last.timestampMs, current.timestampMs);
         const maxMs = Math.max(last.timestampMs, current.timestampMs);
         const rangeIds = keyframes
-          .filter((k) => k.channelId === current.channelId && k.timestampMs >= minMs && k.timestampMs <= maxMs)
+          .filter(
+            (k) =>
+              k.channelId === current.channelId && k.timestampMs >= minMs && k.timestampMs <= maxMs
+          )
           .map((k) => k.id);
         for (const id of rangeIds) timelineStore.selectKeyframe(id, true);
       } else {
@@ -245,9 +256,9 @@ export function handlePointerDown(
   }
 
   if (type === 'ruler') {
-    // Clicking the ruler starts a scroll drag
+    // Clicking the ruler starts a seek drag (scrub the playhead)
     return {
-      type: 'scroll',
+      type: 'seek',
       startX: e.offsetX,
       startY: e.offsetY,
       startTimestampMs: hitResult.timestampMs,
@@ -289,7 +300,7 @@ export function handlePointerMove(
   store: KeyframeStore,
   effectStore?: EffectKeyframeStore,
   snapTargets?: SnapTarget[] | null,
-  snappingEnabled?: boolean,
+  snappingEnabled?: boolean
 ): number | null {
   if (!dragState) return null;
 
@@ -310,7 +321,12 @@ export function handlePointerMove(
       if (origMs !== undefined) {
         let targetMs = Math.max(0, origMs + deltaMs);
         if (snappingEnabled && snapTargets) {
-          const snap = findSnapPoint(targetMs, snapTargets, KEYFRAME_SNAP_DISTANCE, timelineStore.pxPerMs);
+          const snap = findSnapPoint(
+            targetMs,
+            snapTargets,
+            KEYFRAME_SNAP_DISTANCE,
+            timelineStore.pxPerMs
+          );
           if (snap) {
             targetMs = snap.timestampMs;
             snappedMs = snap.timestampMs;
@@ -336,7 +352,12 @@ export function handlePointerMove(
       if (origMs !== undefined) {
         let targetMs = Math.max(0, origMs + deltaMs);
         if (snappingEnabled && snapTargets) {
-          const snap = findSnapPoint(targetMs, snapTargets, KEYFRAME_SNAP_DISTANCE, timelineStore.pxPerMs);
+          const snap = findSnapPoint(
+            targetMs,
+            snapTargets,
+            KEYFRAME_SNAP_DISTANCE,
+            timelineStore.pxPerMs
+          );
           if (snap) {
             targetMs = snap.timestampMs;
             snappedMs = snap.timestampMs;
@@ -379,7 +400,7 @@ export function handlePointerUp(
   channels: Channel[],
   keyframes: Keyframe[],
   effectStore?: EffectKeyframeStore,
-  effects: EffectKeyframe[] = [],
+  effects: EffectKeyframe[] = []
 ): void {
   if (!dragState) return;
 
@@ -483,7 +504,11 @@ export function handlePointerUp(
         const efX = msToPx(ef.timestampMs, viewport);
         const laneIdx = channelIndex.get(ef.channelId);
         if (laneIdx === undefined) continue;
-        const efY = RULER_HEIGHT + laneIdx * CHANNEL_LANE_HEIGHT + EFFECT_BLOCK_Y_OFFSET + EFFECT_BLOCK_HEIGHT / 2;
+        const efY =
+          RULER_HEIGHT +
+          laneIdx * CHANNEL_LANE_HEIGHT +
+          EFFECT_BLOCK_Y_OFFSET +
+          EFFECT_BLOCK_HEIGHT / 2;
         if (efX >= x1 && efX <= x2 && efY >= y1 && efY <= y2) {
           timelineStore.selectEffect(ef.id, true);
         }
@@ -502,7 +527,7 @@ export function handleDoubleClick(
   e: MouseEvent,
   hitResult: TimelineHitResult,
   undoStore: UndoStoreInterface,
-  store: KeyframeStore,
+  store: KeyframeStore
 ): void {
   if (hitResult.type !== 'empty' || !hitResult.channelId) return;
 
@@ -519,7 +544,17 @@ export function handleDoubleClick(
     powerOn: true,
   };
 
-  undoStore.execute(new AddKeyframeCommand(newKeyframe, store));
+  const propagated = propagateToGroup(newKeyframe, projectStore.getChannelGroups(), generateId);
+
+  if (propagated.length > 0) {
+    const commands = [
+      new AddKeyframeCommand(newKeyframe, store),
+      ...propagated.map((kf) => new AddKeyframeCommand(kf, store)),
+    ];
+    undoStore.execute(new CompositeCommand('Add keyframes to group', commands));
+  } else {
+    undoStore.execute(new AddKeyframeCommand(newKeyframe, store));
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -532,7 +567,7 @@ export function handleContextMenu(
   undoStore: UndoStoreInterface,
   store: KeyframeStore,
   timelineStore: TimelineStoreInterface,
-  sceneMarkerStore?: SceneMarkerStore,
+  sceneMarkerStore?: SceneMarkerStore
 ): ContextMenuItem[] {
   e.preventDefault();
 
@@ -679,7 +714,7 @@ export function handlePinch(event: PinchEvent, timelineStore: TimelineStoreInter
  */
 export function maybeAutoFollowPlayhead(
   currentTimeMs: number,
-  timelineStore: TimelineStoreInterface,
+  timelineStore: TimelineStoreInterface
 ): void {
   const viewportDurationMs = timelineStore.viewportWidth / timelineStore.pxPerMs;
   const playheadX = (currentTimeMs - timelineStore.scrollX) / viewportDurationMs;

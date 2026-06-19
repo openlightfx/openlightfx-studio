@@ -5,12 +5,12 @@ export class ColorPickerPage {
 
   /** The Popover container for the keyframe popover (fixed position overlay). */
   private get popover() {
-    return this.page.locator('.fixed.z-50.bg-surface.rounded-xl.shadow-2xl');
+    return this.page.locator('.fixed.z-50.bg-surface.rounded-xl.shadow-2xl').first();
   }
 
   /** Click the color swatch button to expand the color picker. */
   async toggleExpand(): Promise<void> {
-    await this.popover.locator('button[aria-label="Toggle color picker"]').click();
+    await this.popover.locator('button[aria-label="Toggle color picker"]').first().click();
     await this.page.waitForTimeout(200);
   }
 
@@ -37,7 +37,8 @@ export class ColorPickerPage {
 
   /** Set an RGB slider value. channel is 'R', 'G', or 'B'. */
   async setRGBSlider(channel: 'R' | 'G' | 'B', value: number): Promise<void> {
-    const sliderContainer = this.popover.locator(`label:has-text("${channel}")`).locator('..');
+    // Use exact-text match to avoid 'R' matching 'Bright', 'Trans', etc.
+    const sliderContainer = this.popover.locator(`label`).filter({ hasText: new RegExp(`^${channel}$`) }).locator('..');
     const input = sliderContainer.locator('input[type="range"]');
     await input.evaluate((el: HTMLInputElement, val: number) => {
       el.value = String(val);
@@ -51,7 +52,7 @@ export class ColorPickerPage {
     const input = this.popover.locator('input#hex-input');
     await input.fill(hex);
     await input.press('Enter');
-    await this.page.waitForTimeout(100);
+    await this.page.waitForTimeout(200);
   }
 
   /** Check if hex input shows an error. */
@@ -62,8 +63,8 @@ export class ColorPickerPage {
   /** Switch to RGB or Kelvin mode. */
   async selectMode(mode: 'RGB' | 'Kelvin'): Promise<void> {
     const buttonText = mode === 'RGB' ? 'RGB' : 'Kelvin';
-    await this.popover.locator(`button:has-text("${buttonText}")`).click();
-    await this.page.waitForTimeout(200);
+    await this.popover.locator(`button:has-text("${buttonText}")`).first().click();
+    await this.page.waitForTimeout(300);
   }
 
   /** Check if the Kelvin slider is visible. */

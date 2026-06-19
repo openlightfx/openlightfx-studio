@@ -1,4 +1,5 @@
 <script lang="ts">
+  const selectId = crypto.randomUUID();
   let {
     label, value = $bindable(), options,
   }: {
@@ -7,8 +8,8 @@
 </script>
 
 <div class="flex items-center gap-3">
-  <label class="text-xs text-textMuted w-16 shrink-0">{label}</label>
-  <select class="flex-1 bg-surface2 text-text-base rounded-lg px-3 py-2 text-sm border border-surface3 focus:outline-none focus:ring-2 focus:ring-accent/50 min-h-[44px]" bind:value>
+  <label for={selectId} class="text-xs text-textMuted w-16 shrink-0">{label}</label>
+  <select id={selectId} class="flex-1 bg-surface2 text-text-base rounded-lg px-3 py-2 text-sm border border-surface3 focus:outline-none focus:ring-2 focus:ring-accent/50 min-h-[44px]" bind:value>
     {#each options as opt}
       <option value={opt.value}>{opt.label}</option>
     {/each}
