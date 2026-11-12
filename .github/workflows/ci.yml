@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run check
+      - run: npm run build
+      - name: Static build uses relative asset paths
+        run: |
+          set -euo pipefail
+          test -f dist/index.html
+          if grep -E '(src|href)="/' dist/index.html; then
+            echo "dist/index.html contains absolute asset paths"
+            exit 1
+          fi

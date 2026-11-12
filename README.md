@@ -1,147 +1,43 @@
 # OpenLightFX Studio
 
-Visual timeline editor for authoring `.lightfx` ambient lighting tracks. Part of the [OpenLightFX](https://github.com/openlightfx) ecosystem — create lighting tracks in Studio, share them on the Marketplace, and play them in sync with movies via the Emby plugin.
+Visual timeline editor for `.lightfx` lighting tracks. The Emby plugin plays a track in sync with a movie and drives WiZ, LIFX, Hue, Govee, and REST bulbs. Studio authors the track.
 
-<!-- ![Studio Screenshot](media/screenshot.png) -->
+The file format is `proto/lightfx.proto` (schema version 1), the same contract as [openlightfx-emby](https://github.com/openlightfx/openlightfx-emby) `TrackParser`. This repo does not change that schema. Scene markers exist only in the editor and are not written into `.lightfx`.
 
-## Features
+## Develop
 
-- **Canvas-based timeline editor** — keyframe editing with drag, snap, and multi-select
-- **Channel & group management** — organise lights into logical channels and groups
-- **Multiple interpolation modes** — Step, Linear, Ease In, Ease Out, Ease In/Out
-- **14 built-in effects** — fire, lightning, candle, breathing, and more
-- **Scene markers** — mark chapters/scenes for easy navigation
-- **Protobuf `.lightfx` format** — compact binary tracks with full metadata
-- **Undo / redo** — full history support for all editing operations
-- **Dark theme** — purpose-built dark UI for color-accurate editing
-- **Photosensitivity metadata** — flag tracks with safety information
-
-## Quick Start
-
-The fastest way to get running is Docker Compose:
-
-```bash
-docker compose -f docker-compose.dev.yml up dev
-# Open http://localhost:5173
-```
-
-## Local Development
-
-Requires **Node.js 22+**.
+Node.js 22+.
 
 ```bash
 npm install
-npm run dev          # SvelteKit dev server at http://localhost:5173
+npm run dev      # http://localhost:5173 — mock Emby API
+npm test
+npm run check
+npm run build    # static site in dist/, relative asset paths
 ```
 
-### Build Commands
+`npm run dev` uses the mock backend (bulbs, a small library, no media stream). Open a local video with the Video button. `?backend=live&server=http://host:8096` talks to a real plugin instead. A production build probes the plugin and keeps working offline if it is down: import/export, local video, and the on-screen lights still run.
 
-| Command              | Description                              |
-| -------------------- | ---------------------------------------- |
-| `npm run dev`        | Start dev server with HMR               |
-| `npm run build`      | Production build (static output)         |
-| `npm run preview`    | Preview production build locally         |
-| `npm run check`      | Type-check with svelte-check             |
-| `npm run lint`       | Lint with Prettier + ESLint              |
-| `npm run format`     | Auto-format with Prettier                |
+When the plugin hosts the build, Studio is a static site under a path such as `/emby/OpenLightFX/studio/`. Asset URLs are relative. API calls go to the Emby server root (`/OpenLightFX/Studio/...`) with `X-Emby-Token` when the Emby web session exposes one.
 
-### Protobuf Compilation
+## Backend
 
-The `.lightfx` schema lives at `proto/lightfx.proto`. To regenerate bindings:
+Typed client: `src/lib/api/types.ts`. Paths are relative to the Emby server root.
 
-```bash
-# Via Docker (no local protoc needed)
-docker compose -f docker-compose.dev.yml run protoc
+| Method | Path | Body |
+| --- | --- | --- |
+| GET | `/OpenLightFX/Studio/Bulbs` | |
+| GET | `/OpenLightFX/Studio/Items?search=` | |
+| GET | `/OpenLightFX/Studio/Items/{itemId}/StreamUrl` | |
+| GET | `/OpenLightFX/Studio/Tracks?itemId=` | |
+| GET | `/OpenLightFX/Studio/Tracks/{trackId}` | raw `.lightfx` |
+| PUT | `/OpenLightFX/Studio/Tracks/{trackId}?itemId=` | raw `.lightfx` (`application/octet-stream`) |
+| POST | `/OpenLightFX/Studio/Preview/Start` | `{ mapping: { channelId: bulbId[] } }` |
+| POST | `/OpenLightFX/Studio/Preview/Frame` | `{ states: [{ bulbId, r, g, b, brightness, transitionMs }] }` |
+| POST | `/OpenLightFX/Studio/Preview/Stop` | |
 
-# Output: proto/generated/
-```
+Preview frames are throttled to 10 Hz, or slower when a mapped bulb's `minTransitionMs` is higher. Bulbs that cannot play an effect receive that effect's fallback color.
 
-## Docker Compose
+## Release
 
-### Development (`docker-compose.dev.yml`)
-
-Runs the SvelteKit dev server with hot reload. Source is bind-mounted; `node_modules` use an anonymous volume for performance.
-
-```bash
-docker compose -f docker-compose.dev.yml up dev
-```
-
-The `protoc` service is under the `tools` profile — run it on demand:
-
-```bash
-docker compose -f docker-compose.dev.yml run protoc
-```
-
-### CI (`docker-compose.ci.yml`)
-
-Compiles protobuf then builds the static site. Used in CI pipelines.
-
-```bash
-docker compose -f docker-compose.ci.yml up --abort-on-container-exit
-```
-
-### Production (`docker-compose.prod.yml`)
-
-Multi-stage build: Node compiles the SPA, nginx serves it. Hardened with read-only filesystem, dropped capabilities, non-root user, and resource limits.
-
-```bash
-docker compose -f docker-compose.prod.yml up -d
-# Serves on http://localhost:80
-```
-
-## Technology Stack
-
-| Layer          | Technology                                      |
-| -------------- | ----------------------------------------------- |
-| Framework      | SvelteKit with `@sveltejs/adapter-static` (SPA) |
-| UI             | Svelte 5 (runes), Tailwind CSS v3               |
-| Timeline       | HTML Canvas 2D                                  |
-| Protobuf       | protobufjs                                      |
-| Build          | Vite                                            |
-| Language       | TypeScript                                      |
-| Linting        | ESLint, Prettier                                |
-| Type checking  | svelte-check                                    |
-
-## Project Structure
-
-```
-openlightfx-studio/
-├── proto/                    # Protobuf schema & generated bindings
-│   └── lightfx.proto
-├── src/
-│   ├── lib/
-│   │   ├── components/       # Svelte components
-│   │   │   └── timeline/     # Canvas-based timeline editor
-│   │   ├── proto/            # Protobuf loader & helpers
-│   │   ├── services/         # Application services
-│   │   ├── stores/           # Svelte stores (undo/redo)
-│   │   ├── types/            # TypeScript type definitions
-│   │   └── utils/            # Shared utility functions
-│   ├── routes/               # SvelteKit pages
-│   └── app.html              # HTML shell
-├── static/                   # Static assets
-├── docker-compose.dev.yml    # Dev environment
-├── docker-compose.ci.yml     # CI build
-├── docker-compose.prod.yml   # Production deployment
-├── Dockerfile                # Multi-stage prod build
-├── nginx.conf                # Non-root nginx config
-├── svelte.config.js
-├── tailwind.config.js
-├── vite.config.ts
-└── package.json
-```
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/my-feature`)
-3. Make your changes and ensure checks pass:
-   ```bash
-   npm run check && npm run lint
-   ```
-4. Commit with a descriptive message
-5. Open a pull request
-
-## License
-
-[MIT](LICENSE)
+Push a `v*` tag. `.github/workflows/release.yml` builds the site and attaches `openlightfx-studio-dist.zip` to the GitHub Release. The zip root is the static site (`index.html` at the top), which the plugin can download and serve.

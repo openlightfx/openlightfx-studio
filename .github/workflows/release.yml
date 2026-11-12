@@ -1,0 +1,33 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run check
+      - run: npm run build
+      - name: Zip static build
+        run: |
+          set -euo pipefail
+          rm -f openlightfx-studio-dist.zip
+          (cd dist && zip -r ../openlightfx-studio-dist.zip .)
+          unzip -l openlightfx-studio-dist.zip | head
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: openlightfx-studio-dist.zip
+          generate_release_notes: true

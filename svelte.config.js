@@ -1,14 +1,11 @@
-import adapter from '@sveltejs/adapter-static';
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 
-/** @type {import('@sveltejs/kit').Config} */
+/** @type {import('@sveltejs/vite-plugin-svelte').SvelteConfig} */
 const config = {
-  kit: {
-    adapter: adapter({ fallback: 'index.html' }),
-  },
-  vitePlugin: {
-    dynamicCompileOptions: ({ filename }) =>
-      filename.includes('node_modules') ? undefined : { runes: true },
-  },
+  preprocess: vitePreprocess(),
+  compilerOptions: {
+    runes: true
+  }
 };
 
 export default config;
