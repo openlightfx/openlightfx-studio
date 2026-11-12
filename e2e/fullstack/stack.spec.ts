@@ -15,7 +15,7 @@ function headers(): Record<string, string> {
 }
 
 /** Synthetic clips from scripts/media/generate-clips.sh, as Emby names them. */
-const CLIPS = { h264: 'clip-a', hdr: 'clip-b' } as const;
+const CLIPS = { h264: 'clip-a', hdr: 'clip-b', zero: 'clip-zero' } as const;
 const itemIds = new Map<string, string>();
 
 /** Resolve a synthetic clip to its real Emby item id. Fixed ids like 1 or 42 do not exist in a fresh library. */
@@ -34,6 +34,105 @@ async function itemId(request: APIRequestContext, clip: keyof typeof CLIPS = 'h2
 function commanded(line: Record<string, any>): { r: number; g: number; b: number; brightness: number } {
   const source = line.params ?? line.state_after ?? {};
   return { r: Number(source.r), g: Number(source.g), b: Number(source.b), brightness: Number(source.brightness) };
+}
+
+function freshTrackId(): string {
+  return `t${Date.now().toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`;
+}
+
+function roundTripBytes(): Buffer {
+  return fs.readFileSync('tests/fixtures/sampling/roundtrip.lightfx');
+}
+
+async function saveTrack(request: APIRequestContext, item: string, track: string, ifMatch?: string) {
+  return request.put(`${emby()}/OpenLightFX/Studio/Tracks/${track}?itemId=${item}`, {
+    headers: {
+      ...headers(),
+      'content-type': 'application/octet-stream',
+      ...(ifMatch ? { 'If-Match': ifMatch } : {}),
+    },
+    data: roundTripBytes(),
+    timeout: 8000,
+  });
+}
+
+/** Map the round-trip track's left channel onto the seeded left bulb. */
+async function ensureMapping(request: APIRequestContext): Promise<void> {
+  const profile = JSON.stringify([
+    {
+      name: 'Default',
+      mappings: [
+        { channelId: 'left', bulbIds: ['left'] },
+        { channelId: 'right', bulbIds: ['right'] },
+      ],
+    },
+  ]);
+  const saved = await request.put(`${emby()}/OpenLightFX/Settings`, {
+    headers: { ...headers(), 'content-type': 'application/json' },
+    data: { MappingProfilesJson: profile, ActiveProfileName: 'Default', PhotosensitivityMode: false },
+    timeout: 5000,
+  });
+  expect(saved.ok()).toBeTruthy();
+}
+
+async function playbackToken(request: APIRequestContext): Promise<string> {
+  const response = await request.post(`${emby()}/emby/Users/AuthenticateByName`, {
+    headers: {
+      'content-type': 'application/json',
+      'X-Emby-Authorization':
+        'MediaBrowser Client="OpenLightFX Tests", Device="fullstack-play", DeviceId="openlightfx-fullstack-play", Version="1.0.0"',
+    },
+    data: {
+      Username: process.env.OLFX_EMBY_USER ?? 'admin',
+      Pw: process.env.OLFX_EMBY_PASSWORD ?? 'openlightfx-test',
+    },
+    timeout: 5000,
+  });
+  expect(response.ok()).toBeTruthy();
+  const token = (await response.json()).AccessToken;
+  expect(token).toBeTruthy();
+  return token;
+}
+
+/** Report an Emby playback session so the plugin's PlaybackStart handler runs. */
+async function reportPlayback(request: APIRequestContext, item: string): Promise<void> {
+  const access = await playbackToken(request);
+  const auth = {
+    'X-Emby-Token': access,
+    'content-type': 'application/json',
+    'X-Emby-Authorization':
+      'MediaBrowser Client="OpenLightFX Tests", Device="fullstack-play", DeviceId="openlightfx-fullstack-play", Version="1.0.0"',
+  };
+  const info = await request.post(`${emby()}/emby/Items/${item}/PlaybackInfo`, {
+    headers: auth,
+    data: {},
+    timeout: 5000,
+  });
+  const mediaSourceId = (await info.json()).MediaSources?.[0]?.Id;
+  const started = await request.post(`${emby()}/emby/Sessions/Playing`, {
+    headers: auth,
+    data: {
+      ItemId: item,
+      MediaSourceId: mediaSourceId,
+      PlaySessionId: `olfx-${item}`,
+      CanSeek: true,
+      PlayMethod: 'DirectPlay',
+      PositionTicks: 0,
+    },
+    timeout: 5000,
+  });
+  expect(started.ok()).toBeTruthy();
+  await request.post(`${emby()}/emby/Sessions/Playing/Progress`, {
+    headers: auth,
+    data: {
+      ItemId: item,
+      MediaSourceId: mediaSourceId,
+      PlaySessionId: `olfx-${item}`,
+      PositionTicks: 0,
+      IsPaused: false,
+    },
+    timeout: 5000,
+  });
 }
 
 /** Simulator stdout as captured by run.sh. Skips anything that is not a JSON object. */
@@ -97,16 +196,20 @@ requirement('MEDIA-011 @fullstack the first picture is ready within 10 seconds',
 });
 
 requirement('MEDIA-013 @fullstack reload requests the same item', async ({ page }) => {
-  await page.goto(`${emby()}/emby/OpenLightFX/studio/?api_key=${token()}&itemId=42`);
-  // The query surviving a reload proves nothing by itself; the app has to ask the plugin for item 42 again.
-  const refetch = page.waitForRequest(/\/OpenLightFX\/Studio\/Items\/42\b/, { timeout: 5000 });
+  const id = await itemId(page.request);
+  await page.goto(`${emby()}/emby/OpenLightFX/studio/?api_key=${token()}&itemId=${id}`);
+  const refetch = page.waitForRequest(new RegExp(`/OpenLightFX/Studio/Items/${id}\\b`), { timeout: 5000 });
   await page.reload();
-  await expect(page).toHaveURL(/itemId=42/);
+  await expect(page).toHaveURL(new RegExp(`itemId=${id}`));
   await refetch;
 });
 
 requirement('MEDIA-015 @fullstack a zero runtime is replaced by the probe', async ({ request }) => {
-  const info = await (await request.get(`${emby()}/OpenLightFX/Studio/Items/probe/MediaInfo`, { headers: headers(), timeout: 5000 })).json();
+  const id = await itemId(request, 'zero');
+  const listed = await (await request.get(`${emby()}/OpenLightFX/Studio/Items?search=clip-zero`, { headers: headers(), timeout: 5000 })).json();
+  const item = listed.find((entry: { itemId: string }) => entry.itemId === id);
+  expect(item?.runtimeMs).toBe(0);
+  const info = await (await request.get(`${emby()}/OpenLightFX/Studio/Items/${id}/MediaInfo`, { headers: headers(), timeout: 15000 })).json();
   expect(info.runtimeMs).toBe(120000);
 });
 
@@ -116,8 +219,20 @@ requirement('MEDIA-016 @fullstack a seek past the encoded horizon is not a full 
 });
 
 requirement('MEDIA-017 @fullstack tracks for an item are listed', async ({ request }) => {
-  const body = await (await request.get(`${emby()}/OpenLightFX/Studio/Tracks?itemId=${await itemId(request)}`, { headers: headers(), timeout: 5000 })).json();
-  expect(Array.isArray(body)).toBe(true);
+  const id = await itemId(request);
+  const track = freshTrackId();
+  expect((await saveTrack(request, id, track)).ok()).toBeTruthy();
+  const body = await (await request.get(`${emby()}/OpenLightFX/Studio/Tracks?itemId=${id}`, { headers: headers(), timeout: 5000 })).json();
+  const row = body.find((entry: { trackId: string }) => entry.trackId === track);
+  expect(row).toEqual(
+    expect.objectContaining({
+      trackId: track,
+      title: expect.any(String),
+      itemId: id,
+      updatedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+    })
+  );
+  expect(String(row.title).length).toBeGreaterThan(0);
 });
 
 requirement('PROP-004 @fullstack the frame endpoint returns a PNG', async ({ request }) => {
@@ -144,9 +259,31 @@ requirement('SAVE-001 @fullstack save stores the track beside the movie', async 
 });
 
 requirement('SAVE-002 @fullstack playback uses the saved track', async ({ request }) => {
-  const lines = readNdjson();
-  const hit = lines.find((line) => line.event === 'command_received' && commanded(line).g === 255 && commanded(line).r === 0);
-  expect(hit?.bulb_id).toBeTruthy();
+  const id = await itemId(request);
+  const track = freshTrackId();
+  await ensureMapping(request);
+  expect((await saveTrack(request, id, track)).ok()).toBeTruthy();
+  const listed = await (await request.get(`${emby()}/OpenLightFX/Tracks/ByItem?itemId=${id}`, { headers: headers(), timeout: 5000 })).json();
+  const tracks = listed.tracks ?? listed.Tracks ?? [];
+  const saved = tracks.find((entry: { trackPath?: string; TrackPath?: string }) =>
+    String(entry.trackPath ?? entry.TrackPath ?? '').includes(`${track}.lightfx`)
+  );
+  const trackPath = saved?.trackPath ?? saved?.TrackPath;
+  expect(trackPath).toBeTruthy();
+  const selected = await request.post(`${emby()}/OpenLightFX/Tracks/Select`, {
+    headers: { ...headers(), 'content-type': 'application/json' },
+    data: { itemId: id, trackPath },
+    timeout: 5000,
+  });
+  expect(selected.ok()).toBeTruthy();
+  await reportPlayback(request, id);
+  // roundtrip.lightfx holds left at rgb(10, 20, 30), brightness 40, from time 0.
+  await expect
+    .poll(() => readNdjson().some((line) => {
+      const color = commanded(line);
+      return line.event === 'command_received' && color.r === 10 && color.g === 20 && color.b === 30 && color.brightness === 40;
+    }), { timeout: 8000 })
+    .toBe(true);
 });
 
 requirement('SAVE-003 @fullstack save writes the project sidecar', async ({ request }) => {
@@ -195,18 +332,48 @@ requirement('PREV-006 @fullstack preview color reaches the simulator within 300 
 });
 
 requirement('PREV-007 @fullstack stop restores the bulb snapshot', async ({ request }) => {
+  const started = await request.post(`${emby()}/OpenLightFX/Studio/Preview/Start`, {
+    headers: headers(),
+    data: { mapping: { left: ['left'] }, takeover: true },
+    timeout: 5000,
+  });
+  expect(started.ok()).toBeTruthy();
+  const frame = await request.post(`${emby()}/OpenLightFX/Studio/Preview/Frame`, {
+    headers: { ...headers(), 'content-type': 'application/json' },
+    data: { states: [{ bulbId: 'left', r: 9, g: 8, b: 7, brightness: 11, transitionMs: 0 }] },
+    timeout: 5000,
+  });
+  expect(frame.ok()).toBeTruthy();
+  await expect
+    .poll(() => readNdjson().some((line) => commanded(line).r === 9 && commanded(line).g === 8 && commanded(line).b === 7), { timeout: 5000 })
+    .toBe(true);
   const stopped = await request.post(`${emby()}/OpenLightFX/Studio/Preview/Stop`, { headers: headers(), timeout: 5000 });
   expect(stopped.ok()).toBeTruthy();
+  await expect
+    .poll(() => {
+      const lines = readNdjson().filter((line) => line.event === 'command_received' && line.bulb_id === 'left');
+      const preview = lines.findIndex((line) => commanded(line).r === 9 && commanded(line).g === 8 && commanded(line).b === 7);
+      if (preview < 0) return false;
+      return lines.slice(preview + 1).some((line) => !(commanded(line).r === 9 && commanded(line).g === 8 && commanded(line).b === 7));
+    }, { timeout: 5000 })
+    .toBe(true);
 });
 
 requirement('PREV-008 @fullstack start without takeover is 409 while Emby plays', async ({ request }) => {
-  const response = await request.post(`${emby()}/OpenLightFX/Studio/Preview/Start`, {
-    headers: headers(),
-    data: { mapping: { left: ['left'] } },
-    timeout: 5000,
-  });
-  expect(response.status()).toBe(409);
-  expect(await response.text()).toContain('playback_active');
+  const id = await itemId(request);
+  await ensureMapping(request);
+  expect((await saveTrack(request, id, freshTrackId())).ok()).toBeTruthy();
+  await reportPlayback(request, id);
+  await expect
+    .poll(async () => {
+      const response = await request.post(`${emby()}/OpenLightFX/Studio/Preview/Start`, {
+        headers: headers(),
+        data: { mapping: { left: ['left'] } },
+        timeout: 5000,
+      });
+      return `${response.status()} ${(await response.text())}`;
+    }, { timeout: 8000 })
+    .toMatch(/^409\b[\s\S]*playback_active/);
 });
 
 requirement('PREV-010 @fullstack a non-admin save is forbidden', async ({ request }) => {
@@ -237,14 +404,17 @@ requirement('PERF-004 @fullstack studio does not fetch the source MKV', async ({
 });
 
 requirement('ERR-003 @fullstack a save conflict returns the server text', async ({ request }) => {
-  const response = await request.put(`${emby()}/OpenLightFX/Studio/Tracks/conflict?itemId=${await itemId(request)}`, {
-    // Without a content type the plugin sees an empty body and 400s, which passed this test for the wrong reason.
-    headers: { ...headers(), 'content-type': 'application/octet-stream' },
-    data: fs.readFileSync('tests/fixtures/sampling/roundtrip.lightfx'),
-    timeout: 5000,
-  });
-  expect(response.status()).toBeGreaterThanOrEqual(400);
-  expect((await response.text()).length).toBeGreaterThan(0);
+  const id = await itemId(request);
+  const track = freshTrackId();
+  expect((await saveTrack(request, id, track)).ok()).toBeTruthy();
+  const listed = await (await request.get(`${emby()}/OpenLightFX/Studio/Tracks?itemId=${id}`, { headers: headers(), timeout: 5000 })).json();
+  const row = listed.find((entry: { trackId: string; updatedAt?: string }) => entry.trackId === track);
+  expect(row?.updatedAt).toEqual(expect.any(String));
+  const conflict = await saveTrack(request, id, track, 'stale-token');
+  expect(conflict.status()).toBe(409);
+  const text = await conflict.text();
+  expect(text).toMatch(/conflict/i);
+  expect(text).toContain(row.updatedAt);
 });
 
 requirement('PLUG-001 @fullstack media info reports timing HDR and proxy progress', async ({ request }) => {
@@ -285,12 +455,24 @@ requirement('PLUG-004 @fullstack the sidecar is stored and is not a playback fil
 });
 
 requirement('PLUG-005 @fullstack preview refuses or takes over an active session', async ({ request }) => {
+  const id = await itemId(request);
+  await ensureMapping(request);
+  expect((await saveTrack(request, id, freshTrackId())).ok()).toBeTruthy();
+  await reportPlayback(request, id);
   const refused = await request.post(`${emby()}/OpenLightFX/Studio/Preview/Start`, {
     headers: headers(),
     data: { mapping: { left: ['left'] } },
     timeout: 5000,
   });
-  expect([200, 409]).toContain(refused.status());
+  expect(refused.status()).toBe(409);
+  expect(await refused.text()).toContain('playback_active');
+  const taken = await request.post(`${emby()}/OpenLightFX/Studio/Preview/Start`, {
+    headers: headers(),
+    data: { mapping: { left: ['left'] }, takeover: true },
+    timeout: 5000,
+  });
+  expect(taken.ok()).toBeTruthy();
+  expect((await taken.json()).status).toBe('started');
 });
 
 requirement('PLUG-006 @fullstack the editor routes keep their shapes', async ({ request }) => {
