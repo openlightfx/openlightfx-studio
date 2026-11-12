@@ -13,6 +13,8 @@ protocol = "rest"
 port = 9200
 method = "GET"
 path = "/api/light"
+# REST defaults to a 200 ms floor, so state_after would still be the old color.
+min_transition_ms = 0
 
 [bulbs.param_map]
 r = "r"
@@ -29,6 +31,8 @@ protocol = "rest"
 port = 9201
 method = "GET"
 path = "/api/light"
+# REST defaults to a 200 ms floor, so state_after would still be the old color.
+min_transition_ms = 0
 
 [bulbs.param_map]
 r = "r"
