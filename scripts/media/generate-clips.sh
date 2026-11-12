@@ -5,6 +5,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT="${OLFX_MEDIA_DIR:-$ROOT/media/generated}"
 FONT="${OLFX_FONT:-/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf}"
+if [[ ! -f "$FONT" ]]; then
+  FONT="$(fc-list :file 2>/dev/null | awk -F: '/DejaVuSans\.ttf|LiberationSans-Regular\.ttf|NotoSans-Regular\.ttf/ { print $1; exit }')"
+fi
+if [[ -z "$FONT" || ! -f "$FONT" ]]; then
+  echo "No drawtext font found. Install fonts-dejavu-core or set OLFX_FONT." >&2
+  exit 1
+fi
 mkdir -p "$OUT"
 
 if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then

@@ -16,7 +16,7 @@ npx playwright install chromium firefox
 | Tier | Command |
 | --- | --- |
 | Traceability (titles exist) | `npm run test:traceability` |
-| Unit and fixture | `OLFX_OUTCOMES=test-results/outcomes-unit.jsonl npm test` |
+| Unit and fixture | `npm test` |
 | Browser, Firefox and Chromium | `OLFX_OUTCOMES=test-results/outcomes-browser.jsonl npm run test:browser` |
 | Synthetic media | `npm run media:generate` |
 | Full stack | `npm run test:fullstack` |
