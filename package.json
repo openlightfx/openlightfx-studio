@@ -10,6 +10,15 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "lint": "prettier --check . && eslint .",
     "format": "prettier --write .",
+    "test": "svelte-kit sync && OLFX_OUTCOMES=test-results/outcomes-unit.jsonl vitest run",
+    "test:unit": "svelte-kit sync && OLFX_OUTCOMES=test-results/outcomes-unit.jsonl vitest run",
+    "test:browser": "OLFX_OUTCOMES=test-results/outcomes-browser.jsonl playwright test --project=chromium --project=firefox",
+    "test:fullstack": "bash scripts/fullstack/run.sh",
+    "test:realmedia": "playwright test --project=realmedia",
+    "test:traceability": "node docs/requirements/check-traceability.mjs",
+    "test:report": "node scripts/report/requirements-report.mjs",
+    "media:generate": "bash scripts/media/generate-clips.sh",
+    "fixtures:generate": "vite-node scripts/fixtures/generate.ts",
     "proto:compile": "pbjs -t static-module -w es6 -o src/lib/proto/lightfx.js proto/lightfx.proto && pbts -o src/lib/proto/lightfx.d.ts src/lib/proto/lightfx.js",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron src/electron/main.ts\"",
     "electron:build": "npm run build && electron-builder"
@@ -26,6 +35,7 @@
     "tailwindcss": "^3.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.0",
     "@typescript-eslint/eslint-plugin": "^8",
     "eslint": "^9",
     "eslint-plugin-svelte": "^2",
@@ -34,6 +44,7 @@
     "protobufjs-cli": "^1.1",
     "svelte-check": "^4.0",
     "typescript": "^5",
-    "vite": "^6"
+    "vite": "^6",
+    "vitest": "^5.1.0"
   }
 }

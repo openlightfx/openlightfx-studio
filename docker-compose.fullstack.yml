@@ -1,0 +1,32 @@
+# Full stack for J1–J4 system tests.
+# Emby, the plugin built from openlightfx-emby cursor/studio-host-api-18c1
+# with this Studio build embedded, and headless openlightfx-simulator.
+# Bring it up with scripts/fullstack/run.sh. This file alone does not build the plugin.
+
+services:
+  emby:
+    image: emby/embyserver:4.8.11.0
+    ports:
+      - "8096:8096"
+    environment:
+      - TZ=UTC
+    volumes:
+      - emby-config:/config
+      - emby-plugins:/config/plugins
+      - ${OLFX_MEDIA_DIR:-./media/generated}:/media:ro
+
+  simulator:
+    build:
+      context: .
+      dockerfile: docker/simulator.Dockerfile
+    depends_on:
+      - emby
+    volumes:
+      - ./docker/simulator.toml:/config/simulator.toml:ro
+    ports:
+      - "9200:9200"
+      - "9201:9201"
+
+volumes:
+  emby-config:
+  emby-plugins:

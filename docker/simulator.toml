@@ -1,0 +1,39 @@
+# Two generic REST bulbs. The plugin URL template is
+# http://simulator:9200/api/light?r={r}&g={g}&b={b}&brightness={brightness}&transition_ms={transition_ms}&power={power}
+# and the same path on port 9201 for the right bulb.
+
+[simulator]
+log_level = "info"
+hue_bridge_port = 8080
+
+[[bulbs]]
+id = "left"
+name = "Left"
+protocol = "rest"
+port = 9200
+method = "GET"
+path = "/api/light"
+
+[bulbs.param_map]
+r = "r"
+g = "g"
+b = "b"
+brightness = "brightness"
+transition_ms = "transition_ms"
+power = "power"
+
+[[bulbs]]
+id = "right"
+name = "Right"
+protocol = "rest"
+port = 9201
+method = "GET"
+path = "/api/light"
+
+[bulbs.param_map]
+r = "r"
+g = "g"
+b = "b"
+brightness = "brightness"
+transition_ms = "transition_ms"
+power = "power"
