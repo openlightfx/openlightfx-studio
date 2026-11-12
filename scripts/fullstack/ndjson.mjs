@@ -13,18 +13,23 @@ export function parseNdjson(text) {
 
 export function colorCommands(events) {
   return events
-    .filter((event) => event.event === 'command_received' && event.state_after)
-    .map((event) => ({
-      ts: event.ts,
-      bulbId: event.bulb_id,
-      protocol: event.protocol,
-      r: event.state_after.r,
-      g: event.state_after.g,
-      b: event.state_after.b,
-      brightness: event.state_after.brightness,
-      power: event.state_after.power,
-      transitionMs: event.state_after.transition_ms,
-    }));
+    .filter((event) => event.event === 'command_received' && (event.params || event.state_after))
+    .map((event) => {
+      const sent = event.params ?? {};
+      const after = event.state_after ?? {};
+      const color = event.params ? sent : after;
+      return {
+        ts: event.ts,
+        bulbId: event.bulb_id,
+        protocol: event.protocol,
+        r: Number(color.r),
+        g: Number(color.g),
+        b: Number(color.b),
+        brightness: Number(color.brightness),
+        power: after.power ?? sent.power,
+        transitionMs: Number(color.transition_ms ?? color.transitionMs ?? after.transition_ms ?? 0),
+      };
+    });
 }
 
 export function findColor(events, expected) {

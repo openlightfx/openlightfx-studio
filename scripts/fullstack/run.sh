@@ -7,7 +7,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 COMPOSE=(docker compose -f docker-compose.fullstack.yml)
-EMBY_BRANCH="${OLFX_EMBY_BRANCH:-cursor/studio-host-api-18c1}"
+EMBY_BRANCH="${OLFX_EMBY_BRANCH:-main}"
 SIM_URL="${OLFX_SIMULATOR_URL:-https://github.com/openlightfx/openlightfx-simulator.git}"
 WORK="${OLFX_STACK_DIR:-$ROOT/.emby-stack}"
 
@@ -43,6 +43,25 @@ if [[ ! -f docker/simulator-src/src/openlightfx_simulator/__main__.py ]]; then
 fi
 
 bash scripts/media/generate-clips.sh
+# MEDIA-015: Emby is told this movie's runtime is 0. ffprobe still sees 120s.
+ZERO_DIR="$ROOT/media/generated/clip-zero"
+mkdir -p "$ZERO_DIR"
+if [[ ! -f "$ZERO_DIR/clip-zero.mp4" ]]; then
+  echo "Clip zero: 120s H.264 with no Emby runtime"
+  ffmpeg -y -hide_banner -loglevel error \
+    -f lavfi -i "color=c=black:s=160x90:r=24:d=120" \
+    -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=120" \
+    -t 120 -c:v libx264 -pix_fmt yuv420p -g 48 -sc_threshold 0 -c:a aac -shortest \
+    "$ZERO_DIR/clip-zero.mp4"
+fi
+cat > "$ZERO_DIR/movie.nfo" << 'EOF'
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<movie>
+  <title>clip-zero</title>
+  <runtime>0</runtime>
+  <lockdata>true</lockdata>
+</movie>
+EOF
 npm run build
 ( cd build && rm -f "$WORK/studio.zip" && zip -qr "$WORK/studio.zip" . )
 

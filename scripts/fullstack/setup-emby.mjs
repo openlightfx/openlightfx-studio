@@ -136,4 +136,33 @@ const seeded = await json(
 const pluginLoaded =
   seeded.status < 400 && String(seeded.body?.BulbConfigJson ?? '').includes('simulator');
 
-console.log(JSON.stringify({ apiKey: token, viewerToken, user, emby: base, pluginLoaded }));
+// MEDIA-015: keep Emby's runtime at 0 so the plugin fills it from ffprobe.
+// LockData stops the next library refresh from copying the file duration back.
+const deadline = Date.now() + 60_000;
+let zeroId = '';
+while (Date.now() < deadline && !zeroId) {
+  const listed = await json(
+    '/emby/Items?Recursive=true&IncludeItemTypes=Movie&SearchTerm=clip-zero',
+    undefined,
+    token
+  );
+  const items = listed.body?.Items ?? [];
+  const found = items.find((item) => item.Name === 'clip-zero');
+  zeroId = found?.Id ?? '';
+  if (!zeroId) await new Promise((resolve) => setTimeout(resolve, 2000));
+}
+if (zeroId) {
+  const locked = await json(
+    `/emby/Items/${zeroId}`,
+    { Id: zeroId, Name: 'clip-zero', RunTimeTicks: 0, LockData: true },
+    token,
+    undefined,
+    'POST'
+  );
+  if (locked.status >= 400) {
+    console.error('clip-zero runtime lock', locked.status, locked.body);
+    process.exit(1);
+  }
+}
+
+console.log(JSON.stringify({ apiKey: token, viewerToken, user, emby: base, pluginLoaded, zeroId }));
