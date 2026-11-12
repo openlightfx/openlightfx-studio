@@ -59,7 +59,7 @@ CI reduces Vitest and Playwright output to:
 
 ## When CI runs it
 
-`.github/workflows/requirements-traceability.yml` runs the checker on every pull request and on pushes to `main` and `master`. It runs once with no `--report` (a missing test fails the job) and again with `--report` and `--allow-expected` after the unit, fixture, browser, and fullstack tests publish `test-results/traceability.json`. The workflow fails if this script exits 1. The realmedia tier is not part of that report.
+`.github/workflows/requirements-traceability.yml` runs the checker on every pull request and on pushes to `main` and `master`. It runs once with no `--report` (a missing test fails the job) and again with `--report` and `--allow-expected` after the unit and browser tests publish `test-results/traceability.json`. The browser job runs the Chromium and Firefox projects only. The fullstack tier is not run there: with no Emby reachable and `OLFX_FULLSTACK_REQUIRE` unset, a missing fullstack result is not run and does not fail the gate. A fullstack result that is present still has to pass, or be listed in the expected-failure file. The workflow fails if this script exits 1. The realmedia tier is not part of that report.
 
 Plugin tests live in `openlightfx-emby`. A dotnet test that covers a `PLUG` or `KEY` fixture uses the same id in its name. This repo's gate still requires the Studio test named on the `Tests` line. The plugin test is an extra copy of the same fixture, not a substitute for the Studio one.
 

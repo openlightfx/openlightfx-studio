@@ -69,5 +69,7 @@ fs.writeFileSync(
   JSON.stringify({ tests: outcomes.map((outcome) => ({ name: outcome.title, status: outcome.status })) }, null, 2)
 );
 
+const fullstackRan = outcomes.some((outcome) => outcome.tier === 'fullstack');
+if (!fullstackRan) console.log('fullstack: not run');
 console.log(`requirements: ${summary.passed} passed, ${summary.expectedFail} expected-fail, ${summary.failed} failed`);
 if (summary.failed > 0) process.exit(1);
