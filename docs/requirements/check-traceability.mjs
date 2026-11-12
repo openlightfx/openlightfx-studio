@@ -282,6 +282,7 @@ function loadAllow(file) {
 
 function checkApproved(reqs, titles, useReport, allow) {
   const approved = reqs.filter((req) => req.status === 'approved' && req.layer === 'L1');
+  let fullstackNotRun = false;
   for (const req of approved) {
     const ciTiers = req.tests.filter((tier) => CI_TIERS.includes(tier));
     if (ciTiers.length === 0) {
@@ -291,6 +292,10 @@ function checkApproved(reqs, titles, useReport, allow) {
     for (const tier of ciTiers) {
       const hits = titles.filter((test) => test.name.includes(req.id) && test.name.includes(`@${tier}`));
       const key = `${req.id}@${tier}`;
+      if (useReport && tier === 'fullstack' && hits.length === 0) {
+        fullstackNotRun = true;
+        continue;
+      }
       const good = hits.filter((test) => {
         if (!useReport) return test.status !== 'skipped';
         if (test.status === 'passed') return true;
@@ -305,6 +310,7 @@ function checkApproved(reqs, titles, useReport, allow) {
       }
     }
   }
+  if (fullstackNotRun) console.log('fullstack: not run');
 }
 
 function printCounts(reqs) {
