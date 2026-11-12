@@ -1,5 +1,6 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
+import { mockMiddleware } from './src/lib/api/mock.ts';
 import { studioPrefixMiddleware } from './scripts/studio-prefix.mjs';
 
 export default defineConfig({
@@ -9,9 +10,11 @@ export default defineConfig({
       name: 'studio-host-prefix',
       configureServer(server) {
         server.middlewares.use(studioPrefixMiddleware);
+        server.middlewares.use(mockMiddleware);
       },
       configurePreviewServer(server) {
         server.middlewares.use(studioPrefixMiddleware);
+        server.middlewares.use(mockMiddleware);
       },
     },
   ],
