@@ -95,12 +95,12 @@ function remember(trackId: string, track: Track, when = '2026-01-01T00:00:00.000
 }
 
 remember('proxy-fixture', proxyFixture());
-remember('building-track', strip(newTrackFromMovie('building', 'Building Proxy', 10000)));
-remember('broken-track', strip(newTrackFromMovie('broken', 'Broken Proxy', 10000)));
-remember('nosample-track', strip(newTrackFromMovie('nosample', 'No Frame', 10000)));
-remember('conflict', strip(newTrackFromMovie('conflict', 'Conflict', 10000)));
-remember('alpha', strip(newTrackFromMovie('two', 'Alpha', 10000)));
-remember('beta', strip(newTrackFromMovie('two', 'Beta', 10000)));
+remember('building-track', strip(newTrackFromMovie('44', 'Building Proxy', 10000)));
+remember('broken-track', strip(newTrackFromMovie('46', 'Broken Proxy', 10000)));
+remember('nosample-track', strip(newTrackFromMovie('47', 'No Frame', 10000)));
+remember('conflict', strip(newTrackFromMovie('48', 'Conflict', 10000)));
+remember('alpha', strip(newTrackFromMovie('43', 'Alpha', 10000)));
+remember('beta', strip(newTrackFromMovie('43', 'Beta', 10000)));
 
 const CATALOG: CatalogItem[] = [
   {
@@ -114,21 +114,21 @@ const CATALOG: CatalogItem[] = [
     saveStatus: 200,
   },
   {
-    itemId: 'two',
+    itemId: '43',
     name: 'Two Tracks',
     year: 2019,
     runtimeMs: 10000,
-    tracks: [summary('alpha', 'Alpha', 'two'), summary('beta', 'Beta', 'two')],
+    tracks: [summary('alpha', 'Alpha', '43'), summary('beta', 'Beta', '43')],
     info: infoFor(10000, readyProxy()),
     frameStatus: 200,
     saveStatus: 200,
   },
   {
-    itemId: 'building',
+    itemId: '44',
     name: 'Building Proxy',
     year: 2021,
     runtimeMs: 10000,
-    tracks: [summary('building-track', 'Building Proxy', 'building')],
+    tracks: [summary('building-track', 'Building Proxy', '44')],
     info: infoFor(10000, {
       state: 'building',
       encodedThroughMs: 0,
@@ -141,7 +141,7 @@ const CATALOG: CatalogItem[] = [
     saveStatus: 200,
   },
   {
-    itemId: 'zero',
+    itemId: '45',
     name: 'Unknown Duration',
     year: 2022,
     runtimeMs: 0,
@@ -151,31 +151,31 @@ const CATALOG: CatalogItem[] = [
     saveStatus: 200,
   },
   {
-    itemId: 'broken',
+    itemId: '46',
     name: 'Broken Proxy',
     year: 2023,
     runtimeMs: 10000,
-    tracks: [summary('broken-track', 'Broken Proxy', 'broken')],
+    tracks: [summary('broken-track', 'Broken Proxy', '46')],
     info: infoFor(10000, readyProxy('/media/proxy/broken')),
     frameStatus: 200,
     saveStatus: 200,
   },
   {
-    itemId: 'nosample',
+    itemId: '47',
     name: 'No Frame',
     year: 2024,
     runtimeMs: 10000,
-    tracks: [summary('nosample-track', 'No Frame', 'nosample')],
+    tracks: [summary('nosample-track', 'No Frame', '47')],
     info: infoFor(10000, readyProxy()),
     frameStatus: 503,
     saveStatus: 200,
   },
   {
-    itemId: 'conflict',
+    itemId: '48',
     name: 'Conflict',
     year: 2018,
     runtimeMs: 10000,
-    tracks: [summary('conflict', 'Conflict', 'conflict')],
+    tracks: [summary('conflict', 'Conflict', '48')],
     info: infoFor(10000, readyProxy()),
     frameStatus: 200,
     saveStatus: 400,
@@ -215,6 +215,15 @@ function text(status: number, body: string, headers: Record<string, string> = { 
   return { status, headers, body };
 }
 
+/** Emby internal ids are decimal. GUIDs are accepted. Titles are not item ids. */
+const ITEM_ID = /^(?:\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
+function rejectTitleId(raw: string | null): MockResult | null {
+  if (raw == null || raw === '') return null;
+  if (!ITEM_ID.test(decodeURIComponent(raw))) return text(404, 'not found');
+  return null;
+}
+
 export function handleMock(
   method: string,
   rawUrl: string,
@@ -227,8 +236,15 @@ export function handleMock(
   if (path === '/media/proxy/broken') return text(500, 'proxy failed');
   if (!path.startsWith('/OpenLightFX/')) return null;
 
+  const titled = rejectTitleId(url.searchParams.get('itemId'));
+  if (titled) return titled;
+
   const admin = isAdmin(token);
   const itemMatch = path.match(/^\/OpenLightFX\/Studio\/Items\/([^/]+)\/(MediaInfo|Frame|Proxy)$/);
+  if (itemMatch) {
+    const titledItem = rejectTitleId(itemMatch[1]);
+    if (titledItem) return titledItem;
+  }
   if (itemMatch && method === 'GET' && itemMatch[2] === 'MediaInfo') {
     const item = CATALOG.find((entry) => entry.itemId === decodeURIComponent(itemMatch[1]));
     if (!item?.info) return text(404, 'not found');

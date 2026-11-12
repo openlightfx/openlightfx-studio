@@ -614,7 +614,7 @@ requirement('ERR-002 @browser a dead plugin does not invent a library', async ({
 
 requirement('ERR-003 @browser a save conflict shows the server text', async ({ page }) => {
   const studio = new StudioPage(page);
-  await page.goto('/emby/OpenLightFX/studio/?api_key=test-admin&itemId=conflict');
+  await page.goto('/emby/OpenLightFX/studio/?api_key=test-admin&itemId=48');
   await expect(page.getByText('Conflict')).toBeVisible();
   await studio.button(/^save$/i).click();
   await expect(page.getByRole('alert')).toBeVisible();
