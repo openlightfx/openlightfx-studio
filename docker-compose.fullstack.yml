@@ -5,15 +5,18 @@
 
 services:
   emby:
-    image: emby/embyserver:4.8.11.0
+    image: emby/embyserver:${OLFX_EMBY_IMAGE_TAG:-4.9.3.0}
     ports:
-      - "8096:8096"
+      - '8096:8096'
     environment:
       - TZ=UTC
+      # Run as the host user so SAVE-001 can write {movieDir}/lightfx/ into the bind-mounted media.
+      - UID=${OLFX_UID:-1000}
+      - GID=${OLFX_GID:-1000}
     volumes:
       - emby-config:/config
       - emby-plugins:/config/plugins
-      - ${OLFX_MEDIA_DIR:-./media/generated}:/media:ro
+      - ${OLFX_MEDIA_DIR:-./media/generated}:/media
 
   simulator:
     build:
@@ -24,8 +27,8 @@ services:
     volumes:
       - ./docker/simulator.toml:/config/simulator.toml:ro
     ports:
-      - "9200:9200"
-      - "9201:9201"
+      - '9200:9200'
+      - '9201:9201'
 
 volumes:
   emby-config:
