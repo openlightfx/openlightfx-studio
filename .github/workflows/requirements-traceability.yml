@@ -1,0 +1,17 @@
+name: requirements
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+jobs:
+  traceability:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check requirement structure and approved L1 coverage
+        run: node docs/requirements/check-traceability.mjs
