@@ -196,11 +196,11 @@ requirement('MEDIA-011 @fullstack the first picture is ready within 10 seconds',
 });
 
 requirement('MEDIA-013 @fullstack reload requests the same item', async ({ page }) => {
-  await page.goto(`${emby()}/emby/OpenLightFX/studio/?api_key=${token()}&itemId=42`);
-  // The query surviving a reload proves nothing by itself; the app has to ask the plugin for item 42 again.
-  const refetch = page.waitForRequest(/\/OpenLightFX\/Studio\/Items\/42\b/, { timeout: 5000 });
+  const id = await itemId(page.request);
+  await page.goto(`${emby()}/emby/OpenLightFX/studio/?api_key=${token()}&itemId=${id}`);
+  const refetch = page.waitForRequest(new RegExp(`/OpenLightFX/Studio/Items/${id}\\b`), { timeout: 5000 });
   await page.reload();
-  await expect(page).toHaveURL(/itemId=42/);
+  await expect(page).toHaveURL(new RegExp(`itemId=${id}`));
   await refetch;
 });
 
