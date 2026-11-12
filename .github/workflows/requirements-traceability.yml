@@ -1,0 +1,97 @@
+name: requirements
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+jobs:
+  traceability:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Every approved L1 requirement has a test title
+        run: node docs/requirements/check-traceability.mjs
+
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: OLFX_OUTCOMES=test-results/outcomes-unit.jsonl npx vitest run
+      - uses: actions/upload-artifact@v4
+        with:
+          name: outcomes-unit
+          path: test-results/outcomes-unit.jsonl
+
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium firefox
+      - run: OLFX_OUTCOMES=test-results/outcomes-browser.jsonl npx playwright test --project=chromium --project=firefox --project=fullstack
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: outcomes-browser
+          path: test-results/outcomes-browser.jsonl
+
+  media:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Generate synthetic clips and ffprobe them
+        run: bash scripts/media/generate-clips.sh
+
+  fullstack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate the compose file
+        run: docker compose -f docker-compose.fullstack.yml config
+      - name: Boot the stack when the simulator can be cloned
+        env:
+          SIMULATOR_TOKEN: ${{ secrets.SIMULATOR_TOKEN }}
+        run: |
+          if [ -z "$SIMULATOR_TOKEN" ]; then
+            echo "SIMULATOR_TOKEN is not set. The live stack is npm run test:fullstack on a machine that can clone openlightfx-simulator."
+            echo "See docs/testing.md."
+            exit 0
+          fi
+          OLFX_FULLSTACK_REQUIRE=1 npm run test:fullstack
+
+  report:
+    needs: [unit, browser]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: outcomes-unit
+          path: test-results
+      - uses: actions/download-artifact@v4
+        with:
+          name: outcomes-browser
+          path: test-results
+      - name: Requirement report and traceability gate
+        run: |
+          node scripts/report/requirements-report.mjs
+          node docs/requirements/check-traceability.mjs --report test-results/traceability.json --allow-expected tests/expected-failures.json

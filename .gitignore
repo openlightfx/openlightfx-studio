@@ -10,3 +10,9 @@ release
 .DS_Store
 src/lib/proto/*.js
 src/lib/proto/*.d.ts
+test-results/
+playwright-report/
+blob-report/
+media/generated/
+.emby-stack/
+docker/simulator-src/
