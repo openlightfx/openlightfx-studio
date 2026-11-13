@@ -250,13 +250,46 @@ requirement('MEDIA-003 @fullstack the edit URL is a direct-play proxy', async ({
 });
 
 requirement('MEDIA-004 @fullstack play uses the proxy URL', async ({ request }) => {
+  const id = await itemId(request);
   const info = await (
-    await request.get(`${emby()}/OpenLightFX/Studio/Items/${await itemId(request)}/MediaInfo`, {
+    await request.get(`${emby()}/OpenLightFX/Studio/Items/${id}/MediaInfo`, {
       headers: headers(),
       timeout: 5000,
     })
   ).json();
   expect(String(info.proxy.editUrl)).not.toMatch(/Transcode/i);
+  expect(String(info.proxy.editUrl)).not.toMatch(/api_key/i);
+  // MediaInfo set the HttpOnly media ticket in this request context's cookie jar.
+  // It opens the edit proxy and nothing else.
+  const state = await request.storageState();
+  const media = state.cookies.find((cookie) => cookie.name === 'olfx_studio_media');
+  expect(media?.httpOnly).toBe(true);
+  expect(media?.sameSite).toBe('Strict');
+  expect(media?.value).not.toBe(token());
+  expect(state.cookies.some((cookie) => cookie.value === token())).toBe(false);
+  const cookieOnly = await request.get(info.proxy.editUrl, {
+    headers: { Range: 'bytes=0-100' },
+    timeout: 5000,
+  });
+  expect(cookieOnly.status()).toBe(206);
+  expect(
+    (await request.get(`${emby()}/OpenLightFX/Studio/Items`, { timeout: 5000 })).status()
+  ).toBe(401);
+  expect(
+    (
+      await request.get(`${emby()}/OpenLightFX/Studio/Items/${id}/MediaInfo`, { timeout: 5000 })
+    ).status()
+  ).toBe(401);
+  expect(
+    (
+      await request.post(`${emby()}/OpenLightFX/Studio/Items/${id}/Proxy`, { timeout: 5000 })
+    ).status()
+  ).toBe(401);
+  expect(
+    (
+      await request.get(`${emby()}/emby/OpenLightFX/studio/`, { timeout: 5000, maxRedirects: 0 })
+    ).status()
+  ).toBe(401);
 });
 
 requirement(
@@ -351,6 +384,11 @@ requirement(
     await page.getByRole('slider', { name: /scrub/i }).fill('300000');
     await expect(page.locator('#transport-reason')).toContainText(/still encoding to \d{2}:\d{2}/i);
     expect(urls.some((url) => /Transcode/i.test(url))).toBe(false);
+    // The video plays from the HttpOnly ticket, not a token in the URL or a script-readable cookie.
+    expect(urls.some((url) => /Proxy\/Media.*api_key/i.test(url))).toBe(false);
+    const cookies = await page.context().cookies();
+    expect(cookies.some((cookie) => cookie.value === token())).toBe(false);
+    expect(cookies.find((cookie) => cookie.name === 'olfx_studio_media')?.httpOnly).toBe(true);
   }
 );
 
