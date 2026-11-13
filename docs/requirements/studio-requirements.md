@@ -494,7 +494,8 @@ On-demand, not CI. Characteristics, not a title: about 25 GB, 4K, HEVC 10-bit, H
 - Then the keyframe is created and the transport shows preparation progress
 - Given `encodedThroughMs` is 5000 and the user seeks to 20000
 - When the seek is requested
-- Then the UI shows that the edit copy has reached 5 seconds and the network log has no full-movie transcode request
+- Then the picture can already be playing from time 0 while `state` is still `building`
+- Then the UI shows `Still encoding to 00:05` and waits there, and the network log has no full-movie transcode request
 
 #### MEDIA-017 Existing tracks open with the movie
 
@@ -2065,6 +2066,9 @@ The proto has no separate back hint, so the back channels share the surround hin
 - When the shell handles it
 - Then a message names the failure, the play control remains visible, and Retry requests the proxy again
 - Then the message does not include the raw `api_key`
+- Given MediaInfo `proxy.state` is `failed` and `proxy.reason` names the failure
+- When the shell handles it
+- Then the message is that reason, Retry asks the plugin to build the proxy again, and the shell does not stay on Preparing edit proxy
 
 #### ERR-002 A dead plugin does not become a fake library
 
@@ -2162,8 +2166,12 @@ These requirements are changes or guarantees the Emby plugin must provide. Studi
 - Given an admin GET `/OpenLightFX/Studio/Items/{itemId}/MediaInfo`
 - When the item exists
 - Then the JSON includes `runtimeMs`, `width`, `height`, `videoCodec`, `hdr`, `colorTransfer`, `audioCodec`, and `proxy`
-- Then `proxy.state` is `missing`, `building`, or `ready`
+- Then `proxy.state` is `missing`, `building`, `ready`, or `failed`
+- Then `proxy.reason` is a short string when `state` is `failed`, and it does not include `api_key`
 - Then `proxy` includes `encodedThroughMs`, `fps`, `keyframeIntervalMs`, `width`, and `height` when a build has started
+- Given `proxy.state` is `failed`
+- When the admin POSTs `/OpenLightFX/Studio/Items/{itemId}/Proxy`
+- Then the plugin drops that failure and starts another build
 - Given `runtimeMs` on the item is 0 and ffprobe reports 120000
 - When MediaInfo is called
 - Then `runtimeMs` is 120000
@@ -2221,7 +2229,8 @@ These requirements are changes or guarantees the Emby plugin must provide. Studi
 - Then ffmpeg arguments force a closed GOP at that interval (`scenecut` disabled) using Emby's ffmpeg
 - Given a seek to a time greater than `encodedThroughMs`
 - When Studio asks for that time
-- Then the plugin does not start a full-quality transcode as a fallback
+- Then the plugin does not answer 416 while the encode is still running, and it does not start a full-quality transcode as a fallback
+- Then an open-ended read of a building proxy stays open and appends bytes until the encode finishes, without a Content-Length of the bytes written so far
 - Then the proxy is a cache the plugin may delete and rebuild, not a second library item
 
 #### PLUG-004 Project sidecar API
@@ -2358,7 +2367,7 @@ The March spec runs entirely in the browser: local files, File System Access API
 
 The plugin's current StreamUrl transcodes non-browser files to H.264 on each playback session. A seek on that kind of URL starts the transcode again, so scrubbing and frame stepping feel broken. Browsers also cannot promise original-frame stepping: `seekToNextFrame` is not a cross-browser API, and Firefox is the owner's browser.
 
-**Decision:** Studio's video element uses only the edit proxy (`PLUG-003`): H.264, AAC, keyframe interval ≤ 500 ms, direct play with range requests. For sources longer than 60 seconds the URL must play from time 0 before the rest is encoded. Seek p95 is ≤ 400 ms on the synthetic proxy and ≤ 1500 ms on the real-media tier once that time is encoded. Seeks past the encoded horizon wait; they do not fall back to a full transcode (`MEDIA-006`, `MEDIA-016`). Frame step moves `round(1000/fps)` ms by setting `currentTime`. The picture may be as far away as one GOP. That limit is the requirement, not a bug (`MEDIA-007`).
+**Decision:** Studio's video element uses only the edit proxy (`PLUG-003`): H.264, AAC, keyframe interval ≤ 500 ms, direct play with range requests. For sources longer than 60 seconds the URL must play from time 0 before the rest is encoded. Seek p95 is ≤ 400 ms on the synthetic proxy and ≤ 1500 ms on the real-media tier once that time is encoded. Seeks past the encoded horizon wait and the transport shows `Still encoding to mm:ss`; they do not fall back to a full transcode (`MEDIA-006`, `MEDIA-016`). Frame step moves `round(1000/fps)` ms by setting `currentTime`. The picture may be as far away as one GOP. That limit is the requirement, not a bug (`MEDIA-007`).
 
 ### C4 — Duration was asked before any movie
 

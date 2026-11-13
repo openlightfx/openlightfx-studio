@@ -15,7 +15,7 @@ function headers(): Record<string, string> {
 }
 
 /** Synthetic clips from scripts/media/generate-clips.sh, as Emby names them. */
-const CLIPS = { h264: 'clip-a', hdr: 'clip-b', zero: 'clip-zero' } as const;
+const CLIPS = { h264: 'clip-a', hdr: 'clip-b', zero: 'clip-zero', long: 'clip-long' } as const;
 const itemIds = new Map<string, string>();
 
 /** Resolve a synthetic clip to its real Emby item id. Fixed ids like 1 or 42 do not exist in a fresh library. */
@@ -221,9 +221,20 @@ requirement('MEDIA-015 @fullstack a zero runtime is replaced by the probe', asyn
   expect(info.runtimeMs).toBe(120000);
 });
 
-requirement('MEDIA-016 @fullstack a seek past the encoded horizon is not a full transcode', async ({ request }) => {
-  const info = await (await request.get(`${emby()}/OpenLightFX/Studio/Items/${await itemId(request)}/MediaInfo`, { headers: headers(), timeout: 5000 })).json();
-  expect(info.proxy.state === 'building' || info.proxy.state === 'ready').toBe(true);
+requirement('MEDIA-016 @fullstack playback starts while the proxy encodes and a late seek waits', async ({ page, request }) => {
+  const id = await itemId(request, 'long');
+  const urls: string[] = [];
+  page.on('request', (req) => urls.push(req.url()));
+  await page.goto(`${emby()}/emby/OpenLightFX/studio/?api_key=${token()}&itemId=${id}`);
+  await expect.poll(async () => page.locator('video').evaluate((node) => (node as HTMLVideoElement).readyState), { timeout: 15_000 }).toBeGreaterThanOrEqual(2);
+  const info = await (await request.get(`${emby()}/OpenLightFX/Studio/Items/${id}/MediaInfo`, { headers: headers(), timeout: 5000 })).json();
+  expect(info.proxy.state).toBe('building');
+  expect(String(info.proxy.editUrl)).not.toMatch(/Transcode/i);
+  await page.getByRole('button', { name: /^play$/i }).click();
+  await expect.poll(async () => page.locator('video').evaluate((node) => (node as HTMLVideoElement).currentTime)).toBeGreaterThan(0.2);
+  await page.getByRole('slider', { name: /scrub/i }).fill('300000');
+  await expect(page.locator('#transport-reason')).toContainText(/still encoding to \d{2}:\d{2}/i);
+  expect(urls.some((url) => /Transcode/i.test(url))).toBe(false);
 });
 
 requirement('MEDIA-017 @fullstack tracks for an item are listed', async ({ request }) => {
@@ -472,7 +483,11 @@ requirement('ERR-003 @fullstack a save conflict returns the server text', async 
 requirement('PLUG-001 @fullstack media info reports timing HDR and proxy progress', async ({ request }) => {
   const info = await (await request.get(`${emby()}/OpenLightFX/Studio/Items/${await itemId(request)}/MediaInfo`, { headers: headers(), timeout: 5000 })).json();
   expect(info).toEqual(expect.objectContaining({ runtimeMs: expect.any(Number), width: expect.any(Number), videoCodec: expect.any(String) }));
-  expect(['missing', 'building', 'ready']).toContain(info.proxy.state);
+  expect(['missing', 'building', 'ready', 'failed']).toContain(info.proxy.state);
+  if (info.proxy.state === 'failed') {
+    expect(info.proxy.reason).toEqual(expect.any(String));
+    expect(info.proxy.reason).not.toMatch(/api_key/i);
+  }
 });
 
 requirement('PLUG-002 @fullstack the frame endpoint tone-maps HDR with hable', async ({ request }) => {

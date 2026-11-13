@@ -10,6 +10,9 @@ services:
       - '8096:8096'
     environment:
       - TZ=UTC
+      # 1 makes edit proxies read the source at 1x so a long clip is still encoding
+      # when Studio starts playback. Unset on a real library; the default encode is as fast as ffmpeg.
+      - OLFX_STUDIO_PROXY_READRATE=${OLFX_STUDIO_PROXY_READRATE:-1}
       # Run as the host user so SAVE-001 can write {movieDir}/lightfx/ into the bind-mounted media.
       - UID=${OLFX_UID:-1000}
       - GID=${OLFX_GID:-1000}

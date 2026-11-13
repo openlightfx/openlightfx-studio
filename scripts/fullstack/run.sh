@@ -57,6 +57,22 @@ if [[ ! -f "$ZERO_DIR/clip-zero.mp4" ]]; then
     -t 120 -c:v libx264 -pix_fmt yuv420p -g 48 -sc_threshold 0 -c:a aac -shortest \
     "$ZERO_DIR/clip-zero.mp4"
 fi
+LONG_DIR="$ROOT/media/generated/clip-long"
+mkdir -p "$LONG_DIR"
+if [[ ! -f "$LONG_DIR/clip-long.mp4" ]]; then
+  echo "Clip long: 10 min H.264 so the edit proxy is still encoding when playback starts"
+  ffmpeg -y -hide_banner -loglevel error \
+    -f lavfi -i "color=c=black:s=160x90:r=24:d=600" \
+    -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=600" \
+    -t 600 -c:v libx264 -pix_fmt yuv420p -preset ultrafast -g 48 -sc_threshold 0 -c:a aac -shortest \
+    "$LONG_DIR/clip-long.mp4"
+fi
+cat > "$LONG_DIR/movie.nfo" << 'EOF'
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<movie>
+  <title>clip-long</title>
+</movie>
+EOF
 cat > "$ZERO_DIR/movie.nfo" << 'EOF'
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <movie>
@@ -137,6 +153,16 @@ export OLFX_EMBY_URL="${OLFX_EMBY_URL:-http://127.0.0.1:8096}"
 export OLFX_API_KEY="$API_KEY"
 export OLFX_VIEWER_TOKEN="$VIEWER_TOKEN"
 export OLFX_NDJSON="$WORK/simulator.ndjson"
-export OLFX_OUTCOMES="${OLFX_OUTCOMES:-$ROOT/test-results/outcomes-fullstack.jsonl}"
+# Chromium and Firefox share one Emby, so the projects run one after the other.
+# A second Playwright process would otherwise wipe the first project's outcomes.
+CHROMIUM_OUTCOMES="$ROOT/test-results/outcomes-fullstack-chromium.jsonl"
+FIREFOX_OUTCOMES="$ROOT/test-results/outcomes-fullstack-firefox.jsonl"
+export OLFX_OUTCOMES="$CHROMIUM_OUTCOMES"
 npx playwright test --project=fullstack
+export OLFX_OUTCOMES="$FIREFOX_OUTCOMES"
+# Each project expects a fresh library, as the first run does: SAVE-001 writes the
+# new track proxy-fixture, which would otherwise already exist from the Chromium pass.
+find "$ROOT/media/generated" -type d -name lightfx -prune -exec rm -rf {} +
+npx playwright test --project=fullstack-firefox
+cat "$CHROMIUM_OUTCOMES" "$FIREFOX_OUTCOMES" > "$ROOT/test-results/outcomes-fullstack.jsonl"
 echo "Full stack finished. Simulator NDJSON is $WORK/simulator.ndjson"
