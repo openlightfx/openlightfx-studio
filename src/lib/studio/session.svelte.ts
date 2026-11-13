@@ -173,8 +173,8 @@ export class StudioSession {
     this.nonAdmin = params.get('api_key') === 'viewer' || params.get('api_key') === 'not-an-admin';
     this.playbackActive = params.get('playback') === 'active';
     if (this.nonAdmin) this.adminMessage = 'Admin is required';
-    const key = params.get('api_key');
-    if (key) document.cookie = `api_key=${key}; Path=/`;
+    // Never copy the access token into a script-readable cookie. The plugin sets
+    // HttpOnly ticket cookies for the page files and the edit proxy.
     await this.openDb();
     if (this.pluginDown) {
       this.items = [];
