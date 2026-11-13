@@ -18,6 +18,40 @@ export function validateTrack(track: Track): string[] {
   if (track.metadata.durationMs === 0) errors.push('V-004: Duration must be > 0');
   if (track.channels.length === 0) errors.push('V-011: At least one channel is required');
 
+  const layoutPositions: Record<string, string[]> = {
+    LAYOUT_AMBIENT: ['SPATIAL_AMBIENT'],
+    LAYOUT_2_0: ['SPATIAL_LEFT', 'SPATIAL_RIGHT'],
+    LAYOUT_3_0: ['SPATIAL_LEFT', 'SPATIAL_CENTER', 'SPATIAL_RIGHT'],
+    LAYOUT_5_0: [
+      'SPATIAL_LEFT',
+      'SPATIAL_CENTER',
+      'SPATIAL_RIGHT',
+      'SPATIAL_SURROUND_LEFT',
+      'SPATIAL_SURROUND_RIGHT',
+    ],
+  };
+  const layout = track.metadata.channelLayout ?? '';
+  if (layout && !layoutPositions[layout])
+    errors.push(`V-022: Unsupported channel_layout ${layout}`);
+  else if (layout) {
+    const position = (hint: string) => {
+      if (hint === 'SPATIAL_BEHIND_SCREEN') return 'SPATIAL_CENTER';
+      if (hint === 'SPATIAL_CEILING' || hint === 'SPATIAL_FLOOR') return 'SPATIAL_AMBIENT';
+      return hint;
+    };
+    const actual = track.channels.map((channel) => position(channel.spatialHint));
+    const expected = layoutPositions[layout];
+    if (
+      actual.length !== expected.length ||
+      expected.some((hint) => actual.filter((candidate) => candidate === hint).length !== 1) ||
+      actual.some((hint) => !expected.includes(hint))
+    ) {
+      errors.push(
+        `V-023: channel_layout ${layout} must contain exactly one channel for each layout position`
+      );
+    }
+  }
+
   const channelIds = new Set<string>();
   for (const channel of track.channels) {
     if (channelIds.has(channel.id)) errors.push(`V-005: Duplicate channel ID: ${channel.id}`);

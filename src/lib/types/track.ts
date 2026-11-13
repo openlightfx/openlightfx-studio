@@ -64,6 +64,7 @@ export interface TrackMetadata {
   creditsStartMs: number;
   creditsBehavior: CreditsBehavior;
   trackVersion: string;
+  channelLayout?: string;
 }
 
 export interface Channel {

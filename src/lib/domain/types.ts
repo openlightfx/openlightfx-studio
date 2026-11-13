@@ -72,6 +72,7 @@ export interface TrackMetadata {
   movieTitle: string;
   year: number;
   durationMs: number;
+  channelLayout?: string;
 }
 
 export interface SafetyInfo {

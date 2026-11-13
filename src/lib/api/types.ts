@@ -36,6 +36,9 @@ export interface TrackSummary {
   title: string;
   itemId: string;
   updatedAt: string;
+  active?: boolean;
+  author?: string;
+  layout?: string;
 }
 
 export interface Bulb {

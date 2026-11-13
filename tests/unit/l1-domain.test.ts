@@ -42,6 +42,7 @@ import {
   moduleGraphProblems,
   newKeyframe,
   newTrackFromMovie,
+  upgradeLegacyTrackLayout,
   overlaySample,
   photosensitivityNotice,
   planHostedSave,
@@ -608,6 +609,14 @@ requirement('SAVE-004 @unit each TrackParser rule blocks save', () => {
         ],
       }),
     },
+    {
+      id: 'V-022',
+      value: track({ metadata: meta(10000, { channelLayout: 'LAYOUT_7_0' }) }),
+    },
+    {
+      id: 'V-023',
+      value: track({ metadata: meta(10000, { channelLayout: 'LAYOUT_3_0' }) }),
+    },
   ];
   for (const item of cases) {
     const plan = planHostedSave({
@@ -669,6 +678,70 @@ requirement('SAVE-006 @unit a successful save makes the next load use the server
   expect(chooseLoadSource(10, crash)).toBe('server');
 });
 
+requirement(
+  'MODEL-007 @unit legacy track layout is inferred and missing channels are added',
+  () => {
+    const original = newTrackFromMovie('42', 'Legacy', 10000, 'LAYOUT_5_0');
+    const channels = original.channels.filter((channel) => channel.id !== 'center');
+    const keyframes = [
+      { ...blackKeyframe('left', 'legacy-kf'), timestampMs: 1000 },
+      { ...blackKeyframe('surround-left', 'legacy-kf-2'), timestampMs: 2000 },
+    ];
+    const legacy: Track = {
+      ...original,
+      metadata: { ...original.metadata, channelLayout: '' },
+      channels,
+      keyframes,
+    };
+    const upgraded = upgradeLegacyTrackLayout(legacy);
+    expect(upgraded.metadata.channelLayout).toBe('LAYOUT_5_0');
+    expect(upgraded.channels.map((channel) => channel.id)).toEqual([
+      'left',
+      'center',
+      'right',
+      'surround-left',
+      'surround-right',
+    ]);
+    expect(upgraded.keyframes).toEqual(keyframes);
+  }
+);
+
+requirement('MODEL-001 @unit fixed layouts round-trip and enforce their channel positions', () => {
+  const track = newTrackFromMovie('42', 'Three channel movie lighting', 10000, 'LAYOUT_3_0');
+  const decoded = decodeTrack(encodeTrack(track));
+  expect(decoded.metadata.channelLayout).toBe('LAYOUT_3_0');
+  expect(decoded.channels.map((channel) => channel.spatialHint)).toEqual([
+    'SPATIAL_LEFT',
+    'SPATIAL_CENTER',
+    'SPATIAL_RIGHT',
+  ]);
+  expect(validateTrack(decoded)).toEqual([]);
+  expect(
+    validateTrack({ ...decoded, channels: [...decoded.channels, channel('sixth')] }).some((error) =>
+      error.startsWith('V-023')
+    )
+  ).toBe(true);
+});
+
+requirement(
+  'TRACK-002 @unit new movie tracks use the selected fixed layout and start empty',
+  () => {
+    const expected = {
+      LAYOUT_AMBIENT: ['ambient'],
+      LAYOUT_2_0: ['left', 'right'],
+      LAYOUT_3_0: ['left', 'center', 'right'],
+      LAYOUT_5_0: ['left', 'center', 'right', 'surround-left', 'surround-right'],
+    };
+    for (const [layout, channelIds] of Object.entries(expected)) {
+      const created = newTrackFromMovie('42', 'Proxy Fixture lighting', 6060000, layout);
+      expect(created.channels.map((channel) => channel.id)).toEqual(channelIds);
+      expect(created.channels.every((channel) => channel.defaultBrightness === 0)).toBe(true);
+      expect(created.keyframes).toEqual([]);
+      expect(created.metadata.durationMs).toBe(6060000);
+    }
+  }
+);
+
 requirement('SAVE-009 @unit a movie track stores version 1 and the movie duration', () => {
   const created = newTrackFromMovie('42', 'Proxy Fixture', 6060000);
   const decoded = decodeTrack(encodeTrack(created));
@@ -705,9 +778,10 @@ requirement(
   'IO-004 @unit the duration warning is only for an import more than 5 seconds off',
   () => {
     expect(importDurationWarning(120000, 130001, true)).toBe(true);
-    expect(importDurationWarning(120000, 125000, true)).toBe(false);
+    expect(importDurationWarning(120000, 125000, true)).toBe(true);
     expect(importDurationWarning(120000, 130001, false)).toBe(false);
-    expect(durationDisagrees(120000, 125000)).toBe(false);
+    expect(durationDisagrees(120000, 122000)).toBe(false);
+    expect(durationDisagrees(120000, 123000)).toBe(true);
   }
 );
 

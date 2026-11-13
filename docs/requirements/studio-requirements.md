@@ -1357,22 +1357,24 @@ Conversion: `temp = clamp(kelvin, 1000, 40000) / 100`. At `temp ≤ 66`, red is 
 - When the user saves
 - Then no PUT body is stored and the message contains that rule id
 
-| Rule  | Condition                                                                      |
-| ----- | ------------------------------------------------------------------------------ |
-| V-001 | `version` is not 1                                                             |
-| V-002 | metadata is missing                                                            |
-| V-003 | a non-empty IMDB id does not match `tt` plus at least 7 digits                 |
-| V-004 | `duration_ms` is 0                                                             |
-| V-005 | duplicate channel ids                                                          |
-| V-006 | a keyframe channel is unknown, or a channel's times go backwards in file order |
-| V-007 | brightness > 100                                                               |
-| V-008 | an RGB component > 255                                                         |
-| V-009 | COLOR_TEMPERATURE kelvin outside 1000–10000                                    |
-| V-010 | a keyframe time is past `duration_ms`                                          |
-| V-011 | there is no channel                                                            |
-| V-012 | `transition_ms` > `timestamp_ms`                                               |
-| V-013 | an effect duration is 0                                                        |
-| V-014 | an effect intensity is > 100                                                   |
+| Rule  | Condition                                                                       |
+| ----- | ------------------------------------------------------------------------------- |
+| V-001 | `version` is not 1                                                              |
+| V-002 | metadata is missing                                                             |
+| V-003 | a non-empty IMDB id does not match `tt` plus at least 7 digits                  |
+| V-004 | `duration_ms` is 0                                                              |
+| V-005 | duplicate channel ids                                                           |
+| V-006 | a keyframe channel is unknown, or a channel's times go backwards in file order  |
+| V-007 | brightness > 100                                                                |
+| V-008 | an RGB component > 255                                                          |
+| V-009 | COLOR_TEMPERATURE kelvin outside 1000–10000                                     |
+| V-010 | a keyframe time is past `duration_ms`                                           |
+| V-011 | there is no channel                                                             |
+| V-012 | `transition_ms` > `timestamp_ms`                                                |
+| V-013 | an effect duration is 0                                                         |
+| V-014 | an effect intensity is > 100                                                    |
+| V-022 | a non-empty `channel_layout` is not one of the four supported layouts           |
+| V-023 | a declared layout does not contain exactly one channel for each layout position |
 
 #### SAVE-005 Autosave is IndexedDB every 30 seconds
 

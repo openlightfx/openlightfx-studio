@@ -228,6 +228,8 @@ Reads `GET /OpenLightFX/Studio/Items?search=` (title, year, runtime, poster URL 
 
 **Goal:** get from "this movie" to an open track in one click, whether the movie already has tracks or not.
 
+**Status: complete (owner-confirmed).** The owner confirmed the Step 3 flow works as expected. Automated verification remains incomplete: traceability is failing, browser/full-stack tests were not run, and the .NET tests could not run because the .NET 8 runtime is unavailable.
+
 **Screen:** [04-track-open-create.png](wireframes/04-track-open-create.png).
 
 ### Layout
@@ -243,14 +245,14 @@ Reads `GET /OpenLightFX/Studio/Items?search=` (title, year, runtime, poster URL 
 
 ### Controls
 
-| Control                   | What it does                                                                                                                                                                                                                                                    |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Open** (track row)      | Opens the editor on that track: `#/edit/{itemId}/{trackId}`.                                                                                                                                                                                                    |
-| Layout card               | Selects that layout. Each card lists its channels ("Left · Center · Right") and what the chosen room does with it ("All 3 positions have bulbs" or "Surround folds into Left and Right").                                                                       |
-| **For room ▾**            | Changes which room the suggestion and coverage text refer to.                                                                                                                                                                                                   |
-| **Create track**          | Creates an unsaved track: version 1, the movie's IMDb id, title, year, and runtime from Emby, `duration_ms` from the movie, the layout's channels (dark, brightness 0), no keyframes. Opens the editor. The file is written on first Save.                      |
-| **Open a .lightfx file…** | Browser file picker. The file is decoded and validated (IO-001, IO-003). If its IMDb id differs from this movie's, or its duration differs by more than 2 %, Studio says so and asks to continue (IO-004). Opens the editor as an unsaved track for this movie. |
-| **← Library**             | Back to the Library.                                                                                                                                                                                                                                            |
+| Control                   | What it does                                                                                                                                                                                                                                                        |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Open** (track row)      | Opens the editor on that track: `#/edit/{itemId}/{trackId}`.                                                                                                                                                                                                        |
+| Layout card               | Selects that layout. Each card lists its channels ("Left · Center · Right") and what the chosen room does with it ("All 3 positions have bulbs" or "Surround folds into Left and Right").                                                                           |
+| **For room ▾**            | Changes which room the suggestion and coverage text refer to.                                                                                                                                                                                                       |
+| **Create track**          | Creates an unsaved track: version 1, the movie title, year, and runtime from Emby, `duration_ms` from the movie, the layout's channels (dark, brightness 0), no keyframes. Opens the editor. The file is written on first Save.                                     |
+| **Open a .lightfx file…** | Browser file picker. The file is decoded and validated (IO-001, IO-003). If its movie title differs from this movie's, or its duration differs by more than 2 %, Studio says so and asks to continue (IO-004). Opens the editor as an unsaved track for this movie. |
+| **← Library**             | Back to the Library.                                                                                                                                                                                                                                                |
 
 ### Empty and error states
 
@@ -529,7 +531,7 @@ Format: ID, title, layer (all L1), status (all `approved`), a one-line statement
 #### TRACK-003 Open from file
 
 - **Statement:** Open a .lightfx file imports a valid track for this movie and warns on movie or duration mismatch.
-- **Acceptance:** Given a valid track for another IMDb id, then a warning names both movies and Continue opens it. Given a PNG, then "That file isn't a .lightfx track." shows and nothing opens.
+- **Acceptance:** Given a valid track for a different movie title, then a warning names both movies and Continue opens it. Given a PNG, then "That file isn't a .lightfx track." shows and nothing opens.
 - **Tests:** browser
 
 #### TRACK-004 Marketplace is a note, not a control
@@ -686,7 +688,7 @@ Format: ID, title, layer (all L1), status (all `approved`), a one-line statement
 
 ## Proposed .lightfx format changes
 
-The proto may change. These are additive proto3 fields, so old players ignore them and old tracks still decode. Recorded as FP-2 and FP-3 in [format-proposals.md](../requirements/format-proposals.md).
+The proto changes are approved for J1. These are additive proto3 fields, so old players ignore them and old tracks still decode. Recorded as FP-2 and FP-3 in [format-proposals.md](../requirements/format-proposals.md).
 
 **FP-2 — `TrackMetadata.channel_layout` (required for new tracks).**
 
@@ -706,10 +708,10 @@ New validation in both TrackParser (plugin) and Studio's validator, extending th
 
 | Code  | Rule                                                                                                                                     |
 | ----- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| V-012 | `channel_layout`, when set, is one of the four values.                                                                                   |
-| V-013 | When `channel_layout` is set, the track has exactly one channel per position of the layout, identified by `spatial_hint`, and no others. |
+| V-022 | `channel_layout`, when set, is one of the four values.                                                                                   |
+| V-023 | When `channel_layout` is set, the track has exactly one channel per position of the layout, identified by `spatial_hint`, and no others. |
 
-`version` stays 1: the change is additive and V-012/V-013 only apply when the field is set.
+`version` stays 1: the change is additive and V-022/V-023 only apply when the field is set.
 
 **FP-3 — Canonical position hints.** Document in the proto comment that, for tracks with a layout, `spatial_hint` is one of the six position hints in [Positions](#positions), `SPATIAL_BEHIND_SCREEN` is read as Center, and `SPATIAL_CEILING` / `SPATIAL_FLOOR` are reserved for a later layout. Comment-only.
 

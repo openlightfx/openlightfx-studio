@@ -95,6 +95,7 @@ export function trackToPayload(track: Track): Record<string, unknown> {
         title: normalized.metadata.movieTitle,
         year: normalized.metadata.year,
       },
+      channelLayout: normalized.metadata.channelLayout || undefined,
     },
     channels: normalized.channels.map((channel) => ({
       id: channel.id,
@@ -212,6 +213,7 @@ export function decodeTrack(bytes: Uint8Array): Track {
       movieTitle: String(movie.title ?? ''),
       year: asNumber(movie.year),
       durationMs: asNumber(metadata.durationMs),
+      channelLayout: String(metadata.channelLayout ?? ''),
     },
     channels: ((object.channels as Record<string, unknown>[]) ?? []).map((channel) => ({
       id: String(channel.id ?? ''),

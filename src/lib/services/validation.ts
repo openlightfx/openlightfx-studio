@@ -43,6 +43,8 @@ export function validateTrack(track: LightFXTrack): ValidationResult {
   validateV017a(track, issues);
   validateV020(track, issues);
   validateV021(track, issues);
+  validateV022(track, issues);
+  validateV023(track, issues);
 
   return {
     valid: issues.every((i) => i.severity !== 'error'),
@@ -342,6 +344,56 @@ function validateV017a(track: LightFXTrack, issues: ValidationIssue[]): void {
 }
 
 // V-018: Scene markers must be sorted ascending by timestamp_ms
+// V-022: channel_layout must be a supported layout when present.
+function validateV022(track: LightFXTrack, issues: ValidationIssue[]): void {
+  const layout = track.metadata?.channelLayout;
+  if (!layout) return;
+  if (!['LAYOUT_AMBIENT', 'LAYOUT_2_0', 'LAYOUT_3_0', 'LAYOUT_5_0'].includes(layout)) {
+    issues.push({
+      ruleId: 'V-022',
+      severity: 'error',
+      message: `Unsupported channel_layout: "${layout}".`,
+    });
+  }
+}
+
+// V-023: A declared channel layout has exactly one channel at every layout position.
+function validateV023(track: LightFXTrack, issues: ValidationIssue[]): void {
+  const layout = track.metadata?.channelLayout;
+  if (!layout) return;
+  const positions: Record<string, string[]> = {
+    LAYOUT_AMBIENT: ['SPATIAL_AMBIENT'],
+    LAYOUT_2_0: ['SPATIAL_LEFT', 'SPATIAL_RIGHT'],
+    LAYOUT_3_0: ['SPATIAL_LEFT', 'SPATIAL_CENTER', 'SPATIAL_RIGHT'],
+    LAYOUT_5_0: [
+      'SPATIAL_LEFT',
+      'SPATIAL_CENTER',
+      'SPATIAL_RIGHT',
+      'SPATIAL_SURROUND_LEFT',
+      'SPATIAL_SURROUND_RIGHT',
+    ],
+  };
+  const expected = positions[layout];
+  if (!expected) return;
+  const canonical = (hint: string) => {
+    if (hint === 'SPATIAL_BEHIND_SCREEN') return 'SPATIAL_CENTER';
+    if (hint === 'SPATIAL_CEILING' || hint === 'SPATIAL_FLOOR') return 'SPATIAL_AMBIENT';
+    return hint;
+  };
+  const actual = track.channels.map((channel) => canonical(channel.spatialHint));
+  if (
+    actual.length !== expected.length ||
+    expected.some((hint) => actual.filter((candidate) => candidate === hint).length !== 1) ||
+    actual.some((hint) => !expected.includes(hint))
+  ) {
+    issues.push({
+      ruleId: 'V-023',
+      severity: 'error',
+      message: `channel_layout "${layout}" must contain exactly one channel for each layout position.`,
+    });
+  }
+}
+
 // Note: Scene markers are Studio-only and not in exported .lightfx files (V-019 removed).
 // This validator still checks if scene markers are included in the track structure.
 // Since LightFXTrack doesn't have scene markers, this is a no-op for exported files.

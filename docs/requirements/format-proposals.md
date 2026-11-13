@@ -20,15 +20,15 @@ Proposed replacement, for a later version if the owner accepts open question OQ-
 
 FP-1 was the only proto change proposed for `studio-requirements.md`. FP-2 and FP-3 below come from the first-journey design.
 
-## FP-2 — Channel layout on the track (proposed, J1)
+## FP-2 — Channel layout on the track (J1)
 
-**Status:** proposed in [J1 — First light](../journeys/J1-first-light.md#proposed-lightfx-format-changes). Not approved.
+**Status:** approved by the owner for J1.
 
-Add `string channel_layout = 14` to `TrackMetadata`, with values `LAYOUT_AMBIENT`, `LAYOUT_2_0`, `LAYOUT_3_0`, `LAYOUT_5_0`. It is a string, like `spatial_hint`, so a later layout needs no schema change. Empty means the track predates layouts and readers infer the layout from channel hints. New validation codes: V-012 (known value) and V-013 (exactly one channel per layout position, by `spatial_hint`). `version` stays 1 because the field is additive.
+Add `string channel_layout = 14` to `TrackMetadata`, with values `LAYOUT_AMBIENT`, `LAYOUT_2_0`, `LAYOUT_3_0`, `LAYOUT_5_0`. It is a string, like `spatial_hint`, so a later layout needs no schema change. Empty means the track predates layouts and readers infer the layout from channel hints. New validation codes: V-022 (known value) and V-023 (exactly one channel per layout position, by `spatial_hint`). These follow the existing V-001–V-021 validation codes. `version` stays 1 because the field is additive.
 
-## FP-3 — Canonical position hints (proposed, J1, comment only)
+## FP-3 — Canonical position hints (J1, comment only)
 
-**Status:** proposed in [J1 — First light](../journeys/J1-first-light.md#positions). Not approved.
+**Status:** approved by the owner for J1.
 
 For tracks with a layout, `spatial_hint` is one of `SPATIAL_LEFT`, `SPATIAL_CENTER`, `SPATIAL_RIGHT`, `SPATIAL_SURROUND_LEFT`, `SPATIAL_SURROUND_RIGHT`, `SPATIAL_AMBIENT`. `SPATIAL_BEHIND_SCREEN` is read as Center. `SPATIAL_CEILING` and `SPATIAL_FLOOR` are reserved for a later layout and are read as Ambient until then. Only the proto comment changes.
 

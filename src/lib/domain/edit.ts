@@ -408,18 +408,93 @@ export function emptyMetadata(title: string, durationMs: number): Track['metadat
   };
 }
 
+export const CHANNEL_LAYOUTS: Record<string, TemplateChannel[]> = {
+  LAYOUT_AMBIENT: [{ id: 'ambient', displayName: 'Ambient', spatialHint: 'SPATIAL_AMBIENT' }],
+  LAYOUT_2_0: [
+    { id: 'left', displayName: 'Left', spatialHint: 'SPATIAL_LEFT' },
+    { id: 'right', displayName: 'Right', spatialHint: 'SPATIAL_RIGHT' },
+  ],
+  LAYOUT_3_0: [
+    { id: 'left', displayName: 'Left', spatialHint: 'SPATIAL_LEFT' },
+    { id: 'center', displayName: 'Center', spatialHint: 'SPATIAL_CENTER' },
+    { id: 'right', displayName: 'Right', spatialHint: 'SPATIAL_RIGHT' },
+  ],
+  LAYOUT_5_0: [
+    { id: 'left', displayName: 'Left', spatialHint: 'SPATIAL_LEFT' },
+    { id: 'center', displayName: 'Center', spatialHint: 'SPATIAL_CENTER' },
+    { id: 'right', displayName: 'Right', spatialHint: 'SPATIAL_RIGHT' },
+    { id: 'surround-left', displayName: 'Surround Left', spatialHint: 'SPATIAL_SURROUND_LEFT' },
+    { id: 'surround-right', displayName: 'Surround Right', spatialHint: 'SPATIAL_SURROUND_RIGHT' },
+  ],
+};
+
+export function inferChannelLayout(channels: Channel[]): string {
+  const positions = new Set(
+    channels
+      .map((channel) => {
+        const hint = channel.spatialHint.toUpperCase().replace(/_/g, ' ');
+        const text = `${channel.id} ${channel.displayName}`.toLowerCase().replace(/[_-]/g, ' ');
+        if (hint.includes('SURROUND LEFT') || text.includes('surround left'))
+          return 'surround-left';
+        if (hint.includes('SURROUND RIGHT') || text.includes('surround right'))
+          return 'surround-right';
+        if (
+          hint.includes('CENTER') ||
+          hint.includes('BEHIND SCREEN') ||
+          /\b(center|centre)\b/.test(text)
+        )
+          return 'center';
+        if (hint.includes('LEFT') || /\bleft\b/.test(text)) return 'left';
+        if (hint.includes('RIGHT') || /\bright\b/.test(text)) return 'right';
+        if (hint.includes('AMBIENT') || /\bambient\b/.test(text)) return 'ambient';
+        return '';
+      })
+      .filter(Boolean)
+  );
+  if (positions.has('surround-left') || positions.has('surround-right')) return 'LAYOUT_5_0';
+  if (positions.has('center')) return 'LAYOUT_3_0';
+  if ([...positions].some((position) => position !== 'ambient')) return 'LAYOUT_2_0';
+  return 'LAYOUT_AMBIENT';
+}
+
+function canonicalSpatialHint(hint: string): string {
+  if (hint === 'SPATIAL_BEHIND_SCREEN') return 'SPATIAL_CENTER';
+  if (hint === 'SPATIAL_CEILING' || hint === 'SPATIAL_FLOOR') return 'SPATIAL_AMBIENT';
+  return hint;
+}
+
+export function upgradeLegacyTrackLayout(track: Track): Track {
+  if (track.metadata.channelLayout) return track;
+  const layout = inferChannelLayout(track.channels);
+  const templates = CHANNEL_LAYOUTS[layout] ?? CHANNEL_LAYOUTS.LAYOUT_AMBIENT;
+  const available = [...track.channels];
+  const ordered = templates.map((template) => {
+    const index = available.findIndex(
+      (channel) => canonicalSpatialHint(channel.spatialHint) === template.spatialHint
+    );
+    if (index >= 0) return available.splice(index, 1)[0];
+    return channelFromTemplate(template);
+  });
+  return {
+    ...track,
+    metadata: { ...track.metadata, channelLayout: layout },
+    channels: [...ordered, ...available],
+  };
+}
+
 export function newTrackFromMovie(
   itemId: string,
   title: string,
-  durationMs: number
+  durationMs: number,
+  layout = 'LAYOUT_2_0'
 ): Track & { itemId: string } {
-  const channels = TEMPLATES.Stereo.map(channelFromTemplate);
+  const channels = (CHANNEL_LAYOUTS[layout] ?? CHANNEL_LAYOUTS.LAYOUT_2_0).map(channelFromTemplate);
   return {
     itemId,
     version: 1,
-    metadata: emptyMetadata(title, durationMs),
+    metadata: { ...emptyMetadata(title, durationMs), channelLayout: layout },
     channels,
-    keyframes: channels.map((channel) => blackKeyframe(channel.id)),
+    keyframes: [],
     effects: [],
     safety: null,
   };

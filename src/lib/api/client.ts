@@ -177,6 +177,14 @@ export async function fetchTracks(itemId: string): Promise<TrackSummary[]> {
   return response.json();
 }
 
+export async function fetchActiveTrackPath(itemId: string): Promise<string | null> {
+  const query = new URLSearchParams({ ItemId: itemId });
+  const response = await send(`/OpenLightFX/Tracks/ByItem?${query}`);
+  if (!response.ok) throw new Error(`Track selection ${response.status}`);
+  const body = (await response.json()) as { globalSelectedTrack?: string | null };
+  return body.globalSelectedTrack ?? null;
+}
+
 export async function fetchTrackBytes(trackId: string, itemId: string): Promise<Uint8Array> {
   const response = await send(
     `/OpenLightFX/Studio/Tracks/${encodeURIComponent(trackId)}?itemId=${encodeURIComponent(itemId)}`

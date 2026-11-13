@@ -190,6 +190,7 @@ function metadataToProto(m: TrackMetadata): Record<string, unknown> {
     creditsStartMs: Math.round(m.creditsStartMs),
     creditsBehavior: CREDITS_BEHAVIOR_MAP[m.creditsBehavior] ?? 0,
     trackVersion: m.trackVersion,
+    channelLayout: m.channelLayout || undefined,
   };
 }
 
@@ -297,6 +298,7 @@ function protoToMetadata(obj: any): TrackMetadata {
     creditsStartMs: Number(obj.creditsStartMs ?? 0),
     creditsBehavior: CREDITS_BEHAVIOR_REVERSE[obj.creditsBehavior] ?? 'CREDITS_UNSPECIFIED',
     trackVersion: obj.trackVersion ?? '',
+    channelLayout: obj.channelLayout ?? '',
   };
 }
 

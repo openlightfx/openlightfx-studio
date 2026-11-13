@@ -107,7 +107,7 @@ export function planHostedSave(input: {
 }
 
 export function durationDisagrees(movieMs: number, trackMs: number): boolean {
-  return Math.abs(movieMs - trackMs) > 5000;
+  return movieMs > 0 && Math.abs(movieMs - trackMs) / movieMs > 0.02;
 }
 
 export function importDurationWarning(

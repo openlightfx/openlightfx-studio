@@ -28,6 +28,7 @@ import {
   type Keyframe,
   type ProjectSidecar,
   type Track,
+  upgradeLegacyTrackLayout,
 } from '$lib/domain';
 import {
   bytesAsBuffer,
@@ -48,6 +49,7 @@ import {
   type TrackSummary,
 } from '$lib/api/client';
 import { failedProxyMessage, proxyPlayReason, seekPastHorizon } from '$lib/studio/proxy-playback';
+import { takePendingImport } from '$lib/studio/pending-import';
 
 const DB_NAME = 'openlightfx-studio';
 const STORE = 'crash';
@@ -194,8 +196,25 @@ export class StudioSession {
       return;
     }
     await this.loadItems(this.search);
-    const itemId = params.get('itemId');
-    if (itemId) await this.selectItem(itemId);
+    const itemId = params.get('itemId') ?? decodeURIComponent(location.hash.split('/')[2] ?? '');
+    if (itemId) {
+      let request: { trackId?: string; title?: string; layout?: string } = {};
+      try {
+        request = JSON.parse(sessionStorage.getItem('olfx-editor-request') ?? '{}');
+      } catch {
+        // Ignore an invalid one-time navigation hint.
+      }
+      const routeTrackId = location.hash.split('/')[3];
+      const imported = routeTrackId === 'import' ? takePendingImport(itemId) : null;
+      await this.selectItem(
+        itemId,
+        routeTrackId && routeTrackId !== 'new' && routeTrackId !== 'import'
+          ? routeTrackId
+          : undefined,
+        routeTrackId === 'new' ? request : undefined,
+        imported ?? undefined
+      );
+    }
     this.measureFrames();
   }
 
@@ -220,7 +239,12 @@ export class StudioSession {
     }
   }
 
-  async selectItem(itemId: string): Promise<void> {
+  async selectItem(
+    itemId: string,
+    requestedTrackId?: string,
+    newTrack?: { title?: string; layout?: string },
+    imported?: { fileName: string; bytes: Uint8Array }
+  ): Promise<void> {
     const token = ++this.bootToken;
     const known = this.items.find((item) => item.itemId === itemId);
     const item = known ?? { itemId, name: `Item ${itemId}`, year: 0, runtimeMs: 0 };
@@ -256,7 +280,44 @@ export class StudioSession {
     }
     if (token !== this.bootToken) return;
     this.trackChoices = tracks;
-    if (tracks.length === 1) await this.openTrack(tracks[0], resolved.durationMs);
+    const requested = requestedTrackId
+      ? tracks.find((track) => track.trackId === requestedTrackId)
+      : null;
+    if (imported) {
+      const base = this.fresh(item.name, resolved.durationMs ?? 0);
+      const result = importTrack(base, imported.bytes, itemId);
+      if (result.errors.length) {
+        this.alert = result.errors.join(' ');
+        this.track = null;
+        return;
+      }
+      const stem = imported.fileName.replace(/\.lightfx$/i, '');
+      const rootId = slug(stem);
+      let id = rootId;
+      let suffix = 2;
+      while (tracks.some((track) => track.trackId === id))
+        id = `${rootId.slice(0, 60)}-${suffix++}`;
+      this.trackId = id;
+      this.trackUpdatedAt = '';
+      this.serverUpdatedAt = 0;
+      this.importWarning = importDurationWarning(
+        resolved.durationMs ?? 0,
+        result.track.metadata.durationMs,
+        true
+      );
+      await this.adopt(
+        {
+          ...result.track,
+          metadata: { ...result.track.metadata, movieTitle: item.name, year: item.year },
+        },
+        itemId,
+        id,
+        false
+      );
+    } else if (requested) await this.openTrack(requested, resolved.durationMs);
+    else if (newTrack)
+      this.openNewTrack(item, resolved.durationMs, newTrack.title, newTrack.layout);
+    else if (tracks.length === 1) await this.openTrack(tracks[0], resolved.durationMs);
     else if (tracks.length === 0) this.openNewTrack(item, resolved.durationMs);
     else {
       this.track = null;
@@ -339,11 +400,23 @@ export class StudioSession {
     await this.adopt(track, summary.itemId, summary.trackId, false);
   }
 
-  openNewTrack(item: LibraryItem, durationMs: number | null): void {
-    this.trackId = slug(item.name);
+  openNewTrack(
+    item: LibraryItem,
+    durationMs: number | null,
+    requestedTitle?: string,
+    requestedLayout = 'LAYOUT_2_0'
+  ): void {
+    this.trackId = slug(requestedTitle || item.name);
     this.serverUpdatedAt = 0;
     this.trackUpdatedAt = '';
-    const track = this.fresh(item.name, durationMs ?? 0);
+    const created = newTrackFromMovie(
+      item.itemId,
+      requestedTitle || `${item.name} lighting`,
+      durationMs ?? 0,
+      requestedLayout
+    );
+    const { itemId: _item, ...track } = created;
+    track.metadata = { ...track.metadata, movieTitle: item.name, year: item.year };
     void this.adopt(track, item.itemId, this.trackId, false);
   }
 
@@ -816,7 +889,12 @@ export class StudioSession {
       this.status = 'The movie duration is unknown';
       return;
     }
-    const withSafety = { ...this.track, safety: computeSafety(this.track) };
+    const upgraded = upgradeLegacyTrackLayout(this.track);
+    if (upgraded !== this.track) {
+      this.track = upgraded;
+      this.dirty = true;
+    }
+    const withSafety = { ...upgraded, safety: computeSafety(upgraded) };
     if (!this.hosted) {
       if (!this.durationKnown) {
         this.status = 'The movie duration is unknown';
