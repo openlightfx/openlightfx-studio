@@ -49,9 +49,7 @@ CI reduces Vitest and Playwright output to:
 
 ```json
 {
-  "tests": [
-    { "name": "MEDIA-006 @browser proxy seek lands within one GOP", "status": "passed" }
-  ]
+  "tests": [{ "name": "MEDIA-006 @browser proxy seek lands within one GOP", "status": "passed" }]
 }
 ```
 

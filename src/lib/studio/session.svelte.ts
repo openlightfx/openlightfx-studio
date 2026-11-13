@@ -30,6 +30,7 @@ import {
   type Track,
 } from '$lib/domain';
 import {
+  bytesAsBuffer,
   fetchBulbs,
   fetchItems,
   fetchMediaInfo,
@@ -284,7 +285,14 @@ export class StudioSession {
 
   private releasePendingSeek(info: MediaInfo): void {
     if (this.pendingSeekMs == null) return;
-    if (seekPastHorizon(this.pendingSeekMs, info.proxy.encodedThroughMs, info.proxy.state === 'building')) return;
+    if (
+      seekPastHorizon(
+        this.pendingSeekMs,
+        info.proxy.encodedThroughMs,
+        info.proxy.state === 'building'
+      )
+    )
+      return;
     const target = this.pendingSeekMs;
     this.pendingSeekMs = null;
     if (this.video) this.video.currentTime = target / 1000;
@@ -323,7 +331,8 @@ export class StudioSession {
     } catch {
       track = this.fresh(summary.title, durationMs ?? 0);
     }
-    if (durationMs && durationMs > 0) track = { ...track, metadata: { ...track.metadata, durationMs } };
+    if (durationMs && durationMs > 0)
+      track = { ...track, metadata: { ...track.metadata, durationMs } };
     await this.adopt(track, summary.itemId, summary.trackId, false);
   }
 
@@ -347,7 +356,12 @@ export class StudioSession {
     return track;
   }
 
-  private async adopt(track: Track, itemId: string, trackId: string, dirty: boolean): Promise<void> {
+  private async adopt(
+    track: Track,
+    itemId: string,
+    trackId: string,
+    dirty: boolean
+  ): Promise<void> {
     const crash = await this.readCrash(crashKey(itemId, trackId));
     const source = chooseLoadSource(this.serverUpdatedAt, crash);
     const chosen = source === 'crash' && crash ? crash.track : track;
@@ -492,7 +506,12 @@ export class StudioSession {
     this.videoError = '';
     this.videoSrc = URL.createObjectURL(file);
     if (!this.track) {
-      const item = { itemId: 'local', name: file.name.replace(/\.mp4$/i, ''), year: 0, runtimeMs: 10000 };
+      const item = {
+        itemId: 'local',
+        name: file.name.replace(/\.mp4$/i, ''),
+        year: 0,
+        runtimeMs: 10000,
+      };
       this.item = item;
       this.movieMs = 10000;
       this.durationKnown = true;
@@ -504,7 +523,14 @@ export class StudioSession {
         hdr: false,
         colorTransfer: 'bt709',
         audioCodec: 'aac',
-        proxy: { state: 'ready', encodedThroughMs: 10000, fps: 24, keyframeIntervalMs: 500, width: 320, height: 240 },
+        proxy: {
+          state: 'ready',
+          encodedThroughMs: 10000,
+          fps: 24,
+          keyframeIntervalMs: 500,
+          width: 320,
+          height: 240,
+        },
       };
       this.openNewTrack(item, 10000);
     }
@@ -532,7 +558,10 @@ export class StudioSession {
       return;
     }
     const created = { ...newKeyframe(own, time), channelId: channel };
-    this.edit({ ...this.track, keyframes: [...this.track.keyframes, created] }, `Keyframe at ${time} ms on channel ${channel}`);
+    this.edit(
+      { ...this.track, keyframes: [...this.track.keyframes, created] },
+      `Keyframe at ${time} ms on channel ${channel}`
+    );
     this.selection = [created.id];
     this.activeChannelId = channel;
   }
@@ -592,12 +621,14 @@ export class StudioSession {
     const right = Math.max(x0, x1);
     const top = Math.min(y0, y1);
     const bottom = Math.max(y0, y1);
-    const ids = this.track.keyframes.filter((kf) => {
-      const index = this.track!.channels.findIndex((channel) => channel.id === kf.channelId);
-      const x = kf.timestampMs * this.pxPerMs - this.scrollX;
-      const y = index * laneHeight + laneHeight / 2;
-      return x >= left && x <= right && y >= top && y <= bottom;
-    }).map((kf) => kf.id);
+    const ids = this.track.keyframes
+      .filter((kf) => {
+        const index = this.track!.channels.findIndex((channel) => channel.id === kf.channelId);
+        const x = kf.timestampMs * this.pxPerMs - this.scrollX;
+        const y = index * laneHeight + laneHeight / 2;
+        return x >= left && x <= right && y >= top && y <= bottom;
+      })
+      .map((kf) => kf.id);
     this.selection = ids;
     this.status = `${ids.length} selected`;
     this.syncPropertyFields();
@@ -617,7 +648,13 @@ export class StudioSession {
   }
 
   zoomKey(key: string, modifier: boolean): void {
-    const next = applyZoomChord(this.pxPerMs, key, modifier, this.durationMs() || 1, this.laneWidth);
+    const next = applyZoomChord(
+      this.pxPerMs,
+      key,
+      modifier,
+      this.durationMs() || 1,
+      this.laneWidth
+    );
     this.pxPerMs = next;
     this.fit = key === '\\';
   }
@@ -667,7 +704,9 @@ export class StudioSession {
     this.edit({
       ...this.track,
       keyframes: this.track.keyframes.map((kf) =>
-        ids.has(kf.id) ? { ...kf, colorMode: 'COLOR_TEMPERATURE', colorTemperature: parsed.kelvin } : kf
+        ids.has(kf.id)
+          ? { ...kf, colorMode: 'COLOR_TEMPERATURE', colorTemperature: parsed.kelvin }
+          : kf
       ),
     });
   }
@@ -751,7 +790,11 @@ export class StudioSession {
       return;
     }
     this.edit(result.track, 'Imported track');
-    this.importWarning = importDurationWarning(this.movieMs ?? 0, result.track.metadata.durationMs, true);
+    this.importWarning = importDurationWarning(
+      this.movieMs ?? 0,
+      result.track.metadata.durationMs,
+      true
+    );
   }
 
   useMovieDuration(): void {
@@ -793,7 +836,11 @@ export class StudioSession {
     for (const request of plan.requests) {
       const response =
         request.method === 'PUT' && request.path.includes('/Tracks/')
-          ? await putBytes(request.path, bytes, this.trackUpdatedAt ? { 'If-Match': this.trackUpdatedAt } : {})
+          ? await putBytes(
+              request.path,
+              bytes,
+              this.trackUpdatedAt ? { 'If-Match': this.trackUpdatedAt } : {}
+            )
           : request.method === 'PUT'
             ? await putJson(request.path, sidecarDocument(this.sidecar()))
             : await postJson(request.path, {
@@ -817,7 +864,7 @@ export class StudioSession {
   download(track = this.track): void {
     if (!track) return;
     const bytes = encodeTrack({ ...track, safety: track.safety ?? computeSafety(track) });
-    const blob = new Blob([bytes], { type: 'application/octet-stream' });
+    const blob = new Blob([bytesAsBuffer(bytes)], { type: 'application/octet-stream' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `${this.trackId || 'track'}.lightfx`;
@@ -873,14 +920,19 @@ export class StudioSession {
     const ids = new Set(this.selection);
     this.edit({
       ...this.track,
-      keyframes: this.track.keyframes.map((kf) => (ids.has(kf.id) ? { ...kf, colorMode: 'RGB', color } : kf)),
+      keyframes: this.track.keyframes.map((kf) =>
+        ids.has(kf.id) ? { ...kf, colorMode: 'RGB', color } : kf
+      ),
     });
     this.rememberColor(color);
   }
 
   private rememberColor(color: { r: number; g: number; b: number }): void {
     const hex = `#${[color.r, color.g, color.b].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
-    this.historyColors = [hex, ...this.historyColors.filter((swatch) => swatch !== hex)].slice(0, 16);
+    this.historyColors = [hex, ...this.historyColors.filter((swatch) => swatch !== hex)].slice(
+      0,
+      16
+    );
     while (this.historyColors.length < 16) this.historyColors.push('#000000');
   }
 
@@ -893,7 +945,9 @@ export class StudioSession {
     const kf = selected[0];
     this.brightnessText = String(kf.brightness);
     this.green = String(kf.color.g);
-    this.hex = [kf.color.r, kf.color.g, kf.color.b].map((v) => v.toString(16).padStart(2, '0')).join('');
+    this.hex = [kf.color.r, kf.color.g, kf.color.b]
+      .map((v) => v.toString(16).padStart(2, '0'))
+      .join('');
   }
 
   private async openDb(): Promise<void> {

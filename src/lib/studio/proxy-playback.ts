@@ -17,7 +17,11 @@ export function failedProxyMessage(reason: string | undefined): string {
   return text ? text : 'The edit proxy failed';
 }
 
-export function seekPastHorizon(targetMs: number, encodedThroughMs: number, building: boolean): boolean {
+export function seekPastHorizon(
+  targetMs: number,
+  encodedThroughMs: number,
+  building: boolean
+): boolean {
   return building && targetMs > encodedThroughMs + HORIZON_SLACK_MS;
 }
 
@@ -31,7 +35,8 @@ export function proxyPlayReason(input: {
   reason?: string;
 }): string {
   if (!input.hasItem && !input.blob) return 'Choose a movie';
-  if (input.pendingSeek && input.state === 'building') return horizonLabel(input.encodedThroughMs ?? 0);
+  if (input.pendingSeek && input.state === 'building')
+    return horizonLabel(input.encodedThroughMs ?? 0);
   if (input.state === 'building') return 'Preparing edit proxy';
   if (input.state === 'failed') return failedProxyMessage(input.reason);
   if (input.videoError) return input.videoError;

@@ -50,7 +50,7 @@ const AREAS = [
   ['Performance', 'PERF'],
   ['Accessibility and input', 'A11Y'],
   ['Error handling', 'ERR'],
-  ['Plugin contract', 'PLUG']
+  ['Plugin contract', 'PLUG'],
 ];
 
 const problems = [];
@@ -97,7 +97,7 @@ function parseRequirements(markdown) {
         prefix: reqMatch[1].split('-')[0],
         area,
         line: i + 1,
-        body: []
+        body: [],
       };
       continue;
     }
@@ -125,7 +125,10 @@ function enrich(reqs) {
     const testsRaw = field(req.body, 'Tests');
     const statement = field(req.body, 'Statement');
     const tests = testsRaw
-      ? testsRaw.split(',').map((token) => token.trim()).filter(Boolean)
+      ? testsRaw
+          .split(',')
+          .map((token) => token.trim())
+          .filter(Boolean)
       : [];
     const text = req.body.join('\n');
     return { ...req, layer, status, tests, statement, text };
@@ -191,8 +194,14 @@ function parseCountsTable(markdown) {
   return lines
     .filter((line) => !line.includes('---') && !line.includes('Prefix'))
     .map((line) => {
-      const cells = line.split('|').map((cell) => cell.trim()).filter((_, index, all) => index < all.length);
-      const clean = (value) => String(value ?? '').replace(/\*\*/g, '').trim();
+      const cells = line
+        .split('|')
+        .map((cell) => cell.trim())
+        .filter((_, index, all) => index < all.length);
+      const clean = (value) =>
+        String(value ?? '')
+          .replace(/\*\*/g, '')
+          .trim();
       const [area, prefix, l1, l2, l3, total] = cells.slice(1, 7).map(clean);
       return {
         area,
@@ -200,7 +209,7 @@ function parseCountsTable(markdown) {
         L1: Number(l1),
         L2: Number(l2),
         L3: Number(l3),
-        Total: Number(total)
+        Total: Number(total),
       };
     });
 }
@@ -216,7 +225,13 @@ function checkCounts(markdown, reqs) {
     const got = parsed[i];
     const want = expected[i];
     const label = want.prefix || 'Total';
-    if (got.area !== want.area || got.L1 !== want.L1 || got.L2 !== want.L2 || got.L3 !== want.L3 || got.Total !== want.Total) {
+    if (
+      got.area !== want.area ||
+      got.L1 !== want.L1 ||
+      got.L2 !== want.L2 ||
+      got.L3 !== want.L3 ||
+      got.Total !== want.Total
+    ) {
       fail(
         `Counts row ${label} is ${got.area} ${got.L1}/${got.L2}/${got.L3}/${got.Total}; expected ${want.area} ${want.L1}/${want.L2}/${want.L3}/${want.Total}`
       );
@@ -242,10 +257,11 @@ function testTitlesFromSource() {
   const files = [
     ...walk(path.join(ROOT, 'tests')),
     ...walk(path.join(ROOT, 'e2e')),
-    ...walk(path.join(ROOT, 'src'))
+    ...walk(path.join(ROOT, 'src')),
   ];
   const titles = [];
-  const call = /(?:\bit|\btest|\bdescribe|\brequirement)\s*(?:\.\s*skip)?\s*\(\s*(['"`])([\s\S]*?)\1/g;
+  const call =
+    /(?:\bit|\btest|\bdescribe|\brequirement)\s*(?:\.\s*skip)?\s*\(\s*(['"`])([\s\S]*?)\1/g;
   for (const file of files) {
     const source = fs.readFileSync(file, 'utf8');
     let match;
@@ -264,7 +280,7 @@ function testTitlesFromReport(reportPath) {
   return parsed.tests.map((test) => ({
     name: String(test.name ?? ''),
     status: String(test.status ?? ''),
-    file: String(test.file ?? '')
+    file: String(test.file ?? ''),
   }));
 }
 
@@ -290,7 +306,9 @@ function checkApproved(reqs, titles, useReport, allow) {
       continue;
     }
     for (const tier of ciTiers) {
-      const hits = titles.filter((test) => test.name.includes(req.id) && test.name.includes(`@${tier}`));
+      const hits = titles.filter(
+        (test) => test.name.includes(req.id) && test.name.includes(`@${tier}`)
+      );
       const key = `${req.id}@${tier}`;
       if (useReport && tier === 'fullstack' && hits.length === 0) {
         fullstackNotRun = true;
@@ -301,7 +319,12 @@ function checkApproved(reqs, titles, useReport, allow) {
         if (test.status === 'passed') return true;
         return test.status === 'failed' && allow.has(key);
       });
-      if (useReport && allow.has(key) && hits.some((test) => test.status === 'passed') && !hits.some((test) => test.status === 'failed')) {
+      if (
+        useReport &&
+        allow.has(key) &&
+        hits.some((test) => test.status === 'passed') &&
+        !hits.some((test) => test.status === 'failed')
+      ) {
         fail(`${req.id} @${tier} passed but is still listed in the expected-failure file`);
       }
       if (good.length === 0) {
@@ -318,9 +341,13 @@ function printCounts(reqs) {
   console.log('| Area | Prefix | L1 | L2 | L3 | Total |');
   console.log('| --- | --- | ---: | ---: | ---: | ---: |');
   for (const row of rows) {
-    console.log(`| ${row.area} | ${row.prefix} | ${row.L1} | ${row.L2} | ${row.L3} | ${row.Total} |`);
+    console.log(
+      `| ${row.area} | ${row.prefix} | ${row.L1} | ${row.L2} | ${row.L3} | ${row.Total} |`
+    );
   }
-  console.log(`| **Total** |  | **${total.L1}** | **${total.L2}** | **${total.L3}** | **${total.Total}** |`);
+  console.log(
+    `| **Total** |  | **${total.L1}** | **${total.L2}** | **${total.L3}** | **${total.Total}** |`
+  );
 }
 
 const args = parseArgs(process.argv.slice(2));

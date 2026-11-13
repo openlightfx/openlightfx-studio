@@ -1,12 +1,4 @@
-import type {
-  Channel,
-  ChannelGroup,
-  EffectType,
-  Keyframe,
-  Rgb,
-  SceneMarker,
-  Track,
-} from './types';
+import type { Channel, ChannelGroup, EffectType, Keyframe, Rgb, SceneMarker, Track } from './types';
 import { BLACK, rgb } from './types';
 
 export const CHANNEL_SLUG = /^[a-z0-9_-]{1,64}$/;
@@ -88,7 +80,11 @@ export function channelFromTemplate(spec: TemplateChannel): Channel {
   };
 }
 
-export function newKeyframe(channelKeyframes: Keyframe[], timestampMs: number, id = nextId('kf')): Keyframe {
+export function newKeyframe(
+  channelKeyframes: Keyframe[],
+  timestampMs: number,
+  id = nextId('kf')
+): Keyframe {
   const previous = [...channelKeyframes]
     .filter((kf) => kf.timestampMs <= timestampMs)
     .sort((a, b) => a.timestampMs - b.timestampMs)
@@ -176,7 +172,8 @@ export function snapTime(input: SnapInput): { timeMs: number; snapped: boolean }
     if (distance <= bestDistance) {
       best = target;
       bestDistance = distance;
-      snapped = distance <= thresholdMs && target !== input.timeMs ? true : snapped || distance === 0;
+      snapped =
+        distance <= thresholdMs && target !== input.timeMs ? true : snapped || distance === 0;
       if (distance <= thresholdMs) snapped = true;
     }
   }
@@ -222,9 +219,14 @@ export function applyZoomChord(
 }
 
 export function parseHex(current: Rgb, hex: string): { color: Rgb; error: string | null } {
-  if (!/^[0-9A-Fa-f]{6}$/.test(hex)) return { color: current, error: 'Enter a six-digit hex color' };
+  if (!/^[0-9A-Fa-f]{6}$/.test(hex))
+    return { color: current, error: 'Enter a six-digit hex color' };
   return {
-    color: rgb(parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16)),
+    color: rgb(
+      parseInt(hex.slice(0, 2), 16),
+      parseInt(hex.slice(2, 4), 16),
+      parseInt(hex.slice(4, 6), 16)
+    ),
     error: null,
   };
 }
@@ -302,9 +304,14 @@ export function applyTemplate(
   return { channels, keyframes, needsConfirm: false };
 }
 
-export function addChannel(track: Track, id: string, displayName: string): { track: Track; error: string | null } {
+export function addChannel(
+  track: Track,
+  id: string,
+  displayName: string
+): { track: Track; error: string | null } {
   if (!CHANNEL_SLUG.test(id)) return { track, error: 'Channel id must match [a-z0-9_-]{1,64}' };
-  if (track.channels.some((channel) => channel.id === id)) return { track, error: 'Channel id already exists' };
+  if (track.channels.some((channel) => channel.id === id))
+    return { track, error: 'Channel id already exists' };
   const channel = channelFromTemplate({ id, displayName, spatialHint: '' });
   return {
     track: {
@@ -316,19 +323,38 @@ export function addChannel(track: Track, id: string, displayName: string): { tra
   };
 }
 
-export function applyMirror(keyframes: Keyframe[], group: ChannelGroup, edited: Keyframe): Keyframe[] {
+export function applyMirror(
+  keyframes: Keyframe[],
+  group: ChannelGroup,
+  edited: Keyframe
+): Keyframe[] {
   if (group.mode !== 'mirror') return keyframes;
-  return keyframes.map((kf) => {
-    if (group.channelIds.includes(kf.channelId) && kf.timestampMs === edited.timestampMs && kf.channelId !== edited.channelId) {
-      return { ...kf, color: { ...edited.color }, brightness: edited.brightness, colorMode: edited.colorMode, colorTemperature: edited.colorTemperature };
-    }
-    return kf;
-  }).concat(
-    group.channelIds
-      .filter((id) => id !== edited.channelId)
-      .filter((id) => !keyframes.some((kf) => kf.channelId === id && kf.timestampMs === edited.timestampMs))
-      .map((id) => ({ ...edited, id: nextId('kf'), channelId: id }))
-  );
+  return keyframes
+    .map((kf) => {
+      if (
+        group.channelIds.includes(kf.channelId) &&
+        kf.timestampMs === edited.timestampMs &&
+        kf.channelId !== edited.channelId
+      ) {
+        return {
+          ...kf,
+          color: { ...edited.color },
+          brightness: edited.brightness,
+          colorMode: edited.colorMode,
+          colorTemperature: edited.colorTemperature,
+        };
+      }
+      return kf;
+    })
+    .concat(
+      group.channelIds
+        .filter((id) => id !== edited.channelId)
+        .filter(
+          (id) =>
+            !keyframes.some((kf) => kf.channelId === id && kf.timestampMs === edited.timestampMs)
+        )
+        .map((id) => ({ ...edited, id: nextId('kf'), channelId: id }))
+    );
 }
 
 export function applySpread(group: ChannelGroup, source: Keyframe): Keyframe[] {
@@ -340,7 +366,10 @@ export function applySpread(group: ChannelGroup, source: Keyframe): Keyframe[] {
   }));
 }
 
-export function markerInSidecarOnly(markers: SceneMarker[]): { protobufHasMarkers: false; sidecar: SceneMarker[] } {
+export function markerInSidecarOnly(markers: SceneMarker[]): {
+  protobufHasMarkers: false;
+  sidecar: SceneMarker[];
+} {
   return { protobufHasMarkers: false, sidecar: markers };
 }
 
@@ -379,7 +408,11 @@ export function emptyMetadata(title: string, durationMs: number): Track['metadat
   };
 }
 
-export function newTrackFromMovie(itemId: string, title: string, durationMs: number): Track & { itemId: string } {
+export function newTrackFromMovie(
+  itemId: string,
+  title: string,
+  durationMs: number
+): Track & { itemId: string } {
   const channels = TEMPLATES.Stereo.map(channelFromTemplate);
   return {
     itemId,

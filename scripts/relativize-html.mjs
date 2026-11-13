@@ -4,6 +4,7 @@
  * unless hash routing is on. Rewrite that document so the same build loads
  * under any prefix, including /emby/OpenLightFX/studio/.
  */
+/** @param {string} html */
 export function relativizeSpaHtml(html) {
   if (!html.includes('base:')) {
     throw new Error('SPA HTML has no SvelteKit base field');

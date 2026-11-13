@@ -62,11 +62,16 @@ export function validateTrack(track: Track): string[] {
 
   for (const effect of track.effects) {
     if (!channelIds.has(effect.channelId)) {
-      errors.push(`V-006: Effect keyframe ${effect.id} references invalid channel: ${effect.channelId}`);
+      errors.push(
+        `V-006: Effect keyframe ${effect.id} references invalid channel: ${effect.channelId}`
+      );
     }
-    if (effect.durationMs === 0) errors.push(`V-013: Effect keyframe ${effect.id} duration must be > 0`);
+    if (effect.durationMs === 0)
+      errors.push(`V-013: Effect keyframe ${effect.id} duration must be > 0`);
     if (effect.intensity > 100) {
-      errors.push(`V-014: Effect keyframe ${effect.id} intensity ${effect.intensity} out of range [0, 100]`);
+      errors.push(
+        `V-014: Effect keyframe ${effect.id} intensity ${effect.intensity} out of range [0, 100]`
+      );
     }
   }
   return errors;

@@ -17,12 +17,16 @@ export function classifyLocalFile(name: string, mime = ''): LocalFileKind {
   return 'refused';
 }
 
-export function resolveDuration(itemRuntimeMs: number, probeRuntimeMs: number | null): {
+export function resolveDuration(
+  itemRuntimeMs: number,
+  probeRuntimeMs: number | null
+): {
   durationMs: number | null;
   askUser: false;
 } {
   if (itemRuntimeMs > 0) return { durationMs: itemRuntimeMs, askUser: false };
-  if (probeRuntimeMs !== null && probeRuntimeMs > 0) return { durationMs: probeRuntimeMs, askUser: false };
+  if (probeRuntimeMs !== null && probeRuntimeMs > 0)
+    return { durationMs: probeRuntimeMs, askUser: false };
   return { durationMs: null, askUser: false };
 }
 
@@ -31,7 +35,11 @@ export function frameStepMs(fps: number): number {
   return Math.round(1000 / fps);
 }
 
-export function stepPlayhead(timeMs: number, steps: number, fps: number): { timeMs: number; method: 'currentTime' } {
+export function stepPlayhead(
+  timeMs: number,
+  steps: number,
+  fps: number
+): { timeMs: number; method: 'currentTime' } {
   return { timeMs: timeMs + steps * frameStepMs(fps), method: 'currentTime' };
 }
 

@@ -166,8 +166,8 @@ export function decodeTrack(bytes: Uint8Array): Track {
     powerOn: Boolean(kf.powerOn),
   }));
   const effects = ((object.effectKeyframes as Record<string, unknown>[]) ?? []).map((effect) => {
-    const params = ((effect.effectParams as { params?: Record<string, number> } | undefined)?.params ??
-      {}) as Record<string, number>;
+    const params = ((effect.effectParams as { params?: Record<string, number> } | undefined)
+      ?.params ?? {}) as Record<string, number>;
     return {
       id: String(effect.id ?? ''),
       channelId: String(effect.channelId ?? ''),
@@ -185,14 +185,20 @@ export function decodeTrack(bytes: Uint8Array): Track {
   });
   const safetyRaw = object.safetyInfo as Record<string, unknown> | undefined;
   const safety =
-    safetyRaw && (safetyRaw.warningText || safetyRaw.intensityRating || safetyRaw.containsFlashing || safetyRaw.containsStrobing)
+    safetyRaw &&
+    (safetyRaw.warningText ||
+      safetyRaw.intensityRating ||
+      safetyRaw.containsFlashing ||
+      safetyRaw.containsStrobing)
       ? {
           containsFlashing: Boolean(safetyRaw.containsFlashing),
           containsStrobing: Boolean(safetyRaw.containsStrobing),
           maxFlashFrequencyHz: asNumber(safetyRaw.maxFlashFrequencyHz),
           maxBrightnessDelta: asNumber(safetyRaw.maxBrightnessDelta),
           warningText: String(safetyRaw.warningText ?? ''),
-          intensityRating: String(safetyRaw.intensityRating ?? 'INTENSITY_UNSPECIFIED') as SafetyInfo['intensityRating'],
+          intensityRating: String(
+            safetyRaw.intensityRating ?? 'INTENSITY_UNSPECIFIED'
+          ) as SafetyInfo['intensityRating'],
         }
       : null;
   return {

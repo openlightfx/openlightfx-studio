@@ -1,6 +1,6 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
-import { mockMiddleware } from './src/lib/api/mock.ts';
+import { mockMiddleware } from './src/lib/api/mock';
 import { studioPrefixMiddleware } from './scripts/studio-prefix.mjs';
 
 export default defineConfig({

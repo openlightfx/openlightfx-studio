@@ -169,7 +169,6 @@ class VideoStoreClass {
       file,
       isLoading: true,
     };
-
   }
 
   unloadFile(): void {

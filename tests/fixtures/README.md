@@ -2,12 +2,12 @@
 
 `tests/fixtures/sampling/` is the contract for Studio's Vitest tests and for `dotnet test` in [openlightfx-emby](https://github.com/openlightfx/openlightfx-emby).
 
-| File | Contents |
-| --- | --- |
-| `keyframes.json` | `KEY-009` through `KEY-014`. The sampler is `PlaybackSession`: black before the first keyframe, half-to-even blends, Tanner Helland kelvin truncated toward zero. |
-| `effects.json` | One default and one non-default case for each of the 13 effect types. Commands are `offsetMs`, `r`, `g`, `b`, `brightness`. |
-| `roundtrip.lightfx` | A version-1 track with RGB, color temperature, a transition, and one PULSE effect. |
-| `roundtrip-track.ts` | The logical track encoded into `roundtrip.lightfx`. |
+| File                 | Contents                                                                                                                                                          |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `keyframes.json`     | `KEY-009` through `KEY-014`. The sampler is `PlaybackSession`: black before the first keyframe, half-to-even blends, Tanner Helland kelvin truncated toward zero. |
+| `effects.json`       | One default and one non-default case for each of the 13 effect types. Commands are `offsetMs`, `r`, `g`, `b`, `brightness`.                                       |
+| `roundtrip.lightfx`  | A version-1 track with RGB, color temperature, a transition, and one PULSE effect.                                                                                |
+| `roundtrip-track.ts` | The logical track encoded into `roundtrip.lightfx`.                                                                                                               |
 
 Regenerate the binary and `effects.json` after a renderer or encoder change:
 

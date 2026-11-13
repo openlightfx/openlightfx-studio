@@ -1,6 +1,7 @@
 /** Serve the static SPA under the plugin prefixes without copying the build. */
 const PREFIXES = ['/emby/OpenLightFX/studio', '/OpenLightFX/studio'];
 
+/** @param {string} url */
 export function rewriteStudioPrefix(url) {
   const query = url.indexOf('?');
   const path = query === -1 ? url : url.slice(0, query);
@@ -15,6 +16,11 @@ export function rewriteStudioPrefix(url) {
   return null;
 }
 
+/**
+ * @param {import('node:http').IncomingMessage} req
+ * @param {import('node:http').ServerResponse} res
+ * @param {() => void} next
+ */
 export function studioPrefixMiddleware(req, res, next) {
   if (!req.url) return next();
   const rewritten = rewriteStudioPrefix(req.url);

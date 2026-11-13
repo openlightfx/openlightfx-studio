@@ -1,4 +1,18 @@
-import type { Bulb, LibraryItem, MediaInfo, ProxyInfo, StudioSettings, TrackSummary } from './types';
+import type {
+  Bulb,
+  LibraryItem,
+  MediaInfo,
+  ProxyInfo,
+  StudioSettings,
+  TrackSummary,
+} from './types';
+
+export type { Bulb, LibraryItem, MediaInfo, StudioSettings, TrackSummary };
+
+/** A copy whose buffer is a plain ArrayBuffer, which fetch and Blob accept. */
+export function bytesAsBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
 
 export function authHeaders(): Record<string, string> {
   const key = new URLSearchParams(location.search).get('api_key');
@@ -19,7 +33,9 @@ export async function fetchItems(search = ''): Promise<LibraryItem[]> {
 }
 
 export async function restartProxy(itemId: string): Promise<ProxyInfo> {
-  const response = await send(`/OpenLightFX/Studio/Items/${encodeURIComponent(itemId)}/Proxy`, { method: 'POST' });
+  const response = await send(`/OpenLightFX/Studio/Items/${encodeURIComponent(itemId)}/Proxy`, {
+    method: 'POST',
+  });
   if (!response.ok) throw new Error(`Proxy ${response.status}`);
   return response.json();
 }
@@ -56,11 +72,15 @@ export async function fetchSettings(): Promise<StudioSettings> {
   return response.json();
 }
 
-export async function putBytes(path: string, bytes: Uint8Array, extra: Record<string, string> = {}): Promise<Response> {
+export async function putBytes(
+  path: string,
+  bytes: Uint8Array,
+  extra: Record<string, string> = {}
+): Promise<Response> {
   return send(path, {
     method: 'PUT',
     headers: { 'content-type': 'application/octet-stream', ...extra },
-    body: bytes,
+    body: bytesAsBuffer(bytes),
   });
 }
 

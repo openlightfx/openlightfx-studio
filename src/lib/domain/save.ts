@@ -74,7 +74,12 @@ export function planHostedSave(input: {
   }
   const errors = validateTrack(input.track);
   if (input.track.channels.length === 0) {
-    return { blocked: true, message: errors.find((error) => error.startsWith('V-011')) ?? 'V-011', ruleIds: ['V-011'], requests: [] };
+    return {
+      blocked: true,
+      message: errors.find((error) => error.startsWith('V-011')) ?? 'V-011',
+      ruleIds: ['V-011'],
+      requests: [],
+    };
   }
   if (errors.length > 0) {
     return {
@@ -105,7 +110,11 @@ export function durationDisagrees(movieMs: number, trackMs: number): boolean {
   return Math.abs(movieMs - trackMs) > 5000;
 }
 
-export function importDurationWarning(movieMs: number, trackMs: number, imported: boolean): boolean {
+export function importDurationWarning(
+  movieMs: number,
+  trackMs: number,
+  imported: boolean
+): boolean {
   return imported && durationDisagrees(movieMs, trackMs);
 }
 

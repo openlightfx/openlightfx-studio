@@ -75,7 +75,9 @@
 
   function onKeydown(event: KeyboardEvent) {
     const target = event.target as HTMLElement | null;
-    const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+    const typing =
+      target &&
+      (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
     if (event.key === '?' || (event.key === '/' && event.shiftKey)) {
       if (typing) return;
       event.preventDefault();
@@ -83,7 +85,12 @@
       return;
     }
     if (typing) return;
-    if (target?.tagName === 'BUTTON' && target.getAttribute('aria-label') !== 'Play' && target.getAttribute('aria-label') !== 'Pause' && event.key === ' ') {
+    if (
+      target?.tagName === 'BUTTON' &&
+      target.getAttribute('aria-label') !== 'Play' &&
+      target.getAttribute('aria-label') !== 'Pause' &&
+      event.key === ' '
+    ) {
       return;
     }
     const key = event.key;
@@ -180,7 +187,9 @@
   }
 
   const safety = $derived(session.safetyLabel());
-  const title = $derived(session.item?.name ?? session.track?.metadata.title ?? 'OpenLightFX Studio');
+  const title = $derived(
+    session.item?.name ?? session.track?.metadata.title ?? 'OpenLightFX Studio'
+  );
 </script>
 
 <svelte:window onkeydown={onKeydown} />
@@ -300,28 +309,74 @@
     </section>
 
     <aside class="props" data-keyframe-popover>
-      <label>Title <input aria-label="Title" value={session.track?.metadata.title ?? ''} oninput={(event) => session.setTitle((event.target as HTMLInputElement).value)} /></label>
+      <label
+        >Title <input
+          aria-label="Title"
+          value={session.track?.metadata.title ?? ''}
+          oninput={(event) => session.setTitle((event.target as HTMLInputElement).value)}
+        /></label
+      >
       <label>Brightness <input aria-label="Brightness" value={session.brightnessText} /></label>
-      <label>Color <input aria-label="Hex" value={session.hex} oninput={(event) => session.setHex((event.target as HTMLInputElement).value)} /></label>
+      <label
+        >Color <input
+          aria-label="Hex"
+          value={session.hex}
+          oninput={(event) => session.setHex((event.target as HTMLInputElement).value)}
+        /></label
+      >
       {#if session.hexError}<p>{session.hexError}</p>{/if}
       <label>Green <input aria-label="Green" value={session.green} /></label>
-      <label><input type="radio" name="mode" checked={!session.kelvinOn} onchange={() => session.setKelvinMode(false)} /> RGB</label>
-      <label><input type="radio" name="mode" aria-label="Kelvin mode" checked={session.kelvinOn} onchange={() => session.setKelvinMode(true)} /> Kelvin mode</label>
-      <label>Kelvin <input aria-label="Kelvin" inputmode="numeric" value={session.kelvin} oninput={(event) => session.setKelvinValue((event.target as HTMLInputElement).value)} /></label>
+      <label
+        ><input
+          type="radio"
+          name="mode"
+          checked={!session.kelvinOn}
+          onchange={() => session.setKelvinMode(false)}
+        /> RGB</label
+      >
+      <label
+        ><input
+          type="radio"
+          name="mode"
+          aria-label="Kelvin mode"
+          checked={session.kelvinOn}
+          onchange={() => session.setKelvinMode(true)}
+        /> Kelvin mode</label
+      >
+      <label
+        >Kelvin <input
+          aria-label="Kelvin"
+          inputmode="numeric"
+          value={session.kelvin}
+          oninput={(event) => session.setKelvinValue((event.target as HTMLInputElement).value)}
+        /></label
+      >
       {#if session.kelvinError}<p>{session.kelvinError}</p>{/if}
       <p>Interpolation</p>
       <label><input type="radio" name="interpolation" checked /> Step</label>
       <label><input type="radio" name="interpolation" /> Linear</label>
       {#if session.activeChannelId}
-        <label>Spatial <input aria-label="Spatial" value={session.channels.find((channel) => channel.id === session.activeChannelId)?.spatialHint ?? ''} /></label>
+        <label
+          >Spatial <input
+            aria-label="Spatial"
+            value={session.channels.find((channel) => channel.id === session.activeChannelId)
+              ?.spatialHint ?? ''}
+          /></label
+        >
         <p>Does not change plugin playback</p>
       {/if}
       <div data-color-history>
         {#each session.historyColors as swatch, index (index)}
-          <button type="button" style="background: {swatch}" aria-label="Color history {index + 1}"></button>
+          <button type="button" style="background: {swatch}" aria-label="Color history {index + 1}"
+          ></button>
         {/each}
       </div>
-      <p>{session.activeChannelId ?? 'channel'} {Math.floor(session.playheadMs / 60000)}:{String(Math.floor(session.playheadMs / 1000) % 60).padStart(2, '0')}</p>
+      <p>
+        {session.activeChannelId ?? 'channel'}
+        {Math.floor(session.playheadMs / 60000)}:{String(
+          Math.floor(session.playheadMs / 1000) % 60
+        ).padStart(2, '0')}
+      </p>
       {#if safety.intense}<p>Intense</p>{/if}
       {#if safety.flashing}<p>Flashing</p>{/if}
       {#if session.importWarning}
@@ -375,7 +430,11 @@
       {/each}
       {#if session.menuChannel}
         <div role="menu">
-          <button type="button" role="menuitem" onclick={() => session.toggleMute(session.menuChannel!)}>Mute</button>
+          <button
+            type="button"
+            role="menuitem"
+            onclick={() => session.toggleMute(session.menuChannel!)}>Mute</button
+          >
         </div>
       {/if}
     </div>
@@ -395,7 +454,13 @@
       <button type="button" onclick={() => session.zoomFit()}>Zoom to fit</button>
       <span data-testid="px-per-ms">{session.pxPerMs}</span>
       <span>Snap</span>
-      <label>Minimum spacing <input aria-label="Minimum spacing" value={session.minSpacingMs} oninput={(event) => session.setSpacing((event.target as HTMLInputElement).value)} /></label>
+      <label
+        >Minimum spacing <input
+          aria-label="Minimum spacing"
+          value={session.minSpacingMs}
+          oninput={(event) => session.setSpacing((event.target as HTMLInputElement).value)}
+        /></label
+      >
       {#if session.spacingError}<span>{session.spacingError}</span>{/if}
       <button type="button" onclick={() => session.toggleSolo('left')}>Solo left</button>
       <button type="button" onclick={() => session.toggleMute('right')}>Mute right</button>
@@ -409,7 +474,13 @@
         <button type="button">Use bulbs for editing</button>
       {/if}
     </div>
-    <div class="minimap" data-minimap role="img" aria-label="Minimap" onclick={() => session.seek(session.durationMs() / 2)}></div>
+    <div
+      class="minimap"
+      data-minimap
+      role="img"
+      aria-label="Minimap"
+      onclick={() => session.seek(session.durationMs() / 2)}
+    ></div>
     {#if session.trackChoices.length > 1}
       <div class="choices">
         {#each session.trackChoices as choice (choice.trackId)}
@@ -425,7 +496,13 @@
           session.addChannelById(session.channelIdDraft);
         }}
       >
-        <label>id <input aria-label="id" value={session.channelIdDraft} oninput={(event) => (session.channelIdDraft = (event.target as HTMLInputElement).value)} /></label>
+        <label
+          >id <input
+            aria-label="id"
+            value={session.channelIdDraft}
+            oninput={(event) => (session.channelIdDraft = (event.target as HTMLInputElement).value)}
+          /></label
+        >
         <button type="submit">Add</button>
       </form>
     {/if}
@@ -463,17 +540,29 @@
     overflow: hidden;
     background: #0f0f1a;
     color: #e2e8f0;
-    font: 13px/1.3 system-ui, sans-serif;
+    font:
+      13px/1.3 system-ui,
+      sans-serif;
   }
-  .top, .zoom, .transport, .lanes {
+  .top,
+  .zoom,
+  .transport,
+  .lanes {
     display: flex;
     align-items: center;
     gap: 8px;
     min-width: 0;
   }
-  .top { padding: 0 8px; background: #141428; }
-  .spacer { flex: 1; }
-  button, input, select {
+  .top {
+    padding: 0 8px;
+    background: #141428;
+  }
+  .spacer {
+    flex: 1;
+  }
+  button,
+  input,
+  select {
     background: #1a1a2e;
     color: inherit;
     border: 1px solid #334155;
@@ -484,8 +573,16 @@
     min-height: 0;
     overflow: hidden;
   }
-  aside, .stage { min-width: 0; overflow: auto; }
-  .stage { display: flex; flex-direction: column; min-height: 0; }
+  aside,
+  .stage {
+    min-width: 0;
+    overflow: auto;
+  }
+  .stage {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
   .movie {
     position: relative;
     flex: 1;
@@ -495,17 +592,59 @@
     align-items: center;
     justify-content: center;
   }
-  video { max-width: 100%; max-height: 100%; object-fit: contain; }
-  .region { position: absolute; pointer-events: none; }
-  .SPATIAL_LEFT { top: 0; left: 0; width: 18%; height: 15%; }
-  .SPATIAL_RIGHT { top: 0; right: 0; width: 18%; height: 15%; }
-  .transport { padding: 4px 8px; }
-  .transport input[type='range'] { flex: 1; }
-  .clock { font-variant-numeric: tabular-nums; }
-  .timeline { display: flex; flex-direction: column; min-height: 0; background: #101022; }
-  canvas { width: 100%; height: 96px; display: block; }
-  .lane-label { width: 88px; height: 24px; }
-  .minimap { height: 48px; background: #1e293b; }
-  .props { padding: 8px; }
-  .file { display: block; }
+  video {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+  .region {
+    position: absolute;
+    pointer-events: none;
+  }
+  .SPATIAL_LEFT {
+    top: 0;
+    left: 0;
+    width: 18%;
+    height: 15%;
+  }
+  .SPATIAL_RIGHT {
+    top: 0;
+    right: 0;
+    width: 18%;
+    height: 15%;
+  }
+  .transport {
+    padding: 4px 8px;
+  }
+  .transport input[type='range'] {
+    flex: 1;
+  }
+  .clock {
+    font-variant-numeric: tabular-nums;
+  }
+  .timeline {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: #101022;
+  }
+  canvas {
+    width: 100%;
+    height: 96px;
+    display: block;
+  }
+  .lane-label {
+    width: 88px;
+    height: 24px;
+  }
+  .minimap {
+    height: 48px;
+    background: #1e293b;
+  }
+  .props {
+    padding: 8px;
+  }
+  .file {
+    display: block;
+  }
 </style>
