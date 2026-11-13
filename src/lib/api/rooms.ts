@@ -67,13 +67,13 @@ export async function loadSetup(): Promise<Setup> {
 }
 export const loadRooms = () => roomApi<Room[]>('Rooms');
 export const loadDevices = () => roomApi<EmbyDevice[]>('Devices');
-export async function loadCurrentUser(): Promise<{ id: string; name: string } | null> {
+export async function loadCurrentUser(): Promise<{ id?: string; name: string } | null> {
   const response = await fetch('/emby/Users/Me', { headers: authHeaders() });
   if (!response.ok) return null;
   const user = await response.json();
-  return typeof user?.Id === 'string'
-    ? { id: user.Id, name: typeof user.Name === 'string' ? user.Name : '' }
-    : null;
+  const id = typeof user?.Id === 'string' ? user.Id : undefined;
+  const name = typeof user?.Name === 'string' ? user.Name.trim() : '';
+  return id || name ? { id, name } : null;
 }
 export const loadBulbs = () => roomApi<RoomBulb[]>('Bulbs');
 export const discoverBulbs = () =>

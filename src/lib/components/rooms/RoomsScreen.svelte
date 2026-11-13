@@ -61,14 +61,20 @@
   );
   const assigned = $derived(new Set(placed.map((b) => b.id)));
   const unplaced = $derived(bulbs.filter((b) => !assigned.has(b.id)));
+  function belongsToCurrentUser(device: EmbyDevice): boolean {
+    if (!currentUser) return false;
+    const idMatches =
+      !!currentUser.id &&
+      device.lastUserId?.toLowerCase() === currentUser.id.toLowerCase();
+    const nameMatches =
+      !!currentUser.name &&
+      device.lastUserName?.trim().toLowerCase() === currentUser.name.toLowerCase();
+    return idMatches || nameMatches;
+  }
   const screenDevices = $derived(
     showAllDevices || !currentUser
       ? devices
-      : devices.filter(
-          (device) =>
-            device.lastUserId?.toLowerCase() === currentUser.id.toLowerCase() ||
-            device.roomId === selected
-        )
+      : devices.filter((device) => belongsToCurrentUser(device) || device.roomId === selected)
   );
   const positionsUsed = $derived(
     new Set(placed.map((b) => b.position).filter((p): p is Position => !!p))
@@ -451,7 +457,7 @@
         onclick={() => loadDevices().then((x) => (devices = x))}>Refresh</button
       >
     </div>
-    {#if currentUser && devices.some((device) => device.lastUserId && device.lastUserId.toLowerCase() !== currentUser.id.toLowerCase() && device.roomId !== selected)}
+    {#if currentUser && devices.some((device) => !belongsToCurrentUser(device) && (device.lastUserId || device.lastUserName) && device.roomId !== selected)}
       <label class="device-filter"><input type="checkbox" bind:checked={showAllDevices} /> Show devices last used by other users</label>
     {/if}
     <div class="columns">
