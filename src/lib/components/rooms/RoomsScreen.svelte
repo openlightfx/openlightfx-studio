@@ -64,8 +64,7 @@
   function belongsToCurrentUser(device: EmbyDevice): boolean {
     if (!currentUser) return false;
     const idMatches =
-      !!currentUser.id &&
-      device.lastUserId?.toLowerCase() === currentUser.id.toLowerCase();
+      !!currentUser.id && device.lastUserId?.toLowerCase() === currentUser.id.toLowerCase();
     const nameMatches =
       !!currentUser.name &&
       device.lastUserName?.trim().toLowerCase() === currentUser.name.toLowerCase();
@@ -320,7 +319,7 @@
       }
       if (
         error.includes('another room') &&
-        confirm('This screen or bulb belongs to another room. Move it here?')
+        confirm('A bulb belongs to another room. Move it here?')
       ) {
         try {
           const device = devices.find((d) => d.deviceId === screenId)!;
@@ -445,9 +444,18 @@
           disabled={setup?.isAdmin !== true}
           bind:value={screenId}
           onchange={() => (notice = 'Unsaved changes')}
-          ><option value="">{screenDevices.length ? 'Choose a device…' : 'No devices yet. Open Emby on the room’s TV once, then click Refresh.'}</option
-          >{#each screenDevices as device (device.deviceId)}<option value={device.deviceId}
-              >{device.name} · {device.appName}{device.lastUserName ? ` · ${device.lastUserName}` : ''}{lastSeen(device.lastActivity) ? ` · ${lastSeen(device.lastActivity)}` : ''}{device.roomId && device.roomId !== selected
+          ><option value=""
+            >{screenDevices.length
+              ? 'Choose a device…'
+              : 'No devices yet. Open Emby on the room’s TV once, then click Refresh.'}</option
+          >{#each screenDevices as device (device.deviceId)}<option
+              value={device.deviceId}
+              disabled={!!device.roomId && device.roomId !== selected}
+              >{device.name} · {device.appName}{device.lastUserName
+                ? ` · ${device.lastUserName}`
+                : ''}{lastSeen(device.lastActivity)
+                ? ` · ${lastSeen(device.lastActivity)}`
+                : ''}{device.roomId && device.roomId !== selected
                 ? ` · In ${device.roomName ?? 'another room'}`
                 : ''}</option
             >{/each}</select
@@ -458,7 +466,9 @@
       >
     </div>
     {#if currentUser && devices.some((device) => !belongsToCurrentUser(device) && (device.lastUserId || device.lastUserName) && device.roomId !== selected)}
-      <label class="device-filter"><input type="checkbox" bind:checked={showAllDevices} /> Show devices last used by other users</label>
+      <label class="device-filter"
+        ><input type="checkbox" bind:checked={showAllDevices} /> Show devices last used by other users</label
+      >
     {/if}
     <div class="columns">
       <div class="diagram-area">
@@ -557,7 +567,7 @@
           be moved here.
         </p>
         {#if unplaced.length === 0}<p class="empty">
-            No bulbs found yet. Find bulbs searches your network for WiZ, LIFX, Govee and Hue.
+            No bulbs found yet. Find bulbs searches your network for WiZ, LIFX, and Govee.
           </p>{/if}{#each unplaced as bulb (bulb.id)}<div
             class="bulb"
             role="listitem"
@@ -576,7 +586,9 @@
                   : ''}</small
               ></span
             ><span>
-              {#if identifyFailure?.id === bulb.id}<small role="status">{identifyFailure.message}</small>{/if}
+              {#if identifyFailure?.id === bulb.id}<small role="status"
+                  >{identifyFailure.message}</small
+                >{/if}
               <button
                 disabled={identifying === bulb.id || setup?.isAdmin !== true}
                 onclick={() => identify(bulb.id)}

@@ -2265,15 +2265,16 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 - **Layer:** L1
 - **Status:** approved
 - **Tests:** browser, fullstack
-- **Statement:** The screen picker lists every device Emby has seen, newest first, and marks devices other rooms use.
+- **Statement:** The screen picker defaults to devices last used by the current Emby user, newest first; it can show other users' devices, and prevents assigning a screen to multiple rooms.
 
 **Acceptance:**
 
-- Given Emby has seen devices A (1 h ago) and B (1 day ago, used by Bedroom)
+- Given Emby has seen device A (1 h ago, last used by the current user) and device B (1 day ago, last used by another user and assigned to Bedroom)
 - When the screen picker opens
-- Then it lists A, then B, and B reads "In Bedroom"
-- When B is picked and confirmed
-- Then B is saved in this room and removed from Bedroom
+- Then it shows A and omits B
+- When "Show devices last used by other users" is checked
+- Then B appears as "In Bedroom" and is disabled
+- Then B cannot be assigned to Living Room while it belongs to Bedroom
 
 #### ROOM-003 Discover bulbs
 
@@ -2365,19 +2366,6 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 - Given Living Room with 2 bulbs
 - When Delete room is confirmed
 - Then the room is gone and both bulbs are listed as unplaced
-
-#### ROOM-010 Hue pairing
-
-- **Layer:** L1
-- **Status:** approved
-- **Tests:** fullstack
-- **Statement:** A discovered Hue bridge pairs from the Rooms screen and its lights join the list.
-
-**Acceptance:**
-
-- Given the simulator's Hue bridge
-- When Pair is clicked after its link button is pressed
-- Then its lights appear as bulbs, and no response to the browser contains the bridge key
 
 #### ROOM-012 Room errors are specific
 

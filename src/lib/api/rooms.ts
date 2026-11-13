@@ -79,7 +79,6 @@ export const loadBulbs = () => roomApi<RoomBulb[]>('Bulbs');
 export const discoverBulbs = () =>
   roomApi<{
     bulbs: RoomBulb[];
-    hueBridges: { bridgeId: string; ip: string; paired: boolean }[];
     foundCount: number;
   }>('Discover', { method: 'POST', body: '{}' });
 export const identifyBulb = (id: string) =>
