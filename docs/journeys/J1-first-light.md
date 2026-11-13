@@ -2,7 +2,7 @@
 
 **Status:** draft for owner review. Nothing in this document is approved, and no code is written against it until it is.
 
-**Wireframes:** [docs/journeys/wireframes/](wireframes/). **Plugin API:** [openlightfx-emby `docs/design/rooms-api.md`](https://github.com/openlightfx/openlightfx-emby/blob/design/first-journey/docs/design/rooms-api.md). **Agent guide:** [AGENTS.md](../../AGENTS.md).
+**Wireframes:** [docs/journeys/wireframes/](wireframes/). **Plugin API:** [openlightfx-emby `docs/design/rooms-api.md`](https://github.com/openlightfx/openlightfx-emby/blob/main/docs/design/rooms-api.md). **Agent guide:** [AGENTS.md](../../AGENTS.md).
 
 ## Why this document exists
 
@@ -719,7 +719,7 @@ Format: ID, title, layer (all L1), status (all `proposed`), a one-line statement
 | PREV-004           | Channel-to-bulb mapping is replaced by room routing.                     | MODEL-003, MODEL-004, EDIT-004                                                                                     |
 | PREV-005           | Mapping profiles are retired.                                            | ROOM-011, WATCH-002                                                                                                |
 | PREV-009           | "No bulbs" becomes the no-room banner.                                   | EDIT-010                                                                                                           |
-| PLUG-006           | The plugin route list is replaced by the rooms API.                      | [rooms-api.md](https://github.com/openlightfx/openlightfx-emby/blob/design/first-journey/docs/design/rooms-api.md) |
+| PLUG-006           | The plugin route list is replaced by the rooms API.                      | [rooms-api.md](https://github.com/openlightfx/openlightfx-emby/blob/main/docs/design/rooms-api.md) |
 
 **Untouched, outside J1 (L2/L3).** SHELL-007 to SHELL-009, TIME-008, TIME-009, TIME-012, TIME-013, KEY-015, FX-001 to FX-003, FX-005, CHAN-007, KEYB-004, PREV-011.
 
@@ -756,7 +756,7 @@ Rooms, bulbs, positions, and Follows overrides are not in the track format. They
 
 ## Plugin API summary
 
-Full design, storage, and code mapping: [openlightfx-emby `docs/design/rooms-api.md`](https://github.com/openlightfx/openlightfx-emby/blob/design/first-journey/docs/design/rooms-api.md). All routes are under `/emby`, use the existing Studio authentication, and require the Emby Admin role for writes.
+Full design, storage, and code mapping: [openlightfx-emby `docs/design/rooms-api.md`](https://github.com/openlightfx/openlightfx-emby/blob/main/docs/design/rooms-api.md). All routes are under `/emby`, use the existing Studio authentication, and require the Emby Admin role for writes.
 
 | Method and route                                          | Used by       | Purpose                                                                             |
 | --------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------- |
