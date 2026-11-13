@@ -32,13 +32,13 @@ import {
 import {
   bytesAsBuffer,
   fetchBulbs,
+  fetchFrame,
   fetchItems,
   fetchMediaInfo,
   restartProxy,
   fetchSettings,
   fetchTrackBytes,
   fetchTracks,
-  frameUrl,
   postJson,
   putBytes,
   putJson,
@@ -777,7 +777,7 @@ export class StudioSession {
       return;
     }
     try {
-      const response = await fetch(frameUrl(this.item.itemId, this.playheadMs));
+      const response = await fetchFrame(this.item.itemId, this.playheadMs);
       if (!response.ok) {
         this.status = 'The frame could not be sampled';
         return;

@@ -15,15 +15,123 @@ export function bytesAsBuffer(bytes: Uint8Array): ArrayBuffer {
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
 
+interface EmbyStoredUser {
+  UserId?: string;
+  AccessToken?: string;
+}
+
+interface EmbyStoredServer {
+  UserId?: string;
+  ManualAddress?: string;
+  LocalAddress?: string;
+  RemoteAddress?: string;
+  Users?: EmbyStoredUser[];
+}
+
+interface EmbyStoredCredentials {
+  Servers?: EmbyStoredServer[];
+}
+
+function embyTokenFromSession(): string | null {
+  if (typeof window === 'undefined') return null;
+
+  // When Studio is opened from Emby, use its active API client if the Web app exposes it.
+  const apiClient = (window as Window & { ApiClient?: { accessToken?: () => string } }).ApiClient;
+  const activeToken = apiClient?.accessToken?.();
+  if (activeToken) return activeToken;
+
+  // Emby Web 4.9 stores signed-in server credentials under this key. Studio shares the
+  // server origin, so it can select only the credential for the Emby instance serving it.
+  try {
+    const stored = window.localStorage.getItem('servercredentials3');
+    if (!stored) return null;
+    const credentials = JSON.parse(stored) as EmbyStoredCredentials;
+    const currentUrl = new URL(window.location.href);
+    const server = (credentials.Servers ?? [])
+      .map((candidate) => {
+        const matchingAddress = [
+          candidate.ManualAddress,
+          candidate.LocalAddress,
+          candidate.RemoteAddress,
+        ]
+          .filter((address): address is string => !!address)
+          .map((address) => {
+            try {
+              const url = new URL(address);
+              const pathBase = url.pathname.replace(/\/$/, '');
+              const pathMatches =
+                !pathBase ||
+                currentUrl.pathname === pathBase ||
+                currentUrl.pathname.startsWith(`${pathBase}/`);
+              return url.origin === currentUrl.origin && pathMatches ? pathBase.length : -1;
+            } catch {
+              return -1;
+            }
+          })
+          .reduce((longest, length) => Math.max(longest, length), -1);
+        return { candidate, matchingAddress };
+      })
+      .filter(({ matchingAddress }) => matchingAddress >= 0)
+      .sort((a, b) => b.matchingAddress - a.matchingAddress)[0]?.candidate;
+    if (!server?.UserId) return null;
+    return server.Users?.find((user) => user.UserId === server.UserId)?.AccessToken ?? null;
+  } catch {
+    // Storage can be unavailable in private browsing; normal Emby URL-token auth still works.
+    return null;
+  }
+}
+
 export function authHeaders(): Record<string, string> {
-  const key = new URLSearchParams(location.search).get('api_key');
+  const key = new URLSearchParams(location.search).get('api_key') ?? embyTokenFromSession();
+  return key ? { 'X-Emby-Token': key } : {};
+}
+
+let studioToken: string | null | undefined;
+let studioTokenRequest: Promise<string | null> | null = null;
+
+async function resolveStudioToken(): Promise<string | null> {
+  if (studioToken !== undefined) return studioToken;
+  if (studioTokenRequest) return studioTokenRequest;
+
+  studioTokenRequest = (async () => {
+    const explicitHeaders = authHeaders();
+    const requestSession = (headers: Record<string, string>) =>
+      fetch('/OpenLightFX/Studio/Session', {
+        headers,
+        credentials: 'same-origin',
+        cache: 'no-store',
+      });
+
+    try {
+      let response = await requestSession(explicitHeaders);
+      if (!response.ok && Object.keys(explicitHeaders).length > 0) {
+        // If Emby rotated its login token, the page's HttpOnly ticket may still be valid.
+        response = await requestSession({});
+      }
+      if (response.ok) {
+        const body = (await response.json()) as { accessToken?: string };
+        if (body.accessToken) return body.accessToken;
+      }
+    } catch {
+      // Older plugin builds may not provide the session exchange route.
+    }
+
+    return explicitHeaders['X-Emby-Token'] ?? null;
+  })();
+  studioToken = await studioTokenRequest;
+  studioTokenRequest = null;
+  return studioToken;
+}
+
+export async function studioAuthHeaders(): Promise<Record<string, string>> {
+  const key = await resolveStudioToken();
   return key ? { 'X-Emby-Token': key } : {};
 }
 
 async function send(path: string, init: RequestInit = {}): Promise<Response> {
   return fetch(path, {
     ...init,
-    headers: { ...authHeaders(), ...(init.headers ?? {}) },
+    headers: { ...(await studioAuthHeaders()), ...(init.headers ?? {}) },
   });
 }
 
@@ -117,6 +225,8 @@ export async function postJson(path: string, body: unknown): Promise<Response> {
   });
 }
 
-export function frameUrl(itemId: string, timeMs: number): string {
-  return `/OpenLightFX/Studio/Items/${encodeURIComponent(itemId)}/Frame?timeMs=${Math.round(timeMs)}`;
+export function fetchFrame(itemId: string, timeMs: number): Promise<Response> {
+  return send(
+    `/OpenLightFX/Studio/Items/${encodeURIComponent(itemId)}/Frame?timeMs=${Math.round(timeMs)}`
+  );
 }

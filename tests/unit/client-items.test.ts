@@ -10,8 +10,9 @@ it('LIB-001 @unit item listing follows every API page', async () => {
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input), 'http://studio.test');
-      requests.push(url.searchParams.get('startIndex') ?? '');
-      const startIndex = Number(url.searchParams.get('startIndex'));
+      const startIndexParam = url.searchParams.get('startIndex');
+      if (startIndexParam !== null) requests.push(startIndexParam);
+      const startIndex = Number(startIndexParam);
       const items =
         startIndex === 0
           ? Array.from({ length: 200 }, (_, index) => ({

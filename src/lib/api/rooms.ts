@@ -1,4 +1,4 @@
-import { authHeaders } from './client';
+import { studioAuthHeaders } from './client';
 
 export const positions = [
   'left',
@@ -45,7 +45,11 @@ export interface Setup {
 export async function roomApi<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`/OpenLightFX/Studio/${path}`, {
     ...init,
-    headers: { ...authHeaders(), 'content-type': 'application/json', ...(init.headers ?? {}) },
+    headers: {
+      ...(await studioAuthHeaders()),
+      'content-type': 'application/json',
+      ...(init.headers ?? {}),
+    },
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
@@ -57,7 +61,7 @@ export async function roomApi<T>(path: string, init: RequestInit = {}): Promise<
 export async function loadSetup(): Promise<Setup> {
   const setup = await roomApi<{ roomCount: number }>('Setup');
   const response = await fetch('/OpenLightFX/Studio/CanManageRooms', {
-    headers: authHeaders(),
+    headers: await studioAuthHeaders(),
   });
   if (response.status === 401 || response.status === 403) {
     return { ...setup, isAdmin: false };

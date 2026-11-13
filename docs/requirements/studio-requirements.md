@@ -2219,15 +2219,18 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 - When Studio loads
 - Then the editor for `m1`/`t1` is open
 
-#### FLOW-003 Routes keep the API key and survive reload
+#### FLOW-003 Routes preserve authentication and survive reload
 
 - **Layer:** L1
 - **Status:** approved
-- **Tests:** browser
-- **Statement:** Every screen is a hash route that keeps the `?api_key=` query and restores on reload.
+- **Tests:** fullstack
+- **Statement:** Studio obtains its active Emby session through `/OpenLightFX/Studio/Session` when no `api_key` is present, and every screen is a hash route that preserves any existing query string and restores on reload.
 
 **Acceptance:**
 
+- Given Studio is opened from Emby at `…/studio/#/rooms` with no `api_key` and Emby Web has a saved credential for this server
+- When Studio requests its session
+- Then it sends that credential to `/OpenLightFX/Studio/Session`, receives the active token without exposing it in a URL or persistent Studio storage, sends it in `X-Emby-Token`, and loads the Rooms screen
 - Given `…/studio/?api_key=K#/movie/m1`
 - When the page reloads or Back is pressed
 - Then the query is unchanged and the screen matches the route

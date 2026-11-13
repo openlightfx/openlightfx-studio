@@ -196,6 +196,48 @@ requirement(
   }
 );
 
+requirement(
+  'FLOW-003 @fullstack Studio authenticates from Emby Web without a URL token',
+  async ({ page }) => {
+    await page.addInitScript(
+      ({ serverAddress, accessToken }) => {
+        localStorage.setItem(
+          'servercredentials3',
+          JSON.stringify({
+            Servers: [
+              {
+                Id: 'openlightfx-fullstack',
+                UserId: 'fullstack-admin',
+                ManualAddress: serverAddress,
+                Users: [{ UserId: 'fullstack-admin', AccessToken: accessToken }],
+              },
+            ],
+          })
+        );
+      },
+      { serverAddress: emby(), accessToken: token() }
+    );
+
+    let tokenOnSessionRequest: string | undefined;
+    let tokenOnSetupRequest: string | undefined;
+    page.on('request', (request) => {
+      if (request.url().includes('/OpenLightFX/Studio/Session')) {
+        tokenOnSessionRequest = request.headers()['x-emby-token'];
+      }
+      if (request.url().includes('/OpenLightFX/Studio/Setup')) {
+        tokenOnSetupRequest = request.headers()['x-emby-token'];
+      }
+    });
+
+    const response = await page.goto(`${emby()}/emby/OpenLightFX/studio/#/rooms`);
+    expect(response?.status()).toBeLessThan(400);
+    await expect(page.getByRole('button', { name: /Fullstack Room/ })).toBeVisible();
+    expect(tokenOnSessionRequest).toBe(token());
+    expect(tokenOnSetupRequest).toBe(token());
+    expect(new URL(page.url()).searchParams.has('api_key')).toBe(false);
+  }
+);
+
 requirement('MEDIA-001 @fullstack items search returns movies', async ({ request }) => {
   const body = await (
     await request.get(`${emby()}/OpenLightFX/Studio/Items?search=clip`, {

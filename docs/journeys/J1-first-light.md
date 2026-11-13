@@ -121,7 +121,7 @@ Existing tracks have no layout field and often use UUID channel ids. The owner's
 
 ## Screens and navigation
 
-Studio is one page at `/emby/OpenLightFX/studio/`. Screens are hash routes so the plugin's static host needs no fallback rules and the `?api_key=` query (how the plugin authenticates Studio today) survives every navigation and reload.
+Studio is one page at `/emby/OpenLightFX/studio/`. Its static shell contains no user data and can load without a token. When opened from Emby, Studio reads the current Emby Web server credential from same-origin `servercredentials3` storage, exchanges it through `GET /OpenLightFX/Studio/Session`, keeps the returned token in memory, and sends it in `X-Emby-Token`; the person never has to add a token to the URL. The session endpoint can also redeem a short-lived HttpOnly page ticket. `?api_key=` remains supported for direct/legacy links. Screens are hash routes, and any existing query string survives navigation and reload.
 
 | Route                                  | Screen                       | Wireframe                                                              |
 | -------------------------------------- | ---------------------------- | ---------------------------------------------------------------------- |
@@ -418,11 +418,11 @@ Format: ID, title, layer (all L1), status (all `approved`), a one-line statement
 - **Acceptance:** Given one room and a last route `#/edit/m1/t1`, when Studio loads, then the editor for `m1`/`t1` is open.
 - **Tests:** browser
 
-#### FLOW-003 Routes keep the API key and survive reload
+#### FLOW-003 Routes preserve authentication and survive reload
 
-- **Statement:** Every screen is a hash route that keeps the `?api_key=` query and restores on reload.
-- **Acceptance:** Given `…/studio/?api_key=K#/movie/m1`, when the page reloads or Back is pressed, then the query is unchanged and the screen matches the route.
-- **Tests:** browser
+- **Statement:** Studio obtains its active Emby session through `/OpenLightFX/Studio/Session` when no `api_key` is present, and every screen is a hash route that preserves any existing query string and restores on reload.
+- **Acceptance:** Given Studio is opened from Emby at `…/studio/#/rooms` with no `api_key` and Emby Web has a saved credential for this server, when Studio requests its session, then it sends that credential to `/OpenLightFX/Studio/Session`, receives the active token without exposing it in a URL or persistent Studio storage, sends it in `X-Emby-Token`, and loads the Rooms screen. Given `…/studio/?api_key=K#/movie/m1`, when the page reloads or Back is pressed, then the query is unchanged and the screen matches the route.
+- **Tests:** fullstack
 
 #### FLOW-004 Header navigation
 
