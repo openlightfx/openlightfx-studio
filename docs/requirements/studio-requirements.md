@@ -187,6 +187,23 @@ On-demand, not CI. Characteristics, not a title: about 25 GB, 4K, HEVC 10-bit, H
 - When save succeeds
 - Then the unsaved state clears
 
+#### SHELL-010 An empty studio explains how to start
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser
+- **Statement:** With no movie open, Studio tells the user how to pick a movie, add a keyframe, map bulbs, and save.
+
+**Acceptance:**
+
+- Given no movie is selected
+- When the shell renders
+- Then a guide says to pick a movie, add a channel, click the timeline to add a keyframe, map bulbs, and save
+- Then the timeline shows a time ruler
+- Given a movie is open
+- When the editor renders
+- Then the library row shows the movie title and a poster, and the timeline ruler is still visible
+
 #### SHELL-007 Command palette
 
 - **Layer:** L2
@@ -256,6 +273,9 @@ On-demand, not CI. Characteristics, not a title: about 25 GB, 4K, HEVC 10-bit, H
 - Then the UI says the list is capped and that search narrows it
 - When the user types a search of at least one character
 - Then Studio calls Items with that search and replaces the list
+- Given an item whose JSON uses Emby fields `Name` and `ProductionYear`
+- When the library renders
+- Then the visible row shows that title and year, plus a poster image, and does not show the year alone or the word movie in place of a title
 
 #### MEDIA-002 Duration comes from the selected movie
 
@@ -2332,7 +2352,7 @@ These requirements are changes or guarantees the Emby plugin must provide. Studi
 
 | Area                       | Prefix |      L1 |     L2 |    L3 |   Total |
 | -------------------------- | ------ | ------: | -----: | ----: | ------: |
-| App shell and navigation   | SHELL  |       6 |      3 |     0 |       9 |
+| App shell and navigation   | SHELL  |       7 |      3 |     0 |      10 |
 | Media loading and playback | MEDIA  |      17 |      0 |     0 |      17 |
 | Timeline view              | TIME   |      11 |      2 |     0 |      13 |
 | Keyframe editing           | KEY    |      14 |      1 |     0 |      15 |
@@ -2349,7 +2369,7 @@ These requirements are changes or guarantees the Emby plugin must provide. Studi
 | Accessibility and input    | A11Y   |       3 |      1 |     0 |       4 |
 | Error handling             | ERR    |       7 |      0 |     0 |       7 |
 | Plugin contract            | PLUG   |       6 |      0 |     0 |       6 |
-| **Total**                  |        | **115** | **16** | **2** | **133** |
+| **Total**                  |        | **116** | **16** | **2** | **134** |
 
 The checker recomputes this table from the headings. Do not keep a second list.
 

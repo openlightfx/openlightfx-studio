@@ -3,6 +3,7 @@ export interface LibraryItem {
   name: string;
   year: number;
   runtimeMs: number;
+  posterUrl?: string;
 }
 
 export interface ProxyInfo {
