@@ -1,0 +1,198 @@
+/* Low-fidelity wireframe styles: grey boxes, real labels, no polish. */
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  width: 1280px;
+  height: 800px;
+  overflow: hidden;
+}
+body {
+  font:
+    13px/1.35 Arial,
+    Helvetica,
+    sans-serif;
+  color: #222;
+  background: #fff;
+}
+.wf-label {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  font-size: 11px;
+  color: #888;
+}
+header.app {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 16px;
+  border-bottom: 2px solid #999;
+  background: #eee;
+}
+header.app .brand {
+  font-weight: bold;
+  font-size: 15px;
+}
+header.app a {
+  color: #222;
+  text-decoration: none;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+}
+header.app a.current {
+  border: 1px solid #555;
+  background: #fff;
+  font-weight: bold;
+}
+header.app .spacer {
+  flex: 1;
+}
+.box {
+  border: 1px solid #888;
+  background: #f4f4f4;
+}
+.box.white {
+  background: #fff;
+}
+.dash {
+  border: 1px dashed #888;
+}
+.btn {
+  display: inline-block;
+  border: 1px solid #555;
+  background: #fff;
+  padding: 4px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.btn.primary {
+  background: #444;
+  color: #fff;
+  border-color: #222;
+  font-weight: bold;
+}
+.btn.disabled {
+  color: #aaa;
+  border-color: #bbb;
+  background: #f6f6f6;
+}
+.btn.small {
+  padding: 2px 6px;
+  font-size: 11px;
+}
+.field {
+  display: inline-block;
+  border: 1px solid #777;
+  background: #fff;
+  padding: 4px 8px;
+  min-width: 160px;
+  font-size: 12px;
+}
+.lbl {
+  font-size: 11px;
+  color: #555;
+  display: block;
+  margin-bottom: 2px;
+}
+.muted {
+  color: #777;
+}
+.note {
+  background: #fffbe0;
+  border: 1px solid #c9b200;
+  padding: 8px 12px;
+}
+.banner {
+  background: #e8e8e8;
+  border: 1px solid #888;
+  padding: 8px 12px;
+}
+.chip {
+  display: inline-block;
+  border: 1px solid #555;
+  background: #fff;
+  padding: 2px 6px;
+  margin: 2px;
+  font-size: 11px;
+  border-radius: 3px;
+}
+.h {
+  font-weight: bold;
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+.h2 {
+  font-weight: bold;
+  font-size: 18px;
+  margin: 0 0 6px;
+}
+.row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.abs {
+  position: absolute;
+}
+.callout {
+  position: absolute;
+  background: #222;
+  color: #fff;
+  font-size: 11px;
+  padding: 3px 6px;
+  border-radius: 3px;
+}
+table.t {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+table.t td,
+table.t th {
+  border-bottom: 1px solid #ccc;
+  padding: 5px 6px;
+  text-align: left;
+}
+table.t th {
+  background: #e6e6e6;
+}
+.poster {
+  background: #ccc;
+  border: 1px solid #888;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  font-size: 11px;
+}
+.menu {
+  position: absolute;
+  background: #fff;
+  border: 1px solid #333;
+  box-shadow: 3px 3px 0 #bbb;
+  font-size: 12px;
+  z-index: 5;
+}
+.menu div {
+  padding: 4px 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 30px;
+}
+.menu div.sep {
+  border-top: 1px solid #ccc;
+  padding: 0;
+  margin: 3px 0;
+}
+.menu div.dis {
+  color: #aaa;
+}

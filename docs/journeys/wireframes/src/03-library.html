@@ -1,0 +1,118 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="wf.css" />
+    <title>03 Library</title>
+    <style>
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(7, 160px);
+        gap: 16px 14px;
+      }
+      .card .poster {
+        width: 160px;
+        height: 236px;
+      }
+      .card .t {
+        font-weight: bold;
+        margin-top: 4px;
+      }
+      .badge {
+        display: inline-block;
+        border: 1px solid #666;
+        padding: 0 4px;
+        font-size: 10px;
+        margin-top: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="app">
+      <span class="brand">OpenLightFX Studio</span><a>Rooms</a><a class="current">Library</a
+      ><span class="spacer"></span><span class="muted">jonflix (Emby 4.9)</span><a>Help</a>
+    </header>
+    <div class="abs" style="left: 24px; top: 60px; right: 24px">
+      <div class="row" style="justify-content: space-between; margin-bottom: 14px">
+        <div class="row">
+          <span class="h2" style="margin: 0 14px 0 0">Movies</span
+          ><span class="field" style="min-width: 380px">🔍 Search movies…</span>
+        </div>
+        <div class="row">
+          <span class="lbl" style="margin: 0">Sort</span
+          ><span class="field" style="min-width: 150px">Title A–Z ▾</span>
+        </div>
+      </div>
+      <div class="grid">
+        <div class="card">
+          <div class="poster">poster</div>
+          <div class="t">John Wick</div>
+          <div class="muted">2014</div>
+          <span class="badge">2 tracks · 1 plays in Emby</span>
+        </div>
+        <div class="card">
+          <div class="poster">poster</div>
+          <div class="t">Blade Runner 2049</div>
+          <div class="muted">2017</div>
+          <span class="badge">1 track</span>
+        </div>
+        <div class="card">
+          <div class="poster">poster</div>
+          <div class="t">Dune: Part Two</div>
+          <div class="muted">2024</div>
+          <span class="badge">No track</span>
+        </div>
+        <div class="card">
+          <div
+            class="poster"
+            style="
+              font-size: 16px;
+              font-weight: bold;
+              color: #333;
+              text-align: center;
+              padding: 8px;
+            "
+          >
+            Home Movie 2019
+          </div>
+          <div class="t">Home Movie 2019</div>
+          <div class="muted">2019 · no poster in Emby</div>
+          <span class="badge">No track</span>
+        </div>
+        <div class="card">
+          <div class="poster">poster</div>
+          <div class="t">Mad Max: Fury Road</div>
+          <div class="muted">2015</div>
+          <span class="badge">No track</span>
+        </div>
+        <div class="card">
+          <div class="poster">poster</div>
+          <div class="t">The Matrix</div>
+          <div class="muted">1999</div>
+          <span class="badge">1 track · plays in Emby</span>
+        </div>
+        <div class="card">
+          <div class="poster">poster</div>
+          <div class="t">Oppenheimer</div>
+          <div class="muted">2023</div>
+          <span class="badge">No track</span>
+        </div>
+        <div class="card"><div class="poster" style="background: #e3e3e3"></div></div>
+        <div class="card"><div class="poster" style="background: #e3e3e3"></div></div>
+        <div class="card"><div class="poster" style="background: #e3e3e3"></div></div>
+      </div>
+    </div>
+    <div class="callout" style="left: 540px; top: 98px">
+      Filters by title as you type (server-side). Movies only, no TV.
+    </div>
+    <div class="callout" style="left: 26px; top: 420px">
+      Click a poster (or Tab + Enter) → that movie's tracks
+    </div>
+    <div class="callout" style="left: 700px; top: 700px">
+      Grey cards = still loading (no spinner over a blank page)
+    </div>
+    <div class="wf-label">
+      03 — Library (a room exists, so no no-room strip) · J1 Step 2 · LIB-001…004
+    </div>
+  </body>
+</html>

@@ -1,0 +1,175 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="wf.css" />
+    <title>04 Track open/create</title>
+    <style>
+      .lay {
+        width: 150px;
+        height: 150px;
+        border: 1px solid #777;
+        background: #fff;
+        padding: 6px;
+        font-size: 11px;
+        position: relative;
+      }
+      .lay.sel {
+        border: 3px solid #222;
+      }
+      .mini {
+        position: absolute;
+        left: 30px;
+        top: 40px;
+        width: 90px;
+        height: 70px;
+        border: 1px solid #999;
+      }
+      .mini i {
+        position: absolute;
+        width: 10px;
+        height: 10px;
+        border-radius: 5px;
+        background: #666;
+      }
+      .mini s {
+        position: absolute;
+        left: 25px;
+        top: 2px;
+        width: 40px;
+        height: 6px;
+        background: #444;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="app">
+      <span class="brand">OpenLightFX Studio</span><a>Rooms</a><a class="current">Library</a
+      ><span class="spacer"></span><span class="muted">jonflix (Emby 4.9)</span><a>Help</a>
+    </header>
+    <div class="abs" style="left: 24px; top: 58px; right: 24px">
+      <a class="btn small">← Library</a>
+      <div class="row" style="align-items: flex-start; margin-top: 10px; gap: 18px">
+        <div class="poster" style="width: 120px; height: 178px">poster</div>
+        <div>
+          <div class="h2">John Wick</div>
+          <div class="muted">2014 · 1 h 41 min · IMDb tt2911666</div>
+        </div>
+      </div>
+    </div>
+    <div
+      class="abs box white"
+      style="left: 24px; top: 290px; width: 560px; height: 440px; padding: 12px"
+    >
+      <div class="h">Tracks for this movie</div>
+      <table class="t">
+        <tr>
+          <th>Title</th>
+          <th>Layout</th>
+          <th>Author</th>
+          <th>Last saved</th>
+          <th></th>
+        </tr>
+        <tr>
+          <td><b>John Wick lighting</b> <span class="chip">Plays in Emby</span></td>
+          <td>5.0*</td>
+          <td>Jon</td>
+          <td>Nov 12, 9:41 PM</td>
+          <td><span class="btn small primary">Open</span></td>
+        </tr>
+        <tr>
+          <td>John Wick — subtle</td>
+          <td>2.0</td>
+          <td>Jon</td>
+          <td>Nov 2, 7:15 PM</td>
+          <td><span class="btn small">Open</span></td>
+        </tr>
+        <tr>
+          <td class="muted">jw-old.lightfx</td>
+          <td>—</td>
+          <td>—</td>
+          <td>Oct 3</td>
+          <td class="muted" style="font-size: 11px">
+            Can't open: V-004 keyframe references unknown channel
+          </td>
+        </tr>
+      </table>
+      <div class="muted" style="font-size: 11px; margin-top: 6px">
+        * No layout in file; read as 5.0 from its channels (L, R, SL, SR). Gains an empty Center
+        lane on first save.
+      </div>
+      <div style="margin-top: 22px; border-top: 1px solid #ccc; padding-top: 10px">
+        <div class="h">Other ways to start</div>
+        <span class="btn">Open a .lightfx file…</span>
+        <div class="muted" style="margin-top: 10px">
+          Marketplace: browse tracks others have made — coming later.
+        </div>
+      </div>
+    </div>
+    <div
+      class="abs box"
+      style="left: 604px; top: 290px; width: 652px; height: 440px; padding: 12px"
+    >
+      <div class="h">New track</div>
+      <span class="lbl">Title</span
+      ><span class="field" style="min-width: 360px">John Wick lighting 2</span>
+      <div class="row" style="margin-top: 12px; justify-content: space-between">
+        <span class="lbl" style="margin: 0">Layout</span
+        ><span
+          ><span class="lbl" style="display: inline">For room</span>
+          <span class="field" style="min-width: 140px">Living Room ▾</span></span
+        >
+      </div>
+      <div class="row" style="gap: 8px; margin-top: 6px">
+        <div class="lay">
+          <b>Ambient</b><br />1 channel: Ambient
+          <div class="mini">
+            <s></s
+            ><i style="left: 40px; top: 30px; width: 14px; height: 14px; border-radius: 7px"></i>
+          </div>
+          <div class="abs muted" style="bottom: 4px; left: 6px; right: 6px">
+            Every bulb plays it
+          </div>
+        </div>
+        <div class="lay">
+          <b>2.0</b><br />Left · Right
+          <div class="mini">
+            <s></s><i style="left: 6px; top: 12px"></i><i style="left: 74px; top: 12px"></i>
+          </div>
+          <div class="abs muted" style="bottom: 4px; left: 6px; right: 6px">
+            Center bulb fills from L+R
+          </div>
+        </div>
+        <div class="lay sel">
+          <b>3.0</b> ✔<br />Left · Center · Right
+          <div class="mini">
+            <s></s><i style="left: 6px; top: 12px"></i><i style="left: 40px; top: 12px"></i
+            ><i style="left: 74px; top: 12px"></i>
+          </div>
+          <div class="abs" style="bottom: 4px; left: 6px; right: 6px">
+            <b>Suggested for Living Room</b><br />All 3 positions have bulbs
+          </div>
+        </div>
+        <div class="lay">
+          <b>5.0</b><br />L · C · R · SL · SR
+          <div class="mini">
+            <s></s><i style="left: 6px; top: 12px"></i><i style="left: 40px; top: 12px"></i
+            ><i style="left: 74px; top: 12px"></i><i style="left: 6px; top: 54px"></i
+            ><i style="left: 74px; top: 54px"></i>
+          </div>
+          <div class="abs muted" style="bottom: 4px; left: 6px; right: 6px">
+            Surround folds into L and R
+          </div>
+        </div>
+      </div>
+      <div class="muted" style="margin-top: 10px">
+        Starts with the layout's channels, all dark, no keyframes, and the movie's length from Emby.
+        Nothing is written until you Save.
+      </div>
+      <div class="abs" style="right: 12px; bottom: 12px">
+        <span class="btn primary">Create track</span>
+      </div>
+    </div>
+    <div class="wf-label">04 — Movie: open or create a track · J1 Step 3 · TRACK-001…004</div>
+  </body>
+</html>
