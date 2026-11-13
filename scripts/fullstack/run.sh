@@ -43,6 +43,9 @@ if [[ ! -f docker/simulator-src/src/openlightfx_simulator/__main__.py ]]; then
 fi
 
 bash scripts/media/generate-clips.sh
+# Tracks and sidecars saved by an earlier run live in the bind-mounted media, not in
+# the Emby volume, so `down -v` keeps them and the next SAVE-001 hits a stale conflict.
+find "$ROOT/media/generated" -type d -name lightfx -prune -exec rm -rf {} +
 # MEDIA-015: Emby is told this movie's runtime is 0. ffprobe still sees 120s.
 ZERO_DIR="$ROOT/media/generated/clip-zero"
 mkdir -p "$ZERO_DIR"
@@ -95,11 +98,24 @@ DLL="$WORK/emby/src/src/OpenLightFX.Emby/bin/Release/net8.0/OpenLightFX.Emby.dll
   "$WORK/emby/src/src/OpenLightFX.Emby/bin/Release/net8.0/Google.Protobuf.dll" )
 mv "$DLL.merged" "$DLL"
 docker compose -f docker-compose.fullstack.yml cp "$DLL" emby:/config/plugins/OpenLightFX.Emby.dll
-"${COMPOSE[@]}" restart emby
+# MEDIA-015 needs an item whose Emby runtime is unknown. Emby always probes on scan
+# and its update API ignores RunTimeTicks, so clear it in the database while Emby
+# is stopped. movie.nfo locks the item so a later refresh does not probe it again.
+"${COMPOSE[@]}" stop emby
+EMBY_CONFIG_VOLUME="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/config"}}{{.Name}}{{end}}{{end}}' "$("${COMPOSE[@]}" ps -aq emby)")"
+docker run --rm -v "$EMBY_CONFIG_VOLUME:/config" python:3.12-slim python -c '
+import sqlite3
+db = sqlite3.connect("/config/data/library.db")
+n = db.execute("update MediaItems set RunTimeTicks = NULL where Path = ?", ("/media/clip-zero/clip-zero.mp4",)).rowcount
+db.commit()
+raise SystemExit(0 if n == 1 else "clip-zero not found in library.db")
+'
+"${COMPOSE[@]}" start emby
 # Second pass: the plugin is loaded now, so this also seeds the simulator bulbs.
 SETUP_JSON="$(node scripts/fullstack/setup-emby.mjs | tail -n 1)"
-read -r API_KEY VIEWER_TOKEN PLUGIN_LOADED < <(printf '%s' "$SETUP_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["apiKey"], d.get("viewerToken") or "-", d.get("pluginLoaded"))')
+read -r API_KEY VIEWER_TOKEN PLUGIN_LOADED ZERO_TICKS < <(printf '%s' "$SETUP_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["apiKey"], d.get("viewerToken") or "-", d.get("pluginLoaded"), d.get("zeroRuntimeTicks") or 0)')
 if [[ "$PLUGIN_LOADED" != "True" ]]; then echo "The plugin did not load or rejected the bulb settings"; exit 1; fi
+if [[ "$ZERO_TICKS" != "0" ]]; then echo "clip-zero still has an Emby runtime ($ZERO_TICKS ticks)"; exit 1; fi
 echo "Plugin loaded and simulator bulbs configured"
 
 echo "Starting the simulator"

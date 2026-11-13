@@ -1,30 +1,4 @@
 {
   "comment": "Tiers whose tests are allowed to fail until the feature exists. Remove an entry when its tests pass.",
-  "failures": [
-    "ERR-003@fullstack",
-    "MEDIA-001@fullstack",
-    "MEDIA-002@fullstack",
-    "MEDIA-003@fullstack",
-    "MEDIA-004@fullstack",
-    "MEDIA-006@fullstack",
-    "MEDIA-011@fullstack",
-    "MEDIA-013@fullstack",
-    "MEDIA-015@fullstack",
-    "MEDIA-016@fullstack",
-    "PERF-001@fullstack",
-    "PERF-004@fullstack",
-    "PLUG-001@fullstack",
-    "PLUG-002@fullstack",
-    "PLUG-003@fullstack",
-    "PLUG-004@fullstack",
-    "PLUG-006@fullstack",
-    "PREV-005@fullstack",
-    "PREV-006@fullstack",
-    "PREV-008@fullstack",
-    "PROP-004@fullstack",
-    "PROP-005@fullstack",
-    "SAVE-002@fullstack",
-    "SAVE-003@fullstack",
-    "SAVE-004@fullstack"
-  ]
+  "failures": []
 }

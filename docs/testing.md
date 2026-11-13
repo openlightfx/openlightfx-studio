@@ -24,7 +24,7 @@ npx playwright install chromium firefox
 | Requirement report | `npm run test:report` |
 | Report gate | `node docs/requirements/check-traceability.mjs --report test-results/traceability.json --allow-expected tests/expected-failures.json` |
 
-`npm run test:browser` runs every `@browser` test in Firefox and in Chromium. `npm run test:fullstack` is the local Docker stack. It validates `docker-compose.fullstack.yml` and, when Docker, the .NET 8 SDK, and a clone of `openlightfx-simulator` are available, boots Emby, builds the plugin from `openlightfx-emby` branch `cursor/studio-host-api-18c1` with this Studio build embedded, starts `openlightfx-simulator --no-gui`, and runs the `@fullstack` tests against simulator NDJSON.
+`npm run test:browser` runs every `@browser` test in Firefox and in Chromium. `npm run test:fullstack` is the local Docker stack. It validates `docker-compose.fullstack.yml` and, when Docker, the .NET 8 SDK, and a clone of `openlightfx-simulator` are available, boots Emby, builds the plugin from `openlightfx-emby` `main` (override with `OLFX_EMBY_BRANCH`, or put a checkout at `.emby-stack/emby/src`) with this Studio build embedded, starts `openlightfx-simulator --no-gui`, and runs the `@fullstack` tests against simulator NDJSON.
 
 CI runs the traceability checker, the unit tests, the browser tests, media generation, and `docker compose config`. It does not boot Emby unless `SIMULATOR_TOKEN` is set, because the simulator repository is private and the plugin build needs the Emby SDK DLLs from the running server. The script still does that work locally.
 
@@ -40,5 +40,7 @@ J5 reads `OLFX_REAL_MEDIA` (default `~/Videos/John_Wick.mkv`) and `OLFX_REAL_TRA
 - `KEY-011` follows `PlaybackSession` (black before the first keyframe). `InterpolationEngine.GetStateAtTime` still returns the channel default. Plugin tests of this fixture must not call `GetStateAtTime`.
 - `effects.json` was transcribed from the C# renderers on `cursor/studio-host-api-18c1` because that checkout does not include the Emby SDK DLLs, so the renderers were not executed here. The dotnet test is the cross-check.
 - This ffmpeg build cannot encode PGS. `scripts/media/pgs.mjs` writes a one-pixel SUP and the script fails if ffprobe does not see `hdmv_pgs_subtitle`.
-- `PLUG-001` through `PLUG-005` are not implemented on the host-API branch yet, so the fullstack tests fail against that build.
+- The `@fullstack` project runs in file order (`fullyParallel: false`) because every test shares one Emby, one preview session, and the simulator bulbs.
+- Emby's bundled ffmpeg 5.1 has no `zscale` and cannot decode mono TrueHD from newer ffmpeg, so the synthetic TrueHD clips are stereo and the plugin falls back to `supertonemap` for HDR frames.
+- `clip-zero`'s runtime is cleared in Emby's `library.db` while Emby is stopped, because Emby's item update API ignores `RunTimeTicks`.
 - Frame-budget and real-title timings (`PERF-002`, J5) need the editor and the owner's media. The tests exist and do not run as a green path.

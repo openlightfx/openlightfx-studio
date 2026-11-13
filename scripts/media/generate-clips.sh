@@ -63,6 +63,8 @@ node "$ROOT/scripts/media/pgs.mjs" 3840 2160 "$OUT/clip-4k.sup"
 
 hdr_meta="hdr10=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,50):max-cll=1000,400"
 
+# TrueHD is stereo: Emby's ffmpeg 5.1 cannot decode the mono TrueHD that newer ffmpeg
+# writes ("No restart header"), so a mono clip made every HEVC edit proxy fail.
 echo "Clip B: 5s 320x240 HEVC 10-bit HDR10 MKV, TrueHD, PGS"
 ffmpeg -y -hide_banner -loglevel error \
   -f lavfi -i "color=c=red:s=320x240:r=24:d=5,format=yuv420p10le" \
@@ -72,7 +74,7 @@ ffmpeg -y -hide_banner -loglevel error \
   -c:v libx265 -preset ultrafast -pix_fmt yuv420p10le \
   -x265-params "keyint=12:min-keyint=12:scenecut=0:${hdr_meta}" \
   -color_primaries bt2020 -color_trc smpte2084 -colorspace bt2020nc \
-  -c:a truehd -strict experimental \
+  -ac 2 -c:a truehd -strict experimental \
   -c:s copy \
   "$OUT/clip-b-hevc-hdr.mkv"
 
@@ -85,7 +87,7 @@ ffmpeg -y -hide_banner -loglevel error \
   -c:v libx265 -preset ultrafast -pix_fmt yuv420p10le \
   -x265-params "keyint=24:min-keyint=24:scenecut=0:${hdr_meta}" \
   -color_primaries bt2020 -color_trc smpte2084 -colorspace bt2020nc \
-  -c:a truehd -strict experimental \
+  -ac 2 -c:a truehd -strict experimental \
   -c:s copy \
   "$OUT/clip-4k-hevc-hdr10.mkv"
 
