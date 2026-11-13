@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { encodeTrack, newTrackFromMovie, type Track } from '../domain/index';
 import type { Bulb, LibraryItem, MediaInfo, StudioSettings, TrackSummary } from './types';
@@ -65,6 +67,58 @@ function readyProxy(url = '/media/clip-a-h264.mp4'): MediaInfo['proxy'] {
   };
 }
 
+const GROWING_FILE = path.join(process.cwd(), 'static/media/growing-proxy.mp4');
+let growingStarted = 0;
+let growingBoxes: number[] | null = null;
+
+function growingBoxEnds(): number[] {
+  if (growingBoxes) return growingBoxes;
+  if (!fs.existsSync(GROWING_FILE)) return [];
+  const data = fs.readFileSync(GROWING_FILE);
+  const ends: number[] = [];
+  let offset = 0;
+  while (offset + 8 <= data.length) {
+    const box = data.readUInt32BE(offset);
+    if (box < 8 || offset + box > data.length) break;
+    offset += box;
+    ends.push(offset);
+  }
+  growingBoxes = ends;
+  return ends;
+}
+
+function growingProgress(): { revealed: number; size: number; throughMs: number; ready: boolean } {
+  const ends = growingBoxEnds();
+  const size = ends.length > 0 ? ends[ends.length - 1] : 0;
+  // Whole boxes only. Two fragments immediately, then a short burst so the
+  // video element starts, then one box every 4s. Chromium and Firefox share
+  // this process and the later browser must still see state building.
+  const head = Math.min(5, Math.max(0, ends.length - 1));
+  const burst = Math.min(ends.length - 1, 14);
+  if (!growingStarted) growingStarted = Date.now();
+  const elapsed = Date.now() - growingStarted;
+  const burstMs = Math.max(0, burst - head) * 150;
+  let index = head;
+  if (elapsed < burstMs) index = Math.min(burst, head + Math.floor(elapsed / 150));
+  else index = Math.min(ends.length - 1, burst + Math.floor((elapsed - burstMs) / 4000));
+  const revealed = ends.length > 0 ? ends[Math.max(0, index)] : 0;
+  const ready = size > 0 && revealed >= size;
+  return { revealed, size, throughMs: ready ? 10_000 : Math.floor((revealed / Math.max(size, 1)) * 10_000), ready };
+}
+
+function growingProxy(): MediaInfo['proxy'] {
+  const progress = growingProgress();
+  return {
+    state: progress.ready ? 'ready' : 'building',
+    encodedThroughMs: progress.throughMs,
+    fps: 24,
+    keyframeIntervalMs: 500,
+    width: 320,
+    height: 240,
+    editUrl: '/media/proxy/growing',
+  };
+}
+
 function infoFor(runtimeMs: number, proxy: MediaInfo['proxy']): MediaInfo {
   return {
     runtimeMs,
@@ -97,6 +151,7 @@ function remember(trackId: string, track: Track, when = '2026-01-01T00:00:00.000
 remember('proxy-fixture', proxyFixture());
 remember('building-track', strip(newTrackFromMovie('44', 'Building Proxy', 10000)));
 remember('broken-track', strip(newTrackFromMovie('46', 'Broken Proxy', 10000)));
+remember('failed-track', strip(newTrackFromMovie('49', 'Failed Proxy', 10000)));
 remember('nosample-track', strip(newTrackFromMovie('47', 'No Frame', 10000)));
 remember('conflict', strip(newTrackFromMovie('48', 'Conflict', 10000)));
 remember('alpha', strip(newTrackFromMovie('43', 'Alpha', 10000)));
@@ -136,6 +191,7 @@ const CATALOG: CatalogItem[] = [
       keyframeIntervalMs: 500,
       width: 320,
       height: 240,
+      editUrl: '/media/proxy/growing',
     }),
     frameStatus: 200,
     saveStatus: 200,
@@ -179,6 +235,24 @@ const CATALOG: CatalogItem[] = [
     info: infoFor(10000, readyProxy()),
     frameStatus: 200,
     saveStatus: 400,
+  },
+  {
+    itemId: '49',
+    name: 'Failed Proxy',
+    year: 2017,
+    runtimeMs: 10000,
+    tracks: [summary('failed-track', 'Failed Proxy', '49')],
+    info: infoFor(10000, {
+      state: 'failed',
+      reason: 'ffmpeg exited with code 1',
+      encodedThroughMs: 0,
+      fps: 24,
+      keyframeIntervalMs: 500,
+      width: 320,
+      height: 240,
+    }),
+    frameStatus: 200,
+    saveStatus: 200,
   },
 ];
 
@@ -248,7 +322,20 @@ export function handleMock(
   if (itemMatch && method === 'GET' && itemMatch[2] === 'MediaInfo') {
     const item = CATALOG.find((entry) => entry.itemId === decodeURIComponent(itemMatch[1]));
     if (!item?.info) return text(404, 'not found');
+    if (item.itemId === '44') return json(200, { ...item.info, proxy: growingProxy() });
     return json(200, item.info);
+  }
+  if (itemMatch && method === 'POST' && itemMatch[2] === 'Proxy') {
+    const item = CATALOG.find((entry) => entry.itemId === decodeURIComponent(itemMatch[1]));
+    if (!item?.info) return text(404, 'not found');
+    if (!admin) return text(403, 'Admin is required');
+    if (item.itemId === '49' && item.info.proxy.state === 'failed') {
+      // The catalog stays failed so a parallel browser still sees the error.
+      // The response is what this Studio applies immediately.
+      return json(200, readyProxy());
+    }
+    if (item.itemId === '44') return json(200, growingProxy());
+    return json(200, item.info.proxy);
   }
   if (itemMatch && method === 'GET' && itemMatch[2] === 'Frame') {
     const item = CATALOG.find((entry) => entry.itemId === decodeURIComponent(itemMatch[1]));
@@ -266,12 +353,6 @@ export function handleMock(
       body: PNG,
     };
   }
-  if (itemMatch && method === 'POST' && itemMatch[2] === 'Proxy') {
-    const item = CATALOG.find((entry) => entry.itemId === decodeURIComponent(itemMatch[1]));
-    if (!item?.info) return text(404, 'not found');
-    return json(200, { ...item.info.proxy, editUrl: item.info.proxy.editUrl ?? '/media/clip-a-h264.mp4' });
-  }
-
   if (path === '/OpenLightFX/Studio/Items' && method === 'GET') {
     const search = (url.searchParams.get('search') ?? '').trim().toLowerCase();
     const items = CATALOG.filter((item) => !search || item.name.toLowerCase().includes(search))
@@ -345,10 +426,77 @@ export function handleMock(
   return text(404, 'not found');
 }
 
+export function serveGrowingProxy(req: IncomingMessage, res: ServerResponse): void {
+  if (!fs.existsSync(GROWING_FILE)) {
+    res.statusCode = 404;
+    res.end('missing growing proxy');
+    return;
+  }
+  const progress = growingProgress();
+  const range = typeof req.headers.range === 'string' ? req.headers.range : '';
+  const explicit = /bytes=(\d+)-(\d+)/.exec(range);
+  if (explicit && progress.revealed > Number(explicit[2])) {
+    const start = Number(explicit[1]);
+    const end = Number(explicit[2]);
+    const count = end - start + 1;
+    const buf = Buffer.alloc(count);
+    const fd = fs.openSync(GROWING_FILE, 'r');
+    fs.readSync(fd, buf, 0, count, start);
+    fs.closeSync(fd);
+    res.writeHead(206, {
+      'content-type': 'video/mp4',
+      'content-range': `bytes ${start}-${end}/${progress.revealed}`,
+      'content-length': String(count),
+      'accept-ranges': 'bytes',
+      'cache-control': 'no-store',
+    });
+    res.end(buf);
+    return;
+  }
+  // Open-ended: stay open and append. A finished Content-Length makes the
+  // video element treat the current byte as the end of the movie.
+  res.writeHead(200, {
+    'content-type': 'video/mp4',
+    'cache-control': 'no-store',
+  });
+  const fd = fs.openSync(GROWING_FILE, 'r');
+  let sent = 0;
+  let closed = false;
+  const finish = () => {
+    if (closed) return;
+    closed = true;
+    try { fs.closeSync(fd); } catch { /* already closed */ }
+  };
+  const pump = () => {
+    if (closed || res.writableEnded) return;
+    const now = growingProgress();
+    if (now.revealed > sent) {
+      const buf = Buffer.alloc(now.revealed - sent);
+      const n = fs.readSync(fd, buf, 0, buf.length, sent);
+      if (n > 0) {
+        res.write(buf.subarray(0, n));
+        sent += n;
+      }
+    }
+    if (sent >= now.size && now.ready) {
+      finish();
+      res.end();
+      return;
+    }
+    setTimeout(pump, 80);
+  };
+  res.on('close', finish);
+  pump();
+}
+
 export function mockMiddleware(req: IncomingMessage, res: ServerResponse, next: () => void): void {
   const raw = req.url ?? '';
-  const path = raw.split('?')[0] ?? '';
-  if (!path.startsWith('/OpenLightFX/') && path !== '/media/proxy/broken') {
+  const urlPath = raw.split('?')[0] ?? '';
+  if (urlPath === '/media/proxy/growing') {
+    serveGrowingProxy(req, res);
+    return;
+  }
+  if (!urlPath.startsWith('/OpenLightFX/') && urlPath !== '/media/proxy/broken') {
     next();
     return;
   }

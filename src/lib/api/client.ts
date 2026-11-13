@@ -1,4 +1,4 @@
-import type { Bulb, LibraryItem, MediaInfo, StudioSettings, TrackSummary } from './types';
+import type { Bulb, LibraryItem, MediaInfo, ProxyInfo, StudioSettings, TrackSummary } from './types';
 
 export function authHeaders(): Record<string, string> {
   const key = new URLSearchParams(location.search).get('api_key');
@@ -15,6 +15,12 @@ async function send(path: string, init: RequestInit = {}): Promise<Response> {
 export async function fetchItems(search = ''): Promise<LibraryItem[]> {
   const response = await send(`/OpenLightFX/Studio/Items?search=${encodeURIComponent(search)}`);
   if (!response.ok) throw new Error(`Items ${response.status}`);
+  return response.json();
+}
+
+export async function restartProxy(itemId: string): Promise<ProxyInfo> {
+  const response = await send(`/OpenLightFX/Studio/Items/${encodeURIComponent(itemId)}/Proxy`, { method: 'POST' });
+  if (!response.ok) throw new Error(`Proxy ${response.status}`);
   return response.json();
 }
 

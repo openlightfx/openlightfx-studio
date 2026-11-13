@@ -6,7 +6,8 @@ export interface LibraryItem {
 }
 
 export interface ProxyInfo {
-  state: 'missing' | 'building' | 'ready';
+  state: 'missing' | 'building' | 'ready' | 'failed';
+  reason?: string;
   encodedThroughMs: number;
   fps: number;
   keyframeIntervalMs: number;

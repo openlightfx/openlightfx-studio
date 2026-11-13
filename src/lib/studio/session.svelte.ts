@@ -33,6 +33,7 @@ import {
   fetchBulbs,
   fetchItems,
   fetchMediaInfo,
+  restartProxy,
   fetchSettings,
   fetchTrackBytes,
   fetchTracks,
@@ -45,6 +46,7 @@ import {
   type MediaInfo,
   type TrackSummary,
 } from '$lib/api/client';
+import { failedProxyMessage, proxyPlayReason, seekPastHorizon } from '$lib/studio/proxy-playback';
 
 const DB_NAME = 'openlightfx-studio';
 const STORE = 'crash';
@@ -111,6 +113,7 @@ export class StudioSession {
   localError = $state('');
   videoError = $state('');
   videoSrc = $state('');
+  pendingSeekMs = $state<number | null>(null);
   hex = $state('000000');
   hexError = $state('');
   green = $state('0');
@@ -144,14 +147,19 @@ export class StudioSession {
   }
 
   get playReason(): string {
-    if (!this.item && !this.videoSrc.startsWith('blob:')) return 'Choose a movie';
-    if (this.media?.proxy.state === 'building') return 'Preparing edit proxy';
-    if (this.videoError) return this.videoError;
-    return '';
+    return proxyPlayReason({
+      hasItem: Boolean(this.item),
+      blob: this.videoSrc.startsWith('blob:'),
+      state: this.media?.proxy.state,
+      encodedThroughMs: this.media?.proxy.encodedThroughMs,
+      pendingSeek: this.pendingSeekMs != null,
+      videoError: this.videoError,
+      reason: this.media?.proxy.reason ?? this.videoError,
+    });
   }
 
   get canPlay(): boolean {
-    return Boolean(this.videoSrc) && !this.videoError && this.media?.proxy.state !== 'building';
+    return Boolean(this.videoSrc) && !this.videoError && this.media?.proxy.state !== 'failed';
   }
 
   async boot(): Promise<void> {
@@ -214,6 +222,7 @@ export class StudioSession {
     const item = known ?? { itemId, name: `Item ${itemId}`, year: 0, runtimeMs: 0 };
     this.item = item;
     this.videoError = '';
+    this.pendingSeekMs = null;
     this.localError = '';
     this.importWarning = false;
     this.alert = '';
@@ -253,9 +262,32 @@ export class StudioSession {
   }
 
   private applyProxy(info: MediaInfo | null): void {
-    if (info?.proxy.editUrl && info.proxy.state === 'ready') this.videoSrc = info.proxy.editUrl;
-    else if (info?.proxy.state === 'building') this.videoSrc = '';
-    else this.videoSrc = info?.proxy.editUrl ?? '';
+    if (!info) return;
+    if (info.proxy.state === 'failed') {
+      this.pendingSeekMs = null;
+      this.videoSrc = '';
+      this.videoError = failedProxyMessage(info.proxy.reason);
+      return;
+    }
+    const url = info.proxy.editUrl ?? '';
+    const playable = url && (info.proxy.state === 'ready' || info.proxy.state === 'building');
+    if (playable) {
+      if (this.videoSrc !== url) {
+        this.videoError = '';
+        this.videoSrc = url;
+      }
+      this.releasePendingSeek(info);
+      return;
+    }
+    this.videoSrc = url;
+  }
+
+  private releasePendingSeek(info: MediaInfo): void {
+    if (this.pendingSeekMs == null) return;
+    if (seekPastHorizon(this.pendingSeekMs, info.proxy.encodedThroughMs, info.proxy.state === 'building')) return;
+    const target = this.pendingSeekMs;
+    this.pendingSeekMs = null;
+    if (this.video) this.video.currentTime = target / 1000;
   }
 
   /**
@@ -276,6 +308,7 @@ export class StudioSession {
       if (token !== this.bootToken) return;
       this.media = info;
       this.applyProxy(info);
+      if (info.proxy.state === 'failed') return;
     }
   }
 
@@ -328,7 +361,9 @@ export class StudioSession {
     this.syncPropertyFields();
     this.restored = source === 'crash' ? 'Unsaved edits were restored' : '';
     if (dirty) this.dirty = true;
-    if (this.video && this.videoSrc) this.video.load();
+    // Assigning videoSrc already loads a remote URL. load() aborts that request,
+    // and a growing proxy does not survive the restart.
+    if (this.video && this.videoSrc.startsWith('blob:')) this.video.load();
   }
 
   private resetHistory(track: Track | null): void {
@@ -401,7 +436,15 @@ export class StudioSession {
   seek(ms: number): void {
     const time = Math.min(Math.max(0, ms), this.durationMs() || ms);
     this.playheadMs = time;
-    if (this.video && this.videoSrc) this.video.currentTime = time / 1000;
+    if (!this.video || !this.videoSrc) return;
+    const building = this.media?.proxy.state === 'building';
+    const encoded = this.media?.proxy.encodedThroughMs ?? 0;
+    if (seekPastHorizon(time, encoded, Boolean(building))) {
+      this.pendingSeekMs = time;
+      return;
+    }
+    this.pendingSeekMs = null;
+    this.video.currentTime = time / 1000;
   }
 
   syncFromVideo(): void {
@@ -412,12 +455,26 @@ export class StudioSession {
 
   onVideoError(): void {
     if (!this.videoSrc) return;
+    // A growing file can stall. The poll reports a real failure, which replaces this.
+    if (this.media?.proxy.state === 'building') return;
     this.videoError = 'The edit proxy failed to play';
     this.playing = false;
   }
 
-  retryProxy(): void {
+  async retryProxy(): Promise<void> {
     this.videoError = '';
+    this.pendingSeekMs = null;
+    if (this.media?.proxy.state === 'failed' && this.item) {
+      try {
+        const proxy = await restartProxy(this.item.itemId);
+        this.media = { ...this.media, proxy };
+        this.applyProxy(this.media);
+        if (proxy.state === 'building') void this.watchProxy(this.item.itemId, this.bootToken);
+      } catch {
+        this.videoError = failedProxyMessage(undefined);
+      }
+      return;
+    }
     const src = this.videoSrc;
     this.videoSrc = '';
     queueMicrotask(() => {

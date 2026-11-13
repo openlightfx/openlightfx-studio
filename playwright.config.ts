@@ -42,6 +42,12 @@ export default defineConfig({
       use: { ...browserUse, browserName: 'chromium' },
     },
     {
+      name: 'fullstack-firefox',
+      testDir: 'e2e/fullstack',
+      fullyParallel: false,
+      use: { ...browserUse, browserName: 'firefox' },
+    },
+    {
       name: 'realmedia',
       testDir: 'e2e/realmedia',
       use: { ...browserUse, browserName: 'firefox' },

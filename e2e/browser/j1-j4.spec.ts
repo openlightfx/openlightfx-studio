@@ -201,12 +201,23 @@ requirement('MEDIA-014 @browser an H.264 MP4 plays in dev and MKV is refused', a
   await expect(page.getByText(/emby/i)).toBeVisible();
 });
 
-requirement('MEDIA-016 @browser editing works while the proxy is building', async ({ page }) => {
+requirement('MEDIA-016 @browser the proxy plays from time 0 while it is still encoding', async ({ page }) => {
   const studio = await shell(page);
   await page.getByRole('option', { name: /building proxy/i }).click();
-  await expect(page.getByText(/prepar/i)).toBeVisible();
+  const reason = page.locator('#transport-reason');
+  await expect(reason).toContainText(/prepar/i);
   await page.keyboard.press('k');
   await expect(page.getByText(/keyframe/i)).toBeVisible();
+  await expect.poll(async () => page.locator('video').evaluate((node) => {
+    const video = node as HTMLVideoElement;
+    return video.currentSrc.includes('/media/proxy/growing') && video.readyState >= 2;
+  }), { timeout: 10_000 }).toBe(true);
+  await studio.button(/^play$/i).click();
+  await expect.poll(async () => page.locator('video').evaluate((node) => (node as HTMLVideoElement).currentTime)).toBeGreaterThan(0.2);
+  const scrub = page.getByRole('slider', { name: /scrub/i });
+  const max = await scrub.evaluate((node) => (node as HTMLInputElement).max);
+  await scrub.fill(max);
+  await expect(reason).toContainText(/still encoding to \d{2}:\d{2}/i);
 });
 
 requirement('MEDIA-017 @browser one track opens and several tracks ask', async ({ page }) => {
@@ -604,6 +615,15 @@ requirement('ERR-001 @browser a playback error keeps the transport and offers re
   await page.getByRole('option', { name: /broken proxy/i }).click();
   await expect(page.getByRole('button', { name: /retry/i })).toBeVisible();
   await expect(studio.button(/^play$/i)).toBeVisible();
+  await page.getByRole('option', { name: /failed proxy/i }).click();
+  const reason = page.locator('#transport-reason');
+  await expect(reason).toContainText('ffmpeg exited with code 1');
+  await expect(reason).not.toContainText(/prepar/i);
+  await expect(reason).not.toContainText(/api_key/i);
+  await expect(page.getByRole('button', { name: /retry/i })).toBeVisible();
+  await expect(studio.button(/^play$/i)).toBeVisible();
+  await page.getByRole('button', { name: /retry/i }).click();
+  await expect(reason).not.toContainText(/ffmpeg exited/i);
 });
 
 requirement('ERR-002 @browser a dead plugin does not invent a library', async ({ page }) => {
