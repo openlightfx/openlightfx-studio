@@ -71,6 +71,9 @@ interface CrashRecord {
   storage: 'indexeddb';
 }
 
+/** How often a building edit proxy is re-read. */
+const PROXY_POLL_MS = 1000;
+
 export class StudioSession {
   hosted = $state(false);
   localDev = $state(true);
@@ -230,9 +233,8 @@ export class StudioSession {
     const resolved = resolveDuration(item.runtimeMs, info?.runtimeMs ?? null);
     this.movieMs = resolved.durationMs;
     this.durationKnown = resolved.durationMs !== null && resolved.durationMs > 0;
-    if (info?.proxy.editUrl && info.proxy.state === 'ready') this.videoSrc = info.proxy.editUrl;
-    else if (info?.proxy.state === 'building') this.videoSrc = '';
-    else this.videoSrc = info?.proxy.editUrl ?? '';
+    this.applyProxy(info);
+    if (info?.proxy.state === 'building') void this.watchProxy(itemId, token);
     let tracks: TrackSummary[] = [];
     try {
       tracks = await fetchTracks(itemId);
@@ -247,6 +249,33 @@ export class StudioSession {
       this.track = null;
       this.resetHistory(null);
       this.dirty = false;
+    }
+  }
+
+  private applyProxy(info: MediaInfo | null): void {
+    if (info?.proxy.editUrl && info.proxy.state === 'ready') this.videoSrc = info.proxy.editUrl;
+    else if (info?.proxy.state === 'building') this.videoSrc = '';
+    else this.videoSrc = info?.proxy.editUrl ?? '';
+  }
+
+  /**
+   * MediaInfo is read once on select, and a fresh item's proxy is always still building,
+   * so without this the picture never appeared until a reload. Poll until it is ready,
+   * keeping the progress current, and stop when another item is selected.
+   */
+  private async watchProxy(itemId: string, token: number): Promise<void> {
+    while (token === this.bootToken && this.media?.proxy.state === 'building') {
+      await new Promise((resolve) => setTimeout(resolve, PROXY_POLL_MS));
+      if (token !== this.bootToken) return;
+      let info: MediaInfo;
+      try {
+        info = await fetchMediaInfo(itemId);
+      } catch {
+        continue;
+      }
+      if (token !== this.bootToken) return;
+      this.media = info;
+      this.applyProxy(info);
     }
   }
 

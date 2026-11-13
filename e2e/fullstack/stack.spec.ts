@@ -95,7 +95,7 @@ async function playbackToken(request: APIRequestContext): Promise<string> {
 }
 
 /** Report an Emby playback session so the plugin's PlaybackStart handler runs. */
-async function reportPlayback(request: APIRequestContext, item: string): Promise<void> {
+async function reportPlayback(request: APIRequestContext, item: string): Promise<() => Promise<void>> {
   const access = await playbackToken(request);
   const auth = {
     'X-Emby-Token': access,
@@ -133,6 +133,14 @@ async function reportPlayback(request: APIRequestContext, item: string): Promise
     },
     timeout: 5000,
   });
+  // Callers stop the session so later tests do not see playback_active.
+  return async () => {
+    await request.post(`${emby()}/emby/Sessions/Playing/Stopped`, {
+      headers: auth,
+      data: { ItemId: item, MediaSourceId: mediaSourceId, PlaySessionId: `olfx-${item}`, PositionTicks: 0 },
+      timeout: 5000,
+    });
+  };
 }
 
 /** Simulator stdout as captured by run.sh. Skips anything that is not a JSON object. */
@@ -276,7 +284,8 @@ requirement('SAVE-002 @fullstack playback uses the saved track', async ({ reques
     timeout: 5000,
   });
   expect(selected.ok()).toBeTruthy();
-  await reportPlayback(request, id);
+  const stopPlayback = await reportPlayback(request, id);
+  try {
   // roundtrip.lightfx holds left at rgb(10, 20, 30), brightness 40, from time 0.
   await expect
     .poll(() => readNdjson().some((line) => {
@@ -284,6 +293,9 @@ requirement('SAVE-002 @fullstack playback uses the saved track', async ({ reques
       return line.event === 'command_received' && color.r === 10 && color.g === 20 && color.b === 30 && color.brightness === 40;
     }), { timeout: 8000 })
     .toBe(true);
+  } finally {
+    await stopPlayback();
+  }
 });
 
 requirement('SAVE-003 @fullstack save writes the project sidecar', async ({ request }) => {
@@ -320,15 +332,51 @@ requirement('PREV-004 @fullstack preview start sends the mapping', async ({ requ
 });
 
 requirement('PREV-005 @fullstack confirming a mapping updates the plugin profile', async ({ request }) => {
+  // Confirming the mapping is the preview start that carries it; do not rely on another test's setup.
+  const started = await request.post(`${emby()}/OpenLightFX/Studio/Preview/Start`, {
+    headers: headers(),
+    data: { mapping: { left: ['left'], right: ['right'] }, takeover: true },
+    timeout: 5000,
+  });
+  expect(started.ok()).toBeTruthy();
+  await request.post(`${emby()}/OpenLightFX/Studio/Preview/Stop`, { headers: headers(), timeout: 5000 });
   const settings = await (await request.get(`${emby()}/OpenLightFX/Settings`, { headers: headers(), timeout: 5000 })).json();
   // run.sh seeds bulbs named left/right, so only a mapping profile counts here.
   expect(String(settings.MappingProfilesJson ?? settings.mappingProfilesJson ?? '')).toContain('left');
 });
 
 requirement('PREV-006 @fullstack preview color reaches the simulator within 300 ms', async ({ request }) => {
-  const lines = readNdjson();
-  const hit = lines.find((line) => line.event === 'command_received' && commanded(line).r === 255 && commanded(line).brightness === 100);
-  expect(hit).toBeTruthy();
+  const started = await request.post(`${emby()}/OpenLightFX/Studio/Preview/Start`, {
+    headers: headers(),
+    data: { mapping: { left: ['left'] }, takeover: true },
+    timeout: 5000,
+  });
+  expect(started.ok()).toBeTruthy();
+  try {
+    const sent = Date.now();
+    const frame = await request.post(`${emby()}/OpenLightFX/Studio/Preview/Frame`, {
+      headers: { ...headers(), 'content-type': 'application/json' },
+      data: { states: [{ bulbId: 'left', r: 255, g: 0, b: 0, brightness: 100, transitionMs: 0 }] },
+      timeout: 5000,
+    });
+    expect(frame.ok()).toBeTruthy();
+    let hit: Record<string, any> | undefined;
+    await expect
+      .poll(() => {
+        hit = readNdjson().find(
+          (line) =>
+            line.event === 'command_received' &&
+            line.bulb_id === 'left' &&
+            Date.parse(line.ts) >= sent - 50 &&
+            commanded(line).r === 255 && commanded(line).g === 0 && commanded(line).b === 0 && commanded(line).brightness === 100
+        );
+        return Boolean(hit);
+      }, { timeout: 2000 })
+      .toBe(true);
+    expect(Date.parse(hit!.ts) - sent).toBeLessThanOrEqual(300);
+  } finally {
+    await request.post(`${emby()}/OpenLightFX/Studio/Preview/Stop`, { headers: headers(), timeout: 5000 });
+  }
 });
 
 requirement('PREV-007 @fullstack stop restores the bulb snapshot', async ({ request }) => {
@@ -363,7 +411,8 @@ requirement('PREV-008 @fullstack start without takeover is 409 while Emby plays'
   const id = await itemId(request);
   await ensureMapping(request);
   expect((await saveTrack(request, id, freshTrackId())).ok()).toBeTruthy();
-  await reportPlayback(request, id);
+  const stopPlayback = await reportPlayback(request, id);
+  try {
   await expect
     .poll(async () => {
       const response = await request.post(`${emby()}/OpenLightFX/Studio/Preview/Start`, {
@@ -374,6 +423,9 @@ requirement('PREV-008 @fullstack start without takeover is 409 while Emby plays'
       return `${response.status()} ${(await response.text())}`;
     }, { timeout: 8000 })
     .toMatch(/^409\b[\s\S]*playback_active/);
+  } finally {
+    await stopPlayback();
+  }
 });
 
 requirement('PREV-010 @fullstack a non-admin save is forbidden', async ({ request }) => {
@@ -458,7 +510,8 @@ requirement('PLUG-005 @fullstack preview refuses or takes over an active session
   const id = await itemId(request);
   await ensureMapping(request);
   expect((await saveTrack(request, id, freshTrackId())).ok()).toBeTruthy();
-  await reportPlayback(request, id);
+  const stopPlayback = await reportPlayback(request, id);
+  try {
   const refused = await request.post(`${emby()}/OpenLightFX/Studio/Preview/Start`, {
     headers: headers(),
     data: { mapping: { left: ['left'] } },
@@ -473,6 +526,9 @@ requirement('PLUG-005 @fullstack preview refuses or takes over an active session
   });
   expect(taken.ok()).toBeTruthy();
   expect((await taken.json()).status).toBe('started');
+  } finally {
+    await stopPlayback();
+  }
 });
 
 requirement('PLUG-006 @fullstack the editor routes keep their shapes', async ({ request }) => {

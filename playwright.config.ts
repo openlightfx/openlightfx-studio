@@ -36,6 +36,9 @@ export default defineConfig({
     {
       name: 'fullstack',
       testDir: 'e2e/fullstack',
+      // One Emby, one preview session, one set of bulbs: run in file order so tests do not
+      // stop or take over each other's preview or playback.
+      fullyParallel: false,
       use: { ...browserUse, browserName: 'chromium' },
     },
     {

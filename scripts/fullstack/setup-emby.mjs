@@ -134,35 +134,29 @@ const seeded = await json(
   'PUT'
 );
 const pluginLoaded =
-  seeded.status < 400 && String(seeded.body?.BulbConfigJson ?? '').includes('simulator');
+  seeded.status < 400 && String(seeded.body?.bulbConfigJson ?? seeded.body?.BulbConfigJson ?? '').includes('simulator');
 
-// MEDIA-015: keep Emby's runtime at 0 so the plugin fills it from ffprobe.
-// LockData stops the next library refresh from copying the file duration back.
+// MEDIA-015: wait for clip-zero to be scanned. Emby's item update API ignores
+// RunTimeTicks and the scan always probes the file, so run.sh clears the runtime
+// in library.db while Emby is stopped. This reports what Emby holds now.
 const deadline = Date.now() + 60_000;
 let zeroId = '';
+let zeroRuntimeTicks = null;
 while (Date.now() < deadline && !zeroId) {
   const listed = await json(
-    '/emby/Items?Recursive=true&IncludeItemTypes=Movie&SearchTerm=clip-zero',
+    '/emby/Items?Recursive=true&IncludeItemTypes=Movie&SearchTerm=clip-zero&Fields=RunTimeTicks',
     undefined,
     token
   );
   const items = listed.body?.Items ?? [];
   const found = items.find((item) => item.Name === 'clip-zero');
   zeroId = found?.Id ?? '';
+  zeroRuntimeTicks = found?.RunTimeTicks ?? null;
   if (!zeroId) await new Promise((resolve) => setTimeout(resolve, 2000));
 }
-if (zeroId) {
-  const locked = await json(
-    `/emby/Items/${zeroId}`,
-    { Id: zeroId, Name: 'clip-zero', RunTimeTicks: 0, LockData: true },
-    token,
-    undefined,
-    'POST'
-  );
-  if (locked.status >= 400) {
-    console.error('clip-zero runtime lock', locked.status, locked.body);
-    process.exit(1);
-  }
+if (!zeroId) {
+  console.error('clip-zero was not scanned into the library');
+  process.exit(1);
 }
 
-console.log(JSON.stringify({ apiKey: token, viewerToken, user, emby: base, pluginLoaded, zeroId }));
+console.log(JSON.stringify({ apiKey: token, viewerToken, user, emby: base, pluginLoaded, zeroId, zeroRuntimeTicks }));
