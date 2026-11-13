@@ -1,0 +1,203 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="wf.css" />
+    <title>02 Room setup</title>
+    <style>
+      .room {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 600px;
+        height: 420px;
+        border: 2px solid #333;
+        background: #fff;
+      }
+      .screen {
+        position: absolute;
+        left: 180px;
+        top: 10px;
+        width: 240px;
+        height: 26px;
+        background: #555;
+        color: #fff;
+        text-align: center;
+        line-height: 26px;
+        font-size: 12px;
+      }
+      .zone {
+        position: absolute;
+        border: 1px dashed #666;
+        background: #f2f2f2;
+        padding: 4px;
+        font-size: 11px;
+      }
+      .zone b {
+        display: block;
+        font-size: 11px;
+        margin-bottom: 2px;
+      }
+      .seat {
+        position: absolute;
+        left: 200px;
+        top: 230px;
+        width: 200px;
+        height: 60px;
+        border: 1px solid #999;
+        background: #e9e9e9;
+        text-align: center;
+        line-height: 60px;
+        color: #777;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="app">
+      <span class="brand">OpenLightFX Studio</span><a class="current">Rooms</a><a>Library</a
+      ><span class="spacer"></span><span class="muted">jonflix (Emby 4.9)</span><a>Help</a>
+    </header>
+    <div
+      class="abs"
+      style="
+        left: 0;
+        top: 44px;
+        width: 220px;
+        height: 756px;
+        border-right: 1px solid #999;
+        padding: 12px;
+        background: #fafafa;
+      "
+    >
+      <div class="h">Your rooms</div>
+      <div class="box white" style="padding: 6px 8px; margin-bottom: 6px; border: 2px solid #333">
+        <b>Living Room</b><br /><span class="muted">Living Room TV · 5 bulbs · 3.0</span>
+      </div>
+      <div class="box white" style="padding: 6px 8px; margin-bottom: 10px">
+        <b>Bedroom</b><br /><span class="muted">Bedroom Fire TV · 2 bulbs · 2.0</span>
+      </div>
+      <span class="btn">+ New room</span>
+    </div>
+    <div class="abs" style="left: 236px; top: 56px; width: 1030px">
+      <div class="row" style="gap: 24px; margin-bottom: 10px">
+        <div><span class="lbl">Room name</span><span class="field">Living Room</span></div>
+        <div>
+          <span class="lbl">Screen (the Emby app in this room)</span
+          ><span class="field" style="min-width: 330px"
+            >Living Room TV · Emby for Android TV · seen 2 h ago ▾</span
+          >
+          <span class="btn small">Refresh</span>
+        </div>
+      </div>
+      <div class="row" style="align-items: flex-start; gap: 14px">
+        <div style="position: relative; width: 600px; height: 486px">
+          <div class="room">
+            <div class="screen">SCREEN — Living Room TV</div>
+            <div class="zone" style="left: 10px; top: 44px; width: 160px; height: 110px">
+              <b>Left</b><span class="chip">⠿ Desk lamp ⋮ ×</span
+              ><span class="chip">⠿ Shelf strip ⋮ ×</span>
+            </div>
+            <div class="zone" style="left: 190px; top: 44px; width: 220px; height: 70px">
+              <b>Center (behind / around screen)</b><span class="chip">⠿ TV bias light ⋮ ×</span>
+            </div>
+            <div class="zone" style="left: 430px; top: 44px; width: 160px; height: 110px">
+              <b>Right</b><span class="chip">⠿ Floor lamp ⋮ ×</span>
+            </div>
+            <div class="seat">seating</div>
+            <div class="zone" style="left: 10px; top: 200px; width: 160px; height: 110px">
+              <b>Surround Left</b><span class="muted">Drop a bulb here</span>
+            </div>
+            <div class="zone" style="left: 430px; top: 200px; width: 160px; height: 110px">
+              <b>Surround Right</b><span class="muted">Drop a bulb here</span>
+            </div>
+            <div class="zone" style="left: 10px; top: 326px; width: 580px; height: 84px">
+              <b
+                >Ambient — anywhere in the room (ceiling, lamp across the room, strip under the
+                couch)</b
+              ><span class="chip">⠿ Ceiling ⋮ ×</span>
+            </div>
+          </div>
+          <div class="abs" style="left: 0; top: 428px; width: 600px">
+            <div class="banner">
+              <b>This room plays 3.0 tracks natively.</b> 5.0 surround channels fold into Left and
+              Right. The Ceiling bulb (Ambient) follows a mix of every channel.
+            </div>
+          </div>
+        </div>
+        <div class="col" style="width: 414px">
+          <div class="box white" style="padding: 10px; height: 300px">
+            <div class="row" style="justify-content: space-between">
+              <b>Bulbs not in a room</b><span class="btn primary">Find bulbs</span>
+            </div>
+            <div class="muted" style="margin: 4px 0 6px">Found 3 · last search 1 min ago</div>
+            <table class="t">
+              <tr>
+                <th>Bulb</th>
+                <th></th>
+                <th></th>
+              </tr>
+              <tr>
+                <td>
+                  ⠿ <u>WiZ bulb 4F2A</u><br /><span class="muted"
+                    >WiZ · ESP01 RGB · 192.168.1.44</span
+                  >
+                </td>
+                <td><span class="btn small">Identify</span></td>
+                <td><span class="btn small">Place ▾</span></td>
+              </tr>
+              <tr>
+                <td>
+                  ⠿ <u>LIFX Mini</u><br /><span class="muted"
+                    >LIFX · Mini Color · 192.168.1.52</span
+                  >
+                </td>
+                <td><span class="btn small disabled">Flashing…</span></td>
+                <td><span class="btn small">Place ▾</span></td>
+              </tr>
+              <tr>
+                <td>
+                  ⠿ <u>Govee H6008</u><br /><span class="muted">Govee · H6008 · 192.168.1.61</span>
+                </td>
+                <td><span class="btn small">Identify</span></td>
+                <td><span class="btn small">Place ▾</span></td>
+              </tr>
+            </table>
+          </div>
+          <div class="note">
+            <b>Hue bridge found</b> (192.168.1.20, not paired). Press the round button on the
+            bridge, then click Pair. <span class="btn small">Pair Hue bridge</span>
+          </div>
+          <div class="box" style="padding: 8px; font-size: 11px">
+            <b>How placing works:</b> drag a bulb (⠿) onto a zone, or use <b>Place ▾</b>. Click a
+            name to rename. <b>Identify</b> flashes that bulb red, green, blue. Chip <b>⋮</b> menu:
+            Identify, Follows ▾ (Auto, or another position), Rename. <b>×</b> returns it to this
+            list.
+          </div>
+        </div>
+      </div>
+      <div class="row" style="justify-content: space-between; margin-top: 6px">
+        <span class="btn">Delete room</span>
+        <span class="row"
+          ><span class="muted">Unsaved changes</span><span class="btn primary">Save room</span
+          ><span class="btn">Next: pick a movie →</span></span
+        >
+      </div>
+    </div>
+    <div class="menu" style="left: 420px; top: 240px; width: 190px">
+      <div><b>Shelf strip</b></div>
+      <div class="sep"></div>
+      <div>Identify</div>
+      <div>Rename…</div>
+      <div class="sep"></div>
+      <div><span>Follows</span><span>▸</span></div>
+      <div>&nbsp;&nbsp;● Auto (Left)</div>
+      <div>&nbsp;&nbsp;○ Center</div>
+      <div>&nbsp;&nbsp;○ Ambient mix</div>
+      <div class="sep"></div>
+      <div>Take out of room</div>
+    </div>
+    <div class="wf-label">
+      02 — Room setup (editing Living Room, chip menu open) · J1 Step 1 · ROOM-001…010
+    </div>
+  </body>
+</html>

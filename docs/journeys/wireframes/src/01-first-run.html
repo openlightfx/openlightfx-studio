@@ -1,0 +1,112 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="wf.css" />
+    <title>01 First run</title>
+  </head>
+  <body>
+    <header class="app">
+      <span class="brand">OpenLightFX Studio</span><a class="current">Rooms</a><a>Library</a
+      ><span class="spacer"></span><span class="muted">jonflix (Emby 4.9)</span><a>Help</a>
+    </header>
+    <div
+      class="abs"
+      style="
+        left: 0;
+        top: 44px;
+        width: 220px;
+        height: 756px;
+        border-right: 1px solid #999;
+        padding: 12px;
+        background: #fafafa;
+      "
+    >
+      <div class="h">Your rooms</div>
+      <div class="muted" style="margin-bottom: 10px">No rooms yet.</div>
+      <span class="btn">+ New room</span>
+    </div>
+    <div class="abs" style="left: 236px; top: 58px; width: 1028px">
+      <div class="note" style="margin-bottom: 10px">
+        <div class="row" style="justify-content: space-between">
+          <div>
+            <b>We found your previous setup:</b> 6 bulbs, 2 mapping profiles, 1 device assignment
+            (pasted into the plugin settings from openlightfx.com/config).
+          </div>
+          <div class="row">
+            <span class="btn primary">Review import…</span><span class="btn">Not now</span>
+          </div>
+        </div>
+        <div class="muted" style="margin-top: 4px">
+          Shown only when old pasted config exists. Review lists the rooms, bulbs, positions and
+          screen that will be created, and anything that can't be carried over, before anything
+          changes.
+        </div>
+      </div>
+      <div class="box white" style="padding: 14px 16px; margin-bottom: 12px">
+        <div class="h2">Welcome to OpenLightFX</div>
+        <div>
+          OpenLightFX lights your room in time with a movie. First, tell it about the room you watch
+          in: its screen and its bulbs. It takes a few minutes.
+        </div>
+        <div style="margin-top: 8px">
+          <span class="btn">Skip — write a track without lights</span>
+          <span class="muted">You can set up a room later. Preview on bulbs needs a room.</span>
+        </div>
+      </div>
+      <div class="box" style="padding: 12px 14px; height: 470px; position: relative">
+        <div class="row" style="gap: 24px">
+          <div><span class="lbl">Room name</span><span class="field">Living Room</span></div>
+          <div>
+            <span class="lbl">Screen (the Emby app in this room)</span
+            ><span class="field" style="min-width: 300px">Choose a device… ▾</span>
+            <span class="btn small">Refresh</span>
+          </div>
+        </div>
+        <div class="row" style="margin-top: 14px; align-items: flex-start; gap: 14px">
+          <div
+            class="box white dash"
+            style="
+              width: 560px;
+              height: 330px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              flex-direction: column;
+              color: #666;
+            "
+          >
+            <div style="font-size: 14px">Room diagram</div>
+            <div>Pick a screen and find bulbs, then drag each bulb to where it is in the room.</div>
+          </div>
+          <div class="box white" style="width: 400px; height: 330px; padding: 10px">
+            <div class="row" style="justify-content: space-between">
+              <b>Bulbs not in a room</b><span class="btn primary">Find bulbs</span>
+            </div>
+            <div class="muted" style="margin-top: 30px; text-align: center">
+              No bulbs found yet.<br />Find bulbs searches your network for WiZ, LIFX, Govee and Hue
+              (about 7 s).
+            </div>
+          </div>
+        </div>
+        <div
+          class="abs"
+          style="
+            left: 14px;
+            right: 14px;
+            bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+          "
+        >
+          <span class="btn disabled">Delete room</span>
+          <span class="row"
+            ><span class="muted">Pick a screen to save.</span
+            ><span class="btn disabled">Save room</span></span
+          >
+        </div>
+      </div>
+    </div>
+    <div class="wf-label">01 — First run (no rooms) · J1 Step 1 · FLOW-001, ROOM-011</div>
+  </body>
+</html>

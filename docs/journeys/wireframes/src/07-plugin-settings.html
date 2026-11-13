@@ -1,0 +1,92 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="wf.css" />
+    <title>07 Plugin settings</title>
+  </head>
+  <body>
+    <header class="app" style="background: #ddd">
+      <span class="brand">Emby Server · Dashboard</span
+      ><span class="muted">Plugins › OpenLightFX</span>
+    </header>
+    <div
+      class="abs"
+      style="
+        left: 0;
+        top: 44px;
+        width: 220px;
+        bottom: 0;
+        background: #e6e6e6;
+        border-right: 1px solid #999;
+        padding: 12px;
+        color: #666;
+      "
+    >
+      Emby dashboard menu<br /><br />Server<br />Devices<br />Library<br />…<br /><b
+        style="color: #222"
+        >Plugins</b
+      >
+    </div>
+    <div class="abs" style="left: 250px; top: 64px; width: 760px">
+      <div class="h2">OpenLightFX Settings</div>
+      <div class="box white" style="padding: 16px; margin: 10px 0 18px">
+        <div style="font-size: 14px">
+          Rooms, bulbs, and light tracks are set up in <b>OpenLightFX Studio</b>.
+        </div>
+        <div style="margin-top: 12px">
+          <span class="btn primary" style="font-size: 14px; padding: 8px 16px"
+            >Open OpenLightFX Studio ↗</span
+          >
+          <span class="muted">/emby/OpenLightFX/studio/</span>
+        </div>
+        <div class="muted" style="margin-top: 10px; font-size: 11px">
+          No more pasting JSON. Your old pasted bulb and profile settings are imported the first
+          time you open Studio.
+        </div>
+      </div>
+      <div class="h">Playback</div>
+      <table class="t">
+        <tr>
+          <td style="width: 280px">Global time offset (ms)</td>
+          <td><span class="field" style="min-width: 90px">0</span></td>
+        </tr>
+        <tr>
+          <td>Global brightness cap (%)</td>
+          <td><span class="field" style="min-width: 90px">100</span></td>
+        </tr>
+        <tr>
+          <td>Photosensitivity mode</td>
+          <td>☐</td>
+        </tr>
+        <tr>
+          <td>Show flashing content warnings</td>
+          <td>☑</td>
+        </tr>
+        <tr>
+          <td>Start / End / Credits behavior override</td>
+          <td><span class="field" style="min-width: 150px">Use track default ▾</span></td>
+        </tr>
+        <tr>
+          <td>Pre-show sequence</td>
+          <td>☑</td>
+        </tr>
+        <tr>
+          <td>Log level</td>
+          <td><span class="field" style="min-width: 90px">Info ▾</span></td>
+        </tr>
+      </table>
+      <div style="margin-top: 14px"><span class="btn primary">Save</span></div>
+    </div>
+    <div class="abs note" style="left: 1030px; top: 64px; width: 230px; font-size: 11px">
+      <b>Removed from this page:</b><br />Bulb Configuration JSON<br />Mapping Profiles JSON<br />Active
+      Profile Name<br />Device Profile Overrides JSON<br /><br />Kept as hidden properties so
+      existing values still load and can be imported. "Playback" stays here until Studio has a
+      Settings screen (OQ-J1-6). Lookahead, poll interval and extra scan paths stay too, under
+      "Advanced".
+    </div>
+    <div class="wf-label">
+      07 — Emby plugin settings page, reduced to a link · J1 · rooms-api.md § Plugin settings page
+    </div>
+  </body>
+</html>
