@@ -53,7 +53,17 @@ export async function roomApi<T>(path: string, init: RequestInit = {}): Promise<
   if (response.status === 204) return undefined as T;
   return response.json();
 }
-export const loadSetup = () => roomApi<Setup>('Setup');
+export async function loadSetup(): Promise<Setup> {
+  const setup = await roomApi<{ roomCount: number }>('Setup');
+  const response = await fetch('/OpenLightFX/Studio/CanManageRooms', {
+    headers: authHeaders(),
+  });
+  if (response.status === 401 || response.status === 403) {
+    return { ...setup, isAdmin: false };
+  }
+  if (!response.ok) throw new Error(`Room permissions ${response.status}`);
+  return { ...setup, isAdmin: true };
+}
 export const loadRooms = () => roomApi<Room[]>('Rooms');
 export const loadDevices = () => roomApi<EmbyDevice[]>('Devices');
 export const loadBulbs = () => roomApi<RoomBulb[]>('Bulbs');

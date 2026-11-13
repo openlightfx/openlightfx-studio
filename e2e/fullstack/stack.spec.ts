@@ -299,6 +299,22 @@ requirement(
 );
 
 requirement(
+  'ROOM-001 @fullstack admin room controls use Emby role authorization',
+  async ({ page, request }) => {
+    const response = await request.get(`${emby()}/OpenLightFX/Studio/CanManageRooms`, {
+      headers: headers(),
+      timeout: 5000,
+    });
+    expect(response.ok()).toBeTruthy();
+    expect((await response.json()).canManageRooms).toBe(true);
+
+    await page.goto(`${emby()}/emby/OpenLightFX/studio/?api_key=${token()}#/rooms`);
+    await expect(page.getByRole('button', { name: 'Find bulbs' })).toBeEnabled();
+    await expect(page.getByRole('button', { name: '+ New room' })).toBeEnabled();
+  }
+);
+
+requirement(
   'LIB-001 @fullstack movies show a real poster card and track count from Emby',
   async ({ page, request }) => {
     const id = await itemId(request, 'h264');
