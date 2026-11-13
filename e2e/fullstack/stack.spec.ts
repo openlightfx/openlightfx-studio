@@ -268,8 +268,9 @@ requirement(
         timeout: 5000,
       })
     ).json();
+    expect(String(info.proxy.editUrl)).not.toMatch(/api_key/i);
     const ranged = await request.get(info.proxy.editUrl, {
-      headers: { Range: 'bytes=0-100' },
+      headers: { ...headers(), Range: 'bytes=0-100' },
       timeout: 5000,
     });
     expect(ranged.status()).toBe(206);
