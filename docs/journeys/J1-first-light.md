@@ -705,20 +705,20 @@ Format: ID, title, layer (all L1), status (all `proposed`), a one-line statement
 
 **Superseded.**
 
-| Requirement        | Why                                                                      | Replaced by                                                                                                        |
-| ------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| SHELL-010          | The empty-studio explainer becomes first run on Rooms.                   | FLOW-001                                                                                                           |
-| MEDIA-001          | Library is its own screen.                                               | LIB-001 to LIB-003                                                                                                 |
-| MEDIA-014, ERR-005 | Studio opens movies from Emby only. Local video files are not a J1 path. | —                                                                                                                  |
-| MEDIA-017          | Tracks open from the Movie screen.                                       | TRACK-001                                                                                                          |
-| TIME-006           | The minimap is the "Overview" bar that duplicated seeking.               | EDIT-001                                                                                                           |
-| CHAN-001           | Channel templates become layouts.                                        | MODEL-001, TRACK-002                                                                                               |
-| CHAN-002           | Channels are not added, renamed, or deleted by hand.                     | EDIT-014                                                                                                           |
-| CHAN-003           | Lane order is the layout's order.                                        | MODEL-001                                                                                                          |
-| SAVE-002           | Save no longer changes what Emby plays; Watch in Emby does.              | WATCH-001                                                                                                          |
-| PREV-004           | Channel-to-bulb mapping is replaced by room routing.                     | MODEL-003, MODEL-004, EDIT-004                                                                                     |
-| PREV-005           | Mapping profiles are retired.                                            | ROOM-011, WATCH-002                                                                                                |
-| PREV-009           | "No bulbs" becomes the no-room banner.                                   | EDIT-010                                                                                                           |
+| Requirement        | Why                                                                      | Replaced by                                                                                        |
+| ------------------ | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| SHELL-010          | The empty-studio explainer becomes first run on Rooms.                   | FLOW-001                                                                                           |
+| MEDIA-001          | Library is its own screen.                                               | LIB-001 to LIB-003                                                                                 |
+| MEDIA-014, ERR-005 | Studio opens movies from Emby only. Local video files are not a J1 path. | —                                                                                                  |
+| MEDIA-017          | Tracks open from the Movie screen.                                       | TRACK-001                                                                                          |
+| TIME-006           | The minimap is the "Overview" bar that duplicated seeking.               | EDIT-001                                                                                           |
+| CHAN-001           | Channel templates become layouts.                                        | MODEL-001, TRACK-002                                                                               |
+| CHAN-002           | Channels are not added, renamed, or deleted by hand.                     | EDIT-014                                                                                           |
+| CHAN-003           | Lane order is the layout's order.                                        | MODEL-001                                                                                          |
+| SAVE-002           | Save no longer changes what Emby plays; Watch in Emby does.              | WATCH-001                                                                                          |
+| PREV-004           | Channel-to-bulb mapping is replaced by room routing.                     | MODEL-003, MODEL-004, EDIT-004                                                                     |
+| PREV-005           | Mapping profiles are retired.                                            | ROOM-011, WATCH-002                                                                                |
+| PREV-009           | "No bulbs" becomes the no-room banner.                                   | EDIT-010                                                                                           |
 | PLUG-006           | The plugin route list is replaced by the rooms API.                      | [rooms-api.md](https://github.com/openlightfx/openlightfx-emby/blob/main/docs/design/rooms-api.md) |
 
 **Untouched, outside J1 (L2/L3).** SHELL-007 to SHELL-009, TIME-008, TIME-009, TIME-012, TIME-013, KEY-015, FX-001 to FX-003, FX-005, CHAN-007, KEYB-004, PREV-011.
