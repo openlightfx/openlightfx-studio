@@ -14,7 +14,7 @@ This document is that path, written first. It covers one journey end to end. Eve
 
 A **track** is lighting written once for one movie. A **room** is a real space with one screen and some smart bulbs around it. **Studio** is where you write a track and see it on your own bulbs while you work. The **Emby plugin** plays that track in whichever room is watching the movie.
 
-The person on this journey owns an Emby server, a TV or projector, and a handful of WiZ, LIFX, Hue, or Govee bulbs. Today they paste bulb JSON from openlightfx.com/config into the Emby plugin settings page. After this journey they never open that page and never paste JSON.
+The person on this journey owns an Emby server, a TV or projector, and a handful of WiZ, LIFX, Hue, or Govee bulbs. They set up rooms and bulbs in Studio. There is no pasted-config import, mapping-profile setup, or legacy configuration path.
 
 ## The journey
 
@@ -133,7 +133,7 @@ Studio is one page at `/emby/OpenLightFX/studio/`. Screens are hash routes so th
 
 **Header**, on every Studio screen: the OpenLightFX Studio name, then **Rooms** and **Library** links (the current one is marked), then on the right the server name and a **Help** link to this journey's user-facing help. In the editor the header is replaced by the editor's menu bar ([Step 4](#step-4--edit)). Browser Back and Forward move between screens; the editor asks before leaving with unsaved changes.
 
-**Where Studio opens:** with no rooms and no legacy config, `#/rooms` in first-run mode. With no rooms but legacy config, `#/rooms` with the import card on top. Otherwise the last route the person used, else `#/library`.
+**Where Studio opens:** first run opens `#/rooms`. When rooms already exist, Studio restores the last route, else `#/library`. Existing plugin settings do not change this flow; legacy bulb/profile configuration is not supported.
 
 ## Step 1 — Set up a room
 
@@ -170,24 +170,11 @@ Studio is one page at `/emby/OpenLightFX/studio/`. Screens are hash routes so th
 | **Save room**                           | Footer              | Validates and saves the room and the position of every bulb in it. Disabled until there is a name and a screen. A room with no bulbs saves with a warning: "No bulbs yet. Tracks will not light this room."                                   |
 | **Delete room**                         | Footer              | Asks "Delete Living Room? Its 4 bulbs become unplaced." Then deletes the room.                                                                                                                                                                |
 | **Next: pick a movie →**                | Footer              | Goes to the Library.                                                                                                                                                                                                                          |
-| **Import my existing setup**            | Import card         | See [import](#importing-the-old-pasted-setup).                                                                                                                                                                                                |
 | **Skip — write a track without lights** | First-run card      | Goes to the Library. Studio stays usable; the editor shows the no-room banner.                                                                                                                                                                |
 
 ### First run
 
 With no rooms, the main area starts with a short welcome card above the room editor: "OpenLightFX lights your room in time with a movie. First, tell it about the room you watch in: its screen and its bulbs." The room editor below it is already open with "Living Room" as the name. The card holds **Skip — write a track without lights**.
-
-### Importing the old pasted setup
-
-When the plugin still has `BulbConfigJson` or `MappingProfilesJson` and no rooms exist, an import card sits above everything: "We found your previous setup: 6 bulbs, 2 mapping profiles, 1 device assignment." It lists what will be created before anything changes:
-
-- One room per mapping profile, named after the profile.
-- Each bulb goes into the first profile, in profile order, that maps it. Its position comes from its `spatialPosition` (both "Left" and "SPATIAL_LEFT" spellings), else from the channel name it is mapped to when that is a position name, else it is left unplaced in that room's list.
-- Each room's screen comes from `DeviceProfileOverridesJson` (deviceId → profile name). Where several devices point at one profile, the one Emby saw most recently wins and the others are listed as "not imported".
-- Bulbs mapped by no profile are imported as unplaced bulbs.
-- Everything that cannot be carried over is listed with the reason, for example "Profile 'Bedroom' maps channel `fx-1`, which is not a position".
-
-**Import** applies it. **Not now** hides the card for this browser session. Import does not delete the old settings; the plugin stops reading them once rooms exist. After import, each room opens so the person can check positions with **Identify**.
 
 ### Empty and error states
 
@@ -204,7 +191,7 @@ When the plugin still has `BulbConfigJson` or `MappingProfilesJson` and no rooms
 
 ### Data
 
-Reads `GET /OpenLightFX/Studio/Setup`, `GET …/Rooms`, `GET …/Devices`, `POST …/Discover`. Writes `POST`/`PUT`/`DELETE …/Rooms`, `PUT …/Bulbs/{bulbId}`, `POST …/Bulbs/{bulbId}/Identify`, `POST …/Import/Legacy`, and the existing Hue pairing routes. See the [API summary](#plugin-api-summary).
+Reads `GET /OpenLightFX/Studio/Setup`, `GET …/Rooms`, `GET …/Devices`, `POST …/Discover`. Writes `POST`/`PUT`/`DELETE …/Rooms`, `PUT …/Bulbs/{bulbId}`, `POST …/Bulbs/{bulbId}/Identify`, and the existing Hue pairing routes. There is no legacy import API. See the [API summary](#plugin-api-summary).
 
 ## Step 2 — Pick a movie
 
@@ -424,7 +411,7 @@ Format: ID, title, layer (all L1), status (all `proposed`), a one-line statement
 #### FLOW-001 First run lands on room setup
 
 - **Statement:** With no rooms, Studio opens on `#/rooms` with the welcome card.
-- **Acceptance:** Given a plugin with no rooms and no legacy config, when Studio loads, then the URL is `#/rooms`, the welcome card and an open room editor named "Living Room" are visible, and **Skip — write a track without lights** goes to `#/library`.
+- **Acceptance:** Given a fresh plugin with no rooms, when Studio loads, then the URL is `#/rooms`, the welcome card and an open room editor named "Living Room" are visible. No legacy configuration or import prompt is shown.
 - **Tests:** browser, fullstack, walkthrough
 
 #### FLOW-002 Returning users land where they were
@@ -506,12 +493,6 @@ Format: ID, title, layer (all L1), status (all `proposed`), a one-line statement
 - **Statement:** A discovered Hue bridge pairs from the Rooms screen and its lights join the list.
 - **Acceptance:** Given the simulator's Hue bridge, when Pair is clicked after its link button is pressed, then its lights appear as bulbs, and no response to the browser contains the bridge key.
 - **Tests:** fullstack
-
-#### ROOM-011 Import the old pasted setup
-
-- **Statement:** Legacy bulb and profile JSON imports into rooms with a preview first.
-- **Acceptance:** Given the fixture `tests/fixtures/legacy/config.json` (6 bulbs, profiles "Living Room" and "Bedroom", one device override), when Studio loads, then the import card lists 2 rooms with their bulbs, positions, and screen, plus every item not imported and why. When Import is clicked, then `GET …/Rooms` matches the fixture's expected rooms, and the legacy settings are unchanged.
-- **Tests:** unit, fixture, fullstack
 
 #### ROOM-012 Room errors are specific
 
@@ -717,7 +698,7 @@ Format: ID, title, layer (all L1), status (all `proposed`), a one-line statement
 | CHAN-003           | Lane order is the layout's order.                                        | MODEL-001                                                                                          |
 | SAVE-002           | Save no longer changes what Emby plays; Watch in Emby does.              | WATCH-001                                                                                          |
 | PREV-004           | Channel-to-bulb mapping is replaced by room routing.                     | MODEL-003, MODEL-004, EDIT-004                                                                     |
-| PREV-005           | Mapping profiles are retired.                                            | ROOM-011, WATCH-002                                                                                |
+| PREV-005           | Mapping profiles are not persisted; room positions determine playback.   | WATCH-002                                                                                          |
 | PREV-009           | "No bulbs" becomes the no-room banner.                                   | EDIT-010                                                                                           |
 | PLUG-006           | The plugin route list is replaced by the rooms API.                      | [rooms-api.md](https://github.com/openlightfx/openlightfx-emby/blob/main/docs/design/rooms-api.md) |
 
@@ -758,24 +739,24 @@ Rooms, bulbs, positions, and Follows overrides are not in the track format. They
 
 Full design, storage, and code mapping: [openlightfx-emby `docs/design/rooms-api.md`](https://github.com/openlightfx/openlightfx-emby/blob/main/docs/design/rooms-api.md). All routes are under `/emby`, use the existing Studio authentication, and require the Emby Admin role for writes.
 
-| Method and route                                          | Used by       | Purpose                                                                             |
-| --------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------- |
-| `GET /OpenLightFX/Studio/Setup`                           | Start-up      | Room count, whether legacy config exists, whether the caller is an admin.           |
-| `GET /OpenLightFX/Studio/Rooms`                           | Rooms, editor | Every room with screen, bulbs, positions, overrides, `updatedAt`, suggested layout. |
-| `POST /OpenLightFX/Studio/Rooms`                          | Rooms         | Create a room.                                                                      |
-| `PUT /OpenLightFX/Studio/Rooms/{roomId}`                  | Rooms         | Replace a room, its screen, and its bulbs' positions. `If-Match: updatedAt`.        |
-| `DELETE /OpenLightFX/Studio/Rooms/{roomId}`               | Rooms         | Delete a room; its bulbs become unplaced.                                           |
-| `GET /OpenLightFX/Studio/Devices`                         | Screen picker | Every Emby device seen, with the room using it and unassigned recent playback.      |
-| `POST /OpenLightFX/Studio/Discover`                       | Find bulbs    | Run discovery; return bulbs with stable ids, merged with known bulbs.               |
-| `GET /OpenLightFX/Studio/Bulbs`                           | Rooms         | Every known bulb, placed or not. (Replaces today's route of the same name.)         |
-| `PUT /OpenLightFX/Studio/Bulbs/{bulbId}`                  | Rename        | Name of a known bulb.                                                               |
-| `POST /OpenLightFX/Studio/Bulbs/{bulbId}/Identify`        | Identify      | Flash one bulb.                                                                     |
-| `GET` / `POST /OpenLightFX/Studio/Import/Legacy`          | Import card   | Preview, then apply, the legacy import.                                             |
-| `GET /OpenLightFX/Studio/Rooms/{roomId}/Routing?layout=…` | Editor lanes  | Channel → bulbs and bulb → sources for a layout or a track's channel list.          |
-| `POST /OpenLightFX/Studio/Preview/Start` (changed)        | Lights        | Takes `roomId` instead of a channel→bulb mapping.                                   |
-| `POST /OpenLightFX/Studio/Preview/Frame` (changed)        | Lights        | Takes channel states; the plugin routes them.                                       |
-| `POST /OpenLightFX/Studio/Items/{itemId}/ActiveTrack`     | Watch in Emby | Make a track the movie's active track; returns the Emby web URL.                    |
-| `GET /OpenLightFX/Studio/Items` (extended)                | Library       | Adds `trackCount` and `hasActiveTrack`.                                             |
+| Method and route                                   | Used by       | Purpose                                                                             |
+| -------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------- |
+| `GET /OpenLightFX/Studio/Setup`                    | Start-up      | Room count and whether the caller is an admin.                                      |
+| `GET /OpenLightFX/Studio/Rooms`                    | Rooms, editor | Every room with screen, bulbs, positions, overrides, `updatedAt`, suggested layout. |
+| `POST /OpenLightFX/Studio/Rooms`                   | Rooms         | Create a room.                                                                      |
+| `PUT /OpenLightFX/Studio/Rooms/{roomId}`           | Rooms         | Replace a room, its screen, and its bulbs' positions. `If-Match: updatedAt`.        |
+| `DELETE /OpenLightFX/Studio/Rooms/{roomId}`        | Rooms         | Delete a room; its bulbs become unplaced.                                           |
+| `GET /OpenLightFX/Studio/Devices`                  | Screen picker | Every Emby device seen, with the room using it and unassigned recent playback.      |
+| `POST /OpenLightFX/Studio/Discover`                | Find bulbs    | Run discovery; return bulbs with stable ids, merged with known bulbs.               |
+| `GET /OpenLightFX/Studio/Bulbs`                    | Rooms         | Every known bulb, placed or not. (Replaces today's route of the same name.)         |
+| `PUT /OpenLightFX/Studio/Bulbs/{bulbId}`           | Rename        | Name of a known bulb.                                                               |
+| `POST /OpenLightFX/Studio/Bulbs/{bulbId}/Identify` | Identify      | Flash one bulb.                                                                     |
+
+| `GET /OpenLightFX/Studio/Rooms/{roomId}/Routing?layout=…` | Editor lanes | Channel → bulbs and bulb → sources for a layout or a track's channel list. |
+| `POST /OpenLightFX/Studio/Preview/Start` (changed) | Lights | Takes `roomId` instead of a channel→bulb mapping. |
+| `POST /OpenLightFX/Studio/Preview/Frame` (changed) | Lights | Takes channel states; the plugin routes them. |
+| `POST /OpenLightFX/Studio/Items/{itemId}/ActiveTrack` | Watch in Emby | Make a track the movie's active track; returns the Emby web URL. |
+| `GET /OpenLightFX/Studio/Items` (extended) | Library | Adds `trackCount` and `hasActiveTrack`. |
 
 ## Definition of done for each step
 

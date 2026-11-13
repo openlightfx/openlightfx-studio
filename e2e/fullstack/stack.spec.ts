@@ -79,27 +79,15 @@ async function saveTrack(
   });
 }
 
-/** Map the round-trip track's left channel onto the seeded left bulb. */
-async function ensureMapping(request: APIRequestContext): Promise<void> {
-  const profile = JSON.stringify([
-    {
-      name: 'Default',
-      mappings: [
-        { channelId: 'left', bulbIds: ['left'] },
-        { channelId: 'right', bulbIds: ['right'] },
-      ],
-    },
-  ]);
-  const saved = await request.put(`${emby()}/OpenLightFX/Settings`, {
-    headers: { ...headers(), 'content-type': 'application/json' },
-    data: {
-      MappingProfilesJson: profile,
-      ActiveProfileName: 'Default',
-      PhotosensitivityMode: false,
-    },
+/** Verify the local Emby volume starts with a room seeded for the simulator. */
+async function ensureRoom(request: APIRequestContext): Promise<void> {
+  const response = await request.get(`${emby()}/OpenLightFX/Studio/Rooms`, {
+    headers: headers(),
     timeout: 5000,
   });
-  expect(saved.ok()).toBeTruthy();
+  expect(response.ok()).toBeTruthy();
+  const rooms = await response.json();
+  expect(rooms.some((room: { name: string }) => room.name === 'Fullstack Room')).toBeTruthy();
 }
 
 async function playbackToken(request: APIRequestContext): Promise<string> {
@@ -454,7 +442,7 @@ requirement('SAVE-001 @fullstack save stores the track beside the movie', async 
 requirement('SAVE-002 @fullstack playback uses the saved track', async ({ request }) => {
   const id = await itemId(request);
   const track = freshTrackId();
-  await ensureMapping(request);
+  await ensureRoom(request);
   expect((await saveTrack(request, id, track)).ok()).toBeTruthy();
   const listed = await (
     await request.get(`${emby()}/OpenLightFX/Tracks/ByItem?itemId=${id}`, {
@@ -549,9 +537,9 @@ requirement('PREV-004 @fullstack preview start sends the mapping', async ({ requ
 });
 
 requirement(
-  'PREV-005 @fullstack confirming a mapping updates the plugin profile',
+  'PREV-005 @fullstack preview mappings are transient, not saved as plugin configuration',
   async ({ request }) => {
-    // Confirming the mapping is the preview start that carries it; do not rely on another test's setup.
+    // Preview mappings are request-local; the plugin has no persisted mapping-profile settings.
     const started = await request.post(`${emby()}/OpenLightFX/Studio/Preview/Start`, {
       headers: headers(),
       data: { mapping: { left: ['left'], right: ['right'] }, takeover: true },
@@ -565,10 +553,8 @@ requirement(
     const settings = await (
       await request.get(`${emby()}/OpenLightFX/Settings`, { headers: headers(), timeout: 5000 })
     ).json();
-    // run.sh seeds bulbs named left/right, so only a mapping profile counts here.
-    expect(String(settings.MappingProfilesJson ?? settings.mappingProfilesJson ?? '')).toContain(
-      'left'
-    );
+    expect(settings).not.toHaveProperty('mappingProfilesJson');
+    expect(settings).not.toHaveProperty('bulbConfigJson');
   }
 );
 
@@ -673,7 +659,7 @@ requirement(
   'PREV-008 @fullstack start without takeover is 409 while Emby plays',
   async ({ request }) => {
     const id = await itemId(request);
-    await ensureMapping(request);
+    await ensureRoom(request);
     expect((await saveTrack(request, id, freshTrackId())).ok()).toBeTruthy();
     const stopPlayback = await reportPlayback(request, id);
     try {
@@ -832,7 +818,7 @@ requirement(
   'PLUG-005 @fullstack preview refuses or takes over an active session',
   async ({ request }) => {
     const id = await itemId(request);
-    await ensureMapping(request);
+    await ensureRoom(request);
     expect((await saveTrack(request, id, freshTrackId())).ok()).toBeTruthy();
     const stopPlayback = await reportPlayback(request, id);
     try {

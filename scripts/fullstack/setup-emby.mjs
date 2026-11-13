@@ -102,40 +102,10 @@ if (viewerAuth.body?.User?.Policy?.IsAdministrator) {
   process.exit(1);
 }
 
-// Point the plugin at the two simulator REST bulbs (docker/simulator.toml).
-// Fails harmlessly on the first pass, before the plugin is installed.
-const template = (port) =>
-  `http://simulator:${port}/api/light?r={r}&g={g}&b={b}&brightness={brightness}&transition_ms={transition_ms}&power={power}`;
-const bulbs = [
-  {
-    protocol: 'Rest',
-    Id: 'left',
-    name: 'Left',
-    IpAddress: '0.0.0.0',
-    Port: 9200,
-    restUrlTemplate: template(9200),
-    restHttpMethod: 'GET',
-  },
-  {
-    protocol: 'Rest',
-    Id: 'right',
-    name: 'Right',
-    IpAddress: '0.0.0.0',
-    Port: 9201,
-    restUrlTemplate: template(9201),
-    restHttpMethod: 'GET',
-  },
-];
-const seeded = await json(
-  '/OpenLightFX/Settings',
-  { BulbConfigJson: JSON.stringify(bulbs) },
-  token,
-  undefined,
-  'PUT'
-);
-const pluginLoaded =
-  seeded.status < 400 &&
-  String(seeded.body?.bulbConfigJson ?? seeded.body?.BulbConfigJson ?? '').includes('simulator');
+// Check that the plugin room API is loaded. Simulator bulbs and the test room are
+// seeded into the local Emby test volume by run.sh, not through legacy settings APIs.
+const setup = await json('/OpenLightFX/Studio/Setup', undefined, token);
+const pluginLoaded = setup.status < 400 && typeof setup.body?.roomCount === 'number';
 
 // MEDIA-015: wait for clip-zero to be scanned. Emby's item update API ignores
 // RunTimeTicks and the scan always probes the file, so run.sh clears the runtime

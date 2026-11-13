@@ -4,7 +4,7 @@ Low-fidelity mockups for [J1 — First light](../J1-first-light.md). Grey boxes 
 
 | PNG                                                  | Screen                                        |
 | ---------------------------------------------------- | --------------------------------------------- |
-| [01-first-run.png](01-first-run.png)                 | Rooms, first run, with the legacy import card |
+| [01-first-run.png](01-first-run.png)                 | Rooms, first run, no legacy import            |
 | [02-room-setup.png](02-room-setup.png)               | Rooms, editing a room, bulb chip menu open    |
 | [03-library.png](03-library.png)                     | Library                                       |
 | [04-track-open-create.png](04-track-open-create.png) | Movie: open or create a track                 |

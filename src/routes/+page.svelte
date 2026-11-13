@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import RoomsScreen from '$lib/components/rooms/RoomsScreen.svelte';
   import { L1_SHORTCUTS, visibleMarks } from '$lib/domain';
   import { formatClock, StudioSession } from '$lib/studio/session.svelte';
 
@@ -8,13 +9,24 @@
   let canvas = $state<HTMLCanvasElement | null>(null);
   let video = $state<HTMLVideoElement | null>(null);
   let drag: { x: number; y: number; moved: boolean } | null = null;
+  let hashRoute = $state('');
+  let editorBooted = false;
 
   onMount(() => {
+    const updateRoute = () => {
+      hashRoute = location.hash || '';
+      if (hashRoute && !hashRoute.startsWith('#/rooms') && !editorBooted) {
+        editorBooted = true;
+        void session.boot().then(() => {
+          document.body.dataset.frameP95Ms = String(session.frameP95);
+        });
+      }
+    };
+    updateRoute();
+    window.addEventListener('hashchange', updateRoute);
     document.body.dataset.frameP95Ms = String(session.frameP95);
     const stop = session.startAutosave();
-    void session.boot().then(() => {
-      document.body.dataset.frameP95Ms = String(session.frameP95);
-    });
+    if (!location.hash) location.hash = '#/rooms';
     let frame = 0;
     const loop = () => {
       session.syncFromVideo();
@@ -22,6 +34,7 @@
     };
     frame = requestAnimationFrame(loop);
     return () => {
+      window.removeEventListener('hashchange', updateRoute);
       stop();
       cancelAnimationFrame(frame);
     };
@@ -226,7 +239,13 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-<div class="shell">
+{#if !hashRoute}
+  <div class="route-loading" role="status">Loading OpenLightFX Studio…</div>
+{/if}
+{#if hashRoute.startsWith('#/rooms')}
+  <RoomsScreen />
+{/if}
+<div class="shell" class:hidden={hashRoute.startsWith('#/rooms') || !hashRoute}>
   <header class="top">
     <strong class="brand">OpenLightFX</strong>
     <h1>{title}</h1>
@@ -311,7 +330,6 @@
               <li>Pick a movie from the library.</li>
               <li>Add a channel for each group of bulbs.</li>
               <li>Click the timeline to add a keyframe.</li>
-              <li>Map bulbs, then save.</li>
             </ol>
           </div>
         {/if}
@@ -583,8 +601,6 @@
       >
       {#if session.spacingError}<span>{session.spacingError}</span>{/if}
       <button type="button" onclick={() => (session.adding = true)}>Add channel</button>
-      <button type="button" onclick={() => (session.mappingOpen = true)}>Map bulbs</button>
-      {#if session.mappingOpen}<p>A bulb follows one channel</p>{/if}
       <button type="button" onclick={() => void session.eyedrop()}>Eyedropper</button>
       <button type="button">Overlay</button>
       {#if session.playbackActive}
@@ -644,6 +660,15 @@
 {/if}
 
 <style>
+  .route-loading {
+    min-height: 100vh;
+    padding: 2rem;
+    color: #ddd;
+    background: #0b0b16;
+  }
+  .hidden {
+    display: none;
+  }
   :global(html),
   :global(body) {
     height: 100%;

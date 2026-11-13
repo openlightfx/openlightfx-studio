@@ -120,11 +120,36 @@ docker compose -f docker-compose.fullstack.yml cp "$DLL" emby:/config/plugins/Op
 "${COMPOSE[@]}" stop emby
 EMBY_CONFIG_VOLUME="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/config"}}{{.Name}}{{end}}{{end}}' "$("${COMPOSE[@]}" ps -aq emby)")"
 docker run --rm -v "$EMBY_CONFIG_VOLUME:/config" python:3.12-slim python -c '
-import sqlite3
+import json, os, sqlite3
 db = sqlite3.connect("/config/data/library.db")
 n = db.execute("update MediaItems set RunTimeTicks = NULL where Path = ?", ("/media/clip-zero/clip-zero.mp4",)).rowcount
 db.commit()
-raise SystemExit(0 if n == 1 else "clip-zero not found in library.db")
+if n != 1: raise SystemExit("clip-zero not found in library.db")
+# Test-only fixture data in this disposable Docker volume; never written to a real Emby install.
+room_id = "r_fullstack"
+def bulb(bid, name, position, port):
+    return {
+        "Id": bid, "Name": name, "RoomId": room_id, "Position": position,
+        "Config": {
+            "protocol": "Rest", "id": bid, "name": name, "ipAddress": "0.0.0.0", "port": port,
+            "restUrlTemplate": f"http://simulator:{port}/api/light?r={{r}}&g={{g}}&b={{b}}&brightness={{brightness}}&transition_ms={{transition_ms}}&power={{power}}",
+            "restHttpMethod": "GET"
+        }
+    }
+doc = {
+    "SchemaVersion": 1,
+    "UpdatedAt": "2025-01-01T00:00:00.0000000+00:00",
+    "Rooms": [{
+        "Id": room_id, "Name": "Fullstack Room",
+        "Screen": {"DeviceId": "openlightfx-fullstack-play", "DeviceName": "Fullstack Player", "AppName": "OpenLightFX Tests"},
+        "Bulbs": [{"Id": "left", "Position": "left"}, {"Id": "right", "Position": "right"}],
+        "UpdatedAt": "2025-01-01T00:00:00.0000000+00:00"
+    }],
+    "Bulbs": [bulb("left", "Left", "left", 9200), bulb("right", "Right", "right", 9201)]
+}
+path = "/config/data/OpenLightFX/rooms.json"
+os.makedirs(os.path.dirname(path), exist_ok=True)
+with open(path, "w", encoding="utf-8") as out: json.dump(doc, out)
 '
 "${COMPOSE[@]}" start emby
 # Second pass: the plugin is loaded now, so this also seeds the simulator bulbs.
