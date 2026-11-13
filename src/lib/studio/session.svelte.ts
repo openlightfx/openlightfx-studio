@@ -176,10 +176,10 @@ export class StudioSession {
     const key = params.get('api_key');
     if (key) document.cookie = `api_key=${key}; Path=/`;
     await this.openDb();
-    this.measureFrames();
     if (this.pluginDown) {
       this.items = [];
       this.status = 'The plugin is unreachable';
+      this.measureFrames();
       return;
     }
     try {
@@ -190,11 +190,13 @@ export class StudioSession {
       this.pluginDown = true;
       this.status = 'The plugin is unreachable';
       this.items = [];
+      this.measureFrames();
       return;
     }
     await this.loadItems(this.search);
     const itemId = params.get('itemId');
     if (itemId) await this.selectItem(itemId);
+    this.measureFrames();
   }
 
   bindVideo(video: HTMLVideoElement): void {
@@ -1008,14 +1010,19 @@ export class StudioSession {
     canvas.height = 120;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const samples: number[] = [];
-    for (let pass = 0; pass < 8; pass += 1) {
-      const start = performance.now();
+    const draw = () => {
       for (let mark = 0; mark < 10000; mark += 1) ctx.fillRect(mark % 800, (mark * 3) % 120, 2, 4);
+    };
+    draw();
+    const samples: number[] = [];
+    for (let pass = 0; pass < 20; pass += 1) {
+      const start = performance.now();
+      draw();
       samples.push(performance.now() - start);
     }
     samples.sort((a, b) => a - b);
-    this.frameP95 = samples[Math.min(samples.length - 1, Math.floor(samples.length * 0.95))] ?? 8;
+    const index = Math.max(0, Math.ceil(samples.length * 0.95) - 1);
+    this.frameP95 = samples[index] ?? 8;
   }
 }
 
