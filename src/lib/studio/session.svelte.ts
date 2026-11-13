@@ -107,6 +107,7 @@ export class StudioSession {
   selection = $state<string[]>([]);
   activeChannelId = $state<string | null>(null);
   minSpacingMs = $state(200);
+  snapToSpacing = $state(true);
   spacingError = $state('');
   status = $state('');
   alert = $state('');
@@ -175,10 +176,10 @@ export class StudioSession {
     const key = params.get('api_key');
     if (key) document.cookie = `api_key=${key}; Path=/`;
     await this.openDb();
-    this.measureFrames();
     if (this.pluginDown) {
       this.items = [];
       this.status = 'The plugin is unreachable';
+      this.measureFrames();
       return;
     }
     try {
@@ -189,11 +190,13 @@ export class StudioSession {
       this.pluginDown = true;
       this.status = 'The plugin is unreachable';
       this.items = [];
+      this.measureFrames();
       return;
     }
     await this.loadItems(this.search);
     const itemId = params.get('itemId');
     if (itemId) await this.selectItem(itemId);
+    this.measureFrames();
   }
 
   bindVideo(video: HTMLVideoElement): void {
@@ -553,7 +556,7 @@ export class StudioSession {
     const duration = this.durationMs() || timeMs;
     const time = Math.min(Math.max(0, Math.round(timeMs)), duration);
     const own = this.track.keyframes.filter((kf) => kf.channelId === channel);
-    if (!canInsert(own, time, this.minSpacingMs)) {
+    if (!canInsert(own, time, this.spacingLimit())) {
       this.status = 'No keyframe: that time is too close on this channel';
       return;
     }
@@ -578,13 +581,14 @@ export class StudioSession {
     }
     const own = this.track.keyframes.filter((kf) => kf.channelId === channel);
     let time = Math.round(this.playheadMs);
-    if (!canInsert(own, time, this.minSpacingMs)) {
+    const spacing = this.spacingLimit();
+    if (!canInsert(own, time, spacing)) {
       const duration = this.durationMs() || time;
       const gap = own
         .map((kf) => kf.timestampMs)
         .concat([0, duration])
         .sort((a, b) => a - b)
-        .find((candidate) => canInsert(own, candidate, this.minSpacingMs));
+        .find((candidate) => canInsert(own, candidate, spacing));
       if (gap === undefined) {
         this.status = 'No keyframe: that time is too close on this channel';
         return;
@@ -671,6 +675,10 @@ export class StudioSession {
     }
     this.spacingError = '';
     this.minSpacingMs = value;
+  }
+
+  spacingLimit(): number {
+    return this.snapToSpacing ? this.minSpacingMs : 0;
   }
 
   setHex(raw: string): void {
@@ -1002,14 +1010,19 @@ export class StudioSession {
     canvas.height = 120;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const samples: number[] = [];
-    for (let pass = 0; pass < 8; pass += 1) {
-      const start = performance.now();
+    const draw = () => {
       for (let mark = 0; mark < 10000; mark += 1) ctx.fillRect(mark % 800, (mark * 3) % 120, 2, 4);
+    };
+    draw();
+    const samples: number[] = [];
+    for (let pass = 0; pass < 20; pass += 1) {
+      const start = performance.now();
+      draw();
       samples.push(performance.now() - start);
     }
     samples.sort((a, b) => a - b);
-    this.frameP95 = samples[Math.min(samples.length - 1, Math.floor(samples.length * 0.95))] ?? 8;
+    const index = Math.max(0, Math.ceil(samples.length * 0.95) - 1);
+    this.frameP95 = samples[index] ?? 8;
   }
 }
 

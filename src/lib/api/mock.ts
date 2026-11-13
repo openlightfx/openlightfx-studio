@@ -371,7 +371,8 @@ export function handleMock(
         name,
         year,
         runtimeMs,
-        posterUrl: '/posters/fixture.svg',
+        // Unknown Duration stands in for a movie with no Primary image.
+        ...(itemId === '45' ? {} : { primaryImageTag: `poster-${itemId}` }),
       }));
     return json(200, items);
   }
@@ -516,9 +517,33 @@ export function serveGrowingProxy(req: IncomingMessage, res: ServerResponse): vo
   pump();
 }
 
+function posterSvg(tag: string): string {
+  const hue = [...tag].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 360;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="120" viewBox="0 0 80 120">
+    <rect width="80" height="120" fill="hsl(${hue} 42% 22%)"/>
+    <rect x="10" y="18" width="60" height="68" rx="4" fill="hsl(${hue} 48% 38%)"/>
+    <circle cx="40" cy="48" r="12" fill="hsl(${hue} 70% 72%)"/>
+    <rect x="16" y="96" width="48" height="6" rx="2" fill="hsl(${hue} 30% 70%)"/>
+  </svg>`;
+}
+
 export function mockMiddleware(req: IncomingMessage, res: ServerResponse, next: () => void): void {
   const raw = req.url ?? '';
   const urlPath = raw.split('?')[0] ?? '';
+  const poster = urlPath.match(/^\/emby\/Items\/[^/]+\/Images\/Primary$/);
+  if (poster && (req.method ?? 'GET') === 'GET') {
+    const tag = new URL(raw, 'http://studio.local').searchParams.get('tag') ?? '';
+    if (!tag) {
+      res.statusCode = 404;
+      res.end();
+      return;
+    }
+    res.statusCode = 200;
+    res.setHeader('content-type', 'image/svg+xml');
+    res.setHeader('cache-control', 'no-store');
+    res.end(posterSvg(tag));
+    return;
+  }
   if (urlPath === '/media/proxy/growing') {
     serveGrowingProxy(req, res);
     return;

@@ -7,6 +7,7 @@ it('MEDIA-001 @unit Emby Name and ProductionYear become the visible movie', () =
     Name: 'Glass Harbor',
     ProductionYear: 2017,
     RunTimeTicks: 6_060_000 * 10_000,
+    ImageTags: { Primary: 'abc' },
   });
   expect(item).toMatchObject({
     itemId: '9001',
@@ -14,6 +15,8 @@ it('MEDIA-001 @unit Emby Name and ProductionYear become the visible movie', () =
     year: 2017,
     runtimeMs: 6_060_000,
   });
-  expect(item.posterUrl).toContain('/emby/Items/9001/Images/Primary');
-  expect(libraryItemFromApi({ itemId: '2', year: 2012 }).name).toBe('');
+  expect(item.posterUrl).toBe('/emby/Items/9001/Images/Primary?tag=abc&maxHeight=240');
+  const untitled = libraryItemFromApi({ itemId: '2', year: 2012 });
+  expect(untitled.name).toBe('');
+  expect(untitled.posterUrl).toBe('');
 });

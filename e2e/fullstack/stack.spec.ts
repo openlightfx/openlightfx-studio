@@ -221,6 +221,7 @@ requirement('MEDIA-001 @fullstack items search returns movies', async ({ request
       itemId: expect.any(String),
       name: expect.any(String),
       runtimeMs: expect.any(Number),
+      primaryImageTag: expect.any(String),
     })
   );
 });
