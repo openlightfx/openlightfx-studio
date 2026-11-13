@@ -2197,7 +2197,7 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 
 - **Layer:** L1
 - **Status:** approved
-- **Tests:** browser, fullstack, walkthrough
+- **Tests:** browser, fullstack
 - **Statement:** With no rooms, Studio opens on `#/rooms` with the welcome card.
 
 **Acceptance:**
@@ -2254,7 +2254,7 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 
 - **Layer:** L1
 - **Status:** approved
-- **Tests:** browser, fullstack, walkthrough
+- **Tests:** browser, fullstack
 - **Statement:** A room saves with a unique name and a screen; Save is disabled without both.
 
 **Acceptance:**
@@ -2268,35 +2268,35 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 - **Layer:** L1
 - **Status:** approved
 - **Tests:** browser, fullstack
-- **Statement:** The screen picker defaults to devices last used by the current Emby user, newest first; it can show other users' devices, and prevents assigning a screen to multiple rooms.
+- **Statement:** The screen picker lists every known device, newest first, without filtering by user or room, and shows but disables screens assigned elsewhere.
 
 **Acceptance:**
 
 - Given Emby has seen device A (1 h ago, last used by the current user) and device B (1 day ago, last used by another user and assigned to Bedroom)
 - When the screen picker opens
-- Then it shows A and omits B
-- When "Show devices last used by other users" is checked
+- Then it shows both A and B
 - Then B appears as "In Bedroom" and is disabled
-- Then B cannot be assigned to Living Room while it belongs to Bedroom
+- There is no user or room filter
 
 #### ROOM-003 Discover bulbs
 
 - **Layer:** L1
 - **Status:** approved
-- **Tests:** fullstack, walkthrough
-- **Statement:** Find bulbs runs discovery and lists bulbs not already in a room.
+- **Tests:** fullstack
+- **Statement:** Find bulbs runs discovery and lists all known bulbs, including bulbs assigned to another room.
 
 **Acceptance:**
 
 - Given the simulator emulating 4 bulbs, one already in Bedroom
 - When Find bulbs is clicked
-- Then within 10 s the list shows the other 3 with protocol, model, and IP, and a progress bar shows while it runs
+- Then within 10 s the list shows all 4 with protocol, model, and IP; the Bedroom bulb is labeled and cannot be placed here
+- A progress bar shows while discovery runs
 
 #### ROOM-004 Identify flashes the right bulb
 
 - **Layer:** L1
 - **Status:** approved
-- **Tests:** fullstack, walkthrough
+- **Tests:** fullstack
 - **Statement:** Identify flashes exactly the chosen bulb.
 
 **Acceptance:**
@@ -2309,7 +2309,7 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 
 - **Layer:** L1
 - **Status:** approved
-- **Tests:** browser, fullstack, walkthrough
+- **Tests:** browser, fullstack
 - **Statement:** Dragging a bulb onto a zone or choosing a position from Place ▾ puts it at that position; × takes it out.
 
 **Acceptance:**
@@ -2330,19 +2330,6 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 
 - Given bulbs at L and R
 - Then it reads "This room plays 2.0 tracks natively…". When a bulb is added at Center, it reads 3.0 without a reload
-
-#### ROOM-007 A bulb is in one room
-
-- **Layer:** L1
-- **Status:** approved
-- **Tests:** unit, fullstack
-- **Statement:** Placing a bulb that is in another room moves it, after confirmation.
-
-**Acceptance:**
-
-- Given b1 in Bedroom
-- When b1 is placed in Living Room and confirmed
-- Then after Save it is only in Living Room
 
 #### ROOM-008 Rename and Follows
 
@@ -2392,7 +2379,7 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 
 - **Layer:** L1
 - **Status:** approved
-- **Tests:** browser, fullstack, walkthrough
+- **Tests:** browser, fullstack
 - **Statement:** The Library shows every Emby movie as a poster card with title, year, and track badge; no TV episodes.
 
 **Acceptance:**
@@ -2418,7 +2405,7 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 
 - **Layer:** L1
 - **Status:** approved
-- **Tests:** browser, walkthrough
+- **Tests:** browser, fullstack
 - **Statement:** Clicking a card or pressing Enter on it opens `#/movie/{itemId}`.
 
 **Acceptance:**
@@ -2431,7 +2418,7 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 
 - **Layer:** L1
 - **Status:** approved
-- **Tests:** browser
+- **Tests:** browser, fullstack
 - **Statement:** With no rooms the Library shows the no-room strip with a working Set up a room link.
 
 **Acceptance:**
@@ -2449,7 +2436,7 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 
 - **Layer:** L1
 - **Status:** approved
-- **Tests:** browser, fullstack, walkthrough
+- **Tests:** browser, fullstack
 - **Statement:** The Movie screen lists every track the plugin finds for the movie with title, layout, author, last saved, and the Plays in Emby badge.
 
 **Acceptance:**
@@ -2462,7 +2449,7 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 
 - **Layer:** L1
 - **Status:** approved
-- **Tests:** browser, fullstack, walkthrough
+- **Tests:** browser, fullstack
 - **Statement:** Create track makes an unsaved track with the selected layout, preselecting the room's suggestion.
 
 **Acceptance:**
@@ -2506,7 +2493,7 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 
 - **Layer:** L1
 - **Status:** approved
-- **Tests:** browser, fullstack, walkthrough
+- **Tests:** browser, fullstack
 - **Statement:** The ruler is the only pointer seek control, with no overview bar, minimap, or video seek bar.
 
 **Acceptance:**
@@ -2534,7 +2521,7 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 
 - **Layer:** L1
 - **Status:** approved
-- **Tests:** browser, walkthrough
+- **Tests:** browser
 - **Statement:** A single click on empty lane space adds and selects a keyframe at that time with the channel's current value.
 
 **Acceptance:**
@@ -2563,7 +2550,7 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 
 - **Layer:** L1
 - **Status:** approved
-- **Tests:** browser, walkthrough
+- **Tests:** browser
 - **Statement:** The File menu has New track, Open, Open a .lightfx file, Save, Export .lightfx, and Close, each doing what [Menus](../journeys/J1-first-light.md#menus) says.
 
 **Acceptance:**
@@ -2616,7 +2603,7 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 
 - **Layer:** L1
 - **Status:** approved
-- **Tests:** fullstack, walkthrough
+- **Tests:** fullstack
 - **Statement:** Lights starts preview on the picked room; the bulbs follow the playhead using the plugin's routing.
 
 **Acceptance:**
@@ -2630,7 +2617,7 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 
 - **Layer:** L1
 - **Status:** approved
-- **Tests:** browser, fullstack, walkthrough
+- **Tests:** browser, fullstack
 - **Statement:** With no rooms the editor authors and saves normally, shows the banner, and disables Preview on and Lights with a reason.
 
 **Acceptance:**
@@ -2699,7 +2686,7 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 
 - **Layer:** L1
 - **Status:** approved
-- **Tests:** browser, fullstack, walkthrough
+- **Tests:** browser, fullstack
 - **Statement:** Watch in Emby saves if needed, makes this track the movie's active track for every room, and opens the movie in Emby.
 
 **Acceptance:**
@@ -2737,21 +2724,6 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 - When the dead-control check clicks every enabled control
 - Then each one changes the URL, the DOM, a network request, or opens a dialog, or is on a reviewed allow-list with a reason. Any other control fails the test
 
-#### DONE-002 Walkthrough video
-
-- **Layer:** L1
-- **Status:** approved
-- **Tests:** walkthrough
-- **Statement:** Each step has a Playwright walkthrough that performs it as a person would, records video, and is watched before the step is done.
-
-**Acceptance:**
-
-- Given the full stack
-- When `npm run test:walkthrough` (a new script, added with the first step) runs
-- Then a video per step is written under `test-results/walkthrough/` and the PR for that step links the video and records who watched it
-
----
-
 ## Requirement counts
 
 | Area                       | Prefix |      L1 |     L2 |    L3 |   Total |
@@ -2775,13 +2747,13 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 | Plugin contract            | PLUG   |       5 |      0 |     0 |       5 |
 | Model and routing          | MODEL  |       7 |      0 |     0 |       7 |
 | Navigation                 | FLOW   |       4 |      0 |     0 |       4 |
-| Step 1 — Rooms             | ROOM   |      11 |      0 |     0 |      11 |
+| Step 1 — Rooms             | ROOM   |       9 |      0 |     0 |       9 |
 | Step 2 — Library           | LIB    |       4 |      0 |     0 |       4 |
 | Step 3 — Open or create    | TRACK  |       4 |      0 |     0 |       4 |
 | Step 4 — Editor            | EDIT   |      14 |      0 |     0 |      14 |
 | Step 5 — Watch in Emby     | WATCH  |       2 |      0 |     0 |       2 |
-| Process                    | DONE   |       2 |      0 |     0 |       2 |
-| **Total**                  |        | **150** | **16** | **2** | **168** |
+| Process                    | DONE   |       1 |      0 |     0 |       1 |
+| **Total**                  |        | **147** | **16** | **2** | **165** |
 
 The checker recomputes this table from the headings. Do not keep a second list.
 

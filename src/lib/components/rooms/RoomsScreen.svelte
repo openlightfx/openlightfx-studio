@@ -5,7 +5,6 @@
     discoverBulbs,
     identifyBulb,
     loadBulbs,
-    loadCurrentUser,
     loadDevices,
     loadRooms,
     loadSetup,
@@ -20,8 +19,6 @@
   } from '$lib/api/rooms';
   let rooms = $state<Room[]>([]);
   let devices = $state<EmbyDevice[]>([]);
-  let currentUser = $state<{ id: string; name: string } | null>(null);
-  let showAllDevices = $state(false);
   let bulbs = $state<RoomBulb[]>([]);
   let setup = $state<Setup | null>(null);
   let selected = $state<string | null>(null);
@@ -61,20 +58,6 @@
   );
   const assigned = $derived(new Set(placed.map((b) => b.id)));
   const unplaced = $derived(bulbs.filter((b) => !assigned.has(b.id)));
-  function belongsToCurrentUser(device: EmbyDevice): boolean {
-    if (!currentUser) return false;
-    const idMatches =
-      !!currentUser.id && device.lastUserId?.toLowerCase() === currentUser.id.toLowerCase();
-    const nameMatches =
-      !!currentUser.name &&
-      device.lastUserName?.trim().toLowerCase() === currentUser.name.toLowerCase();
-    return idMatches || nameMatches;
-  }
-  const screenDevices = $derived(
-    showAllDevices || !currentUser
-      ? devices
-      : devices.filter((device) => belongsToCurrentUser(device) || device.roomId === selected)
-  );
   const positionsUsed = $derived(
     new Set(placed.map((b) => b.position).filter((p): p is Position => !!p))
   );
@@ -99,12 +82,11 @@
     connectionFailed = false;
     error = '';
     try {
-      [rooms, devices, bulbs, setup, currentUser] = await Promise.all([
+      [rooms, devices, bulbs, setup] = await Promise.all([
         loadRooms(),
         loadDevices(),
         loadBulbs(),
         loadSetup(),
-        loadCurrentUser().catch(() => null),
       ]);
       const id = location.hash.match(/^#\/rooms\/([^/?]+)/)?.[1];
       const room = rooms.find((r) => r.id === id) ?? rooms[0];
@@ -200,12 +182,11 @@
       if (placed.some((entry) => entry.id === id)) remove(id);
       return;
     }
-    if (
-      bulb.roomId &&
-      bulb.roomId !== selected &&
-      !confirm(`Move ${bulb.name} from its other room?`)
-    )
+    if (bulb.roomId && bulb.roomId !== selected) {
+      const roomName = rooms.find((room) => room.id === bulb.roomId)?.name ?? 'another room';
+      notice = `This bulb is already assigned to ${roomName}.`;
       return;
+    }
     placed = [...placed.filter((x) => x.id !== id), { id, position: pos, follows: null }];
     notice = 'Unsaved changes';
   }
@@ -317,32 +298,6 @@
         conflict = true;
         return;
       }
-      if (
-        error.includes('another room') &&
-        confirm('A bulb belongs to another room. Move it here?')
-      ) {
-        try {
-          const device = devices.find((d) => d.deviceId === screenId)!;
-          const room = await saveRoom(
-            selected,
-            {
-              name,
-              screenDeviceId: screenId,
-              deviceName: device.name,
-              appName: device.appName,
-              bulbs: placed,
-            },
-            current?.updatedAt,
-            true
-          );
-          await refresh();
-          openRoom(room);
-          error = '';
-          notice = 'Room saved.';
-        } catch (ex) {
-          error = (ex as Error).message;
-        }
-      }
     }
   }
   async function removeRoom() {
@@ -445,10 +400,10 @@
           bind:value={screenId}
           onchange={() => (notice = 'Unsaved changes')}
           ><option value=""
-            >{screenDevices.length
+            >{devices.length
               ? 'Choose a device…'
               : 'No devices yet. Open Emby on the room’s TV once, then click Refresh.'}</option
-          >{#each screenDevices as device (device.deviceId)}<option
+          >{#each devices as device (device.deviceId)}<option
               value={device.deviceId}
               disabled={!!device.roomId && device.roomId !== selected}
               >{device.name} · {device.appName}{device.lastUserName
@@ -465,11 +420,6 @@
         onclick={() => loadDevices().then((x) => (devices = x))}>Refresh</button
       >
     </div>
-    {#if currentUser && devices.some((device) => !belongsToCurrentUser(device) && (device.lastUserId || device.lastUserName) && device.roomId !== selected)}
-      <label class="device-filter"
-        ><input type="checkbox" bind:checked={showAllDevices} /> Show devices last used by other users</label
-      >
-    {/if}
     <div class="columns">
       <div class="diagram-area">
         <div class="diagram">
@@ -556,23 +506,25 @@
       </div>
       <aside class="bulb-panel">
         <div class="panelhead">
-          <b>Available bulbs</b><button
-            disabled={busy || setup?.isAdmin !== true}
-            onclick={discover}>{busy ? 'Searching…' : 'Find bulbs'}</button
+          <b>Known bulbs</b><button disabled={busy || setup?.isAdmin !== true} onclick={discover}
+            >{busy ? 'Searching…' : 'Find bulbs'}</button
           >
         </div>
         {#if busy}<progress></progress>{/if}
         <p>
-          Found {unplaced.length} · Known bulbs stay listed after discovery. Bulbs in other rooms can
-          be moved here.
+          Found {unplaced.length} · Known bulbs stay listed after discovery. Bulbs assigned to other rooms
+          remain visible but cannot be placed here.
         </p>
         {#if unplaced.length === 0}<p class="empty">
-            No bulbs found yet. Find bulbs searches your network for WiZ, LIFX, and Govee.
+            No unplaced bulbs are known yet. Find bulbs searches your network for WiZ, LIFX, and
+            Govee.
           </p>{/if}{#each unplaced as bulb (bulb.id)}<div
             class="bulb"
             role="listitem"
-            draggable="true"
-            ondragstart={() => (dragBulb = bulb.id)}
+            draggable={!bulb.roomId || bulb.roomId === selected}
+            ondragstart={() => {
+              if (!bulb.roomId || bulb.roomId === selected) dragBulb = bulb.id;
+            }}
           >
             <span
               >⠿ <button
@@ -598,9 +550,13 @@
             <details>
               <summary>Place ▾</summary>
               <div class="place-menu">
-                {#each positions as position}<button onclick={() => place(bulb.id, position)}
-                    >{labels[position]}</button
-                  >{/each}<button onclick={() => place(bulb.id, null)}>Not in this room</button>
+                {#each positions as position}<button
+                    disabled={!!bulb.roomId && bulb.roomId !== selected}
+                    onclick={() => place(bulb.id, position)}>{labels[position]}</button
+                  >{/each}<button
+                  disabled={!!bulb.roomId && bulb.roomId !== selected}
+                  onclick={() => place(bulb.id, null)}>Not in this room</button
+                >
               </div>
             </details>
           </div>{/each}
@@ -770,13 +726,6 @@
     gap: 24px;
     align-items: end;
     margin-bottom: 12px;
-  }
-  .device-filter {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin: -4px 0 12px;
-    color: var(--text-muted);
   }
   .topfields label {
     display: grid;

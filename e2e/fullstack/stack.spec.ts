@@ -357,6 +357,130 @@ requirement(
 );
 
 requirement(
+  'ROOM-001 @fullstack create and save a room on an available Emby screen',
+  async ({ page, request }) => {
+    const name = `Room acceptance ${Date.now()}`;
+    await page.goto(`${emby()}/emby/OpenLightFX/studio/?api_key=${token()}#/rooms`);
+    await page.getByRole('button', { name: '+ New room' }).click();
+    await page.getByLabel('Room name').fill(name);
+    await page
+      .getByLabel('Screen (the Emby app in this room)')
+      .selectOption('openlightfx-fullstack');
+    const save = page.getByRole('button', { name: 'Save room' });
+    await expect(save).toBeEnabled();
+    await save.click();
+    await expect(page.getByRole('button', { name: new RegExp(name) })).toBeVisible();
+
+    const response = await request.get(`${emby()}/OpenLightFX/Studio/Rooms`, {
+      headers: headers(),
+      timeout: 5000,
+    });
+    expect(response.ok()).toBeTruthy();
+    const rooms = await response.json();
+    const created = rooms.find((room: { name: string }) => room.name === name);
+    expect(created?.screen.deviceId).toBe('openlightfx-fullstack');
+    try {
+      const deleted = await request.delete(
+        `${emby()}/OpenLightFX/Studio/Rooms/${encodeURIComponent(created.id)}`,
+        { headers: headers(), timeout: 5000 }
+      );
+      expect(deleted.ok()).toBeTruthy();
+    } finally {
+      await page.reload();
+    }
+  }
+);
+
+requirement(
+  'ROOM-005 @fullstack dragging a bulb changes its position and × unplaces it',
+  async ({ page, request }) => {
+    const getRooms = async () =>
+      (await (
+        await request.get(`${emby()}/OpenLightFX/Studio/Rooms`, { headers: headers() })
+      ).json()) as Array<{
+        id: string;
+        name: string;
+        screen: { deviceId: string; deviceName: string; appName: string };
+        updatedAt: string;
+        bulbs: Array<{ id: string; position: string | null; follows: string | null }>;
+      }>;
+    const original = (await getRooms()).find((room) => room.name === 'Fullstack Room')!;
+
+    try {
+      await page.goto(`${emby()}/emby/OpenLightFX/studio/?api_key=${token()}#/rooms`);
+      const chip = page.getByRole('group', { name: 'Placed bulb' }).filter({ hasText: 'Left' });
+      await chip.dragTo(page.getByRole('region', { name: 'Surround right bulb position' }));
+      await expect(
+        page.getByRole('region', { name: 'Surround right bulb position' })
+      ).toContainText('Left');
+      await page.getByRole('button', { name: 'Save room' }).click();
+      await expect(page.getByText('Room saved.')).toBeVisible();
+      const updated = (await getRooms()).find((room) => room.id === original.id)!;
+      expect(updated.bulbs.find((bulb) => bulb.id === 'left')?.position).toBe('surround-right');
+
+      await page
+        .getByRole('group', { name: 'Placed bulb' })
+        .filter({ hasText: 'Left' })
+        .getByRole('button', { name: 'Take out of room' })
+        .click();
+      await page.getByRole('button', { name: 'Save room' }).click();
+      await expect(page.getByText('Room saved.')).toBeVisible();
+      const bulbs = await (
+        await request.get(`${emby()}/OpenLightFX/Studio/Bulbs`, { headers: headers() })
+      ).json();
+      expect(bulbs.find((bulb: { id: string }) => bulb.id === 'left').roomId ?? null).toBeNull();
+    } finally {
+      const latest = (await getRooms()).find((room) => room.id === original.id)!;
+      const restored = await request.put(`${emby()}/OpenLightFX/Studio/Rooms/${original.id}`, {
+        headers: {
+          ...headers(),
+          'content-type': 'application/json',
+          'If-Match': latest.updatedAt,
+        },
+        data: {
+          name: original.name,
+          screenDeviceId: original.screen.deviceId,
+          deviceName: original.screen.deviceName,
+          appName: original.screen.appName,
+          bulbs: original.bulbs,
+        },
+      });
+      expect(restored.ok()).toBeTruthy();
+      await page.reload();
+    }
+  }
+);
+
+requirement(
+  'ROOM-003 @fullstack bulbs assigned to another room remain visible but cannot be placed',
+  async ({ page }) => {
+    await page.goto(`${emby()}/emby/OpenLightFX/studio/?api_key=${token()}#/rooms`);
+    await page.getByRole('button', { name: '+ New room' }).click();
+    const assignedBulb = page
+      .getByRole('listitem')
+      .filter({ hasText: 'In Fullstack Room' })
+      .first();
+    await expect(assignedBulb).toBeVisible();
+    await assignedBulb.locator('summary').click();
+    await expect(
+      assignedBulb.locator('.place-menu').getByRole('button', { name: 'Left', exact: true })
+    ).toBeDisabled();
+  }
+);
+
+requirement(
+  'ROOM-002 @fullstack screen picker lists all devices and disables occupied screens',
+  async ({ page }) => {
+    await page.goto(`${emby()}/emby/OpenLightFX/studio/?api_key=${token()}#/rooms`);
+    await page.getByRole('button', { name: '+ New room' }).click();
+    const screen = page.getByLabel('Screen (the Emby app in this room)');
+    await expect(screen.locator('option', { hasText: 'viewer' })).toHaveCount(1);
+    const occupied = screen.getByRole('option', { name: /fullstack-play.*In Fullstack Room/i });
+    await expect(occupied).toBeDisabled();
+  }
+);
+
+requirement(
   'LIB-001 @fullstack movies show a real poster card and track count from Emby',
   async ({ page, request }) => {
     const id = await itemId(request, 'h264');
@@ -364,11 +488,67 @@ requirement(
     const saved = await saveTrack(request, id, track);
     expect(saved.ok()).toBeTruthy();
 
+    const response = await request.get(
+      `${emby()}/OpenLightFX/Studio/Items?search=${encodeURIComponent(CLIPS.h264)}`,
+      { headers: headers(), timeout: 5000 }
+    );
+    expect(response.ok()).toBeTruthy();
+    const body = await response.json();
+    const items = Array.isArray(body) ? body : body.Items;
+    const item = items.find((entry: { itemId: string }) => entry.itemId === id);
+    expect(item).toBeTruthy();
+
     await page.goto(`${emby()}/emby/OpenLightFX/studio/?api_key=${token()}#/library`);
     const card = page.locator('a.movie').filter({ hasText: CLIPS.h264 });
     await expect(card).toBeVisible();
-    await expect(card.getByText('1 track')).toBeVisible();
-    await expect(card.locator('img')).toHaveAttribute('src', /\/emby\/Items\//);
+    await expect(
+      card.getByText(`${item.trackCount} ${item.trackCount === 1 ? 'track' : 'tracks'}`)
+    ).toBeVisible();
+    if (item.posterUrl) {
+      await expect(card.locator('img')).toHaveAttribute('src', item.posterUrl);
+    } else {
+      await expect(card.locator('.poster-fallback')).toContainText(CLIPS.h264);
+      await expect(card.locator('img')).toHaveCount(0);
+    }
+  }
+);
+
+requirement(
+  'LIB-004 @fullstack no-room strip appears and opens Rooms',
+  async ({ page, request }) => {
+    const response = await request.get(`${emby()}/OpenLightFX/Studio/Rooms`, {
+      headers: headers(),
+    });
+    expect(response.ok()).toBeTruthy();
+    const rooms = await response.json();
+    const original = rooms.find((room: { name: string }) => room.name === 'Fullstack Room');
+    expect(original).toBeTruthy();
+    try {
+      const deleted = await request.delete(
+        `${emby()}/OpenLightFX/Studio/Rooms/${encodeURIComponent(original.id)}`,
+        { headers: headers() }
+      );
+      expect(deleted.ok()).toBeTruthy();
+      await page.goto(`${emby()}/emby/OpenLightFX/studio/?api_key=${token()}#/library`);
+      await expect(page.locator('.no-room')).toBeVisible();
+      await page.getByRole('link', { name: 'Set up a room' }).click();
+      await expect(page).toHaveURL(/#\/rooms$/);
+    } finally {
+      const restored = await request.post(`${emby()}/OpenLightFX/Studio/Rooms`, {
+        headers: { ...headers(), 'content-type': 'application/json' },
+        data: {
+          name: 'Fullstack Room',
+          screenDeviceId: original.screen.deviceId,
+          deviceName: original.screen.deviceName,
+          appName: original.screen.appName,
+          bulbs: [
+            { id: 'left', position: 'left', follows: null },
+            { id: 'right', position: 'right', follows: null },
+          ],
+        },
+      });
+      expect(restored.ok()).toBeTruthy();
+    }
   }
 );
 
@@ -389,7 +569,7 @@ requirement(
     await itemId(request, 'h264');
     await itemId(request, 'long');
     await page.goto(`${emby()}/emby/OpenLightFX/studio/?api_key=${token()}#/library`);
-    const search = page.getByRole('searchbox', { name: /search/i });
+    const search = page.getByRole('searchbox', { name: 'Search', exact: true });
     await search.fill('long');
     await expect(page.locator('a.movie')).toHaveCount(1);
     await expect(page.locator('a.movie')).toContainText(CLIPS.long);

@@ -150,6 +150,10 @@ doc = {
 path = "/config/data/OpenLightFX/rooms.json"
 os.makedirs(os.path.dirname(path), exist_ok=True)
 with open(path, "w", encoding="utf-8") as out: json.dump(doc, out)
+# Emby runs as uid 1000 in the official image. The test setup above runs as root;
+# give the plugin data directory back to Emby so room saves can atomically replace rooms.json.
+os.chown(os.path.dirname(path), 1000, 1000)
+os.chown(path, 1000, 1000)
 '
 "${COMPOSE[@]}" start emby
 # Second pass: the plugin is loaded now, so this also seeds the simulator bulbs.

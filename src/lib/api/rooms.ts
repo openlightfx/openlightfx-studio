@@ -33,7 +33,6 @@ export interface EmbyDevice {
   name: string;
   appName: string;
   lastUserName?: string;
-  lastUserId?: string;
   lastActivity?: string;
   roomId?: string | null;
   roomName?: string;
@@ -52,8 +51,16 @@ export async function roomApi<T>(path: string, init: RequestInit = {}): Promise<
     },
   });
   if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(body.message || body.error || `Request failed (${response.status})`);
+    const text = await response.text();
+    let body: Record<string, unknown> | string = text;
+    try {
+      body = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      // Emby error responses are not always JSON.
+    }
+    const message =
+      typeof body === 'string' ? body : (body.message ?? body.Message ?? body.error ?? body.Error);
+    throw new Error(typeof message === 'string' ? message : `Request failed (${response.status})`);
   }
   if (response.status === 204) return undefined as T;
   return response.json();
@@ -71,14 +78,6 @@ export async function loadSetup(): Promise<Setup> {
 }
 export const loadRooms = () => roomApi<Room[]>('Rooms');
 export const loadDevices = () => roomApi<EmbyDevice[]>('Devices');
-export async function loadCurrentUser(): Promise<{ id?: string; name: string } | null> {
-  const response = await fetch('/emby/Users/Me', { headers: authHeaders() });
-  if (!response.ok) return null;
-  const user = await response.json();
-  const id = typeof user?.Id === 'string' ? user.Id : undefined;
-  const name = typeof user?.Name === 'string' ? user.Name.trim() : '';
-  return id || name ? { id, name } : null;
-}
 export const loadBulbs = () => roomApi<RoomBulb[]>('Bulbs');
 export const discoverBulbs = () =>
   roomApi<{
@@ -89,16 +88,11 @@ export const identifyBulb = (id: string) =>
   roomApi(`Bulbs/${encodeURIComponent(id)}/Identify`, { method: 'POST', body: '{}' });
 export const renameBulb = (id: string, name: string) =>
   roomApi(`Bulbs/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ name }) });
-export const saveRoom = (
-  roomId: string | null,
-  data: unknown,
-  updatedAt?: string,
-  moveFromOtherRooms = false
-) =>
+export const saveRoom = (roomId: string | null, data: unknown, updatedAt?: string) =>
   roomApi<Room>(`Rooms${roomId ? `/${encodeURIComponent(roomId)}` : ''}`, {
     method: roomId ? 'PUT' : 'POST',
     headers: roomId && updatedAt ? { 'If-Match': updatedAt } : {},
-    body: JSON.stringify({ ...(data as object), moveFromOtherRooms }),
+    body: JSON.stringify(data),
   });
 export const deleteRoom = (id: string) =>
   roomApi<void>(`Rooms/${encodeURIComponent(id)}`, { method: 'DELETE' });

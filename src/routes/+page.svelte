@@ -276,7 +276,7 @@
 {/if}
 <div
   class="shell"
-  class:hidden={hashRoute.startsWith('#/rooms') ||
+  hidden={hashRoute.startsWith('#/rooms') ||
     hashRoute.startsWith('#/library') ||
     hashRoute.startsWith('#/movie/') ||
     !hashRoute}
@@ -701,8 +701,8 @@
     color: #ddd;
     background: #0b0b16;
   }
-  .hidden {
-    display: none;
+  .shell[hidden] {
+    display: none !important;
   }
   :global(html),
   :global(body) {

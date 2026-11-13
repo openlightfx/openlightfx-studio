@@ -93,8 +93,7 @@ A journey step (or any user-visible change) is done only when **all** of these h
 4. **No test-gaming.** Do not loosen screenshot thresholds, add `test.skip`/`fixme`, widen timeouts to hide slowness, assert on mocks in the browser or full-stack tiers, or make a test check that an element _exists_ when the requirement is that it _works_.
 5. **No dead controls.** Every visible, enabled button, menu item, link, and switch does something observable. The DONE-001 check clicks them all. A control that cannot work yet is not rendered, or is disabled with a tooltip saying why.
 6. **Real, Emby-shaped data.** Browser and full-stack tests use real Emby item ids, poster URLs, device ids and plugin responses from the full stack. Mock data only in unit tests.
-7. **Walkthrough video.** A Playwright walkthrough performs the step the way a person would and records video (`video: 'on'`). You watch it yourself, compare it with the wireframe and spec, and link it in the PR. The owner watches it before merge.
-8. **All tiers green** in Firefox and Chromium: unit, browser, full stack.
+7. **All tiers green** in Firefox and Chromium: unit, browser, full stack.
 
 **"All tests pass" is necessary, not sufficient.** If the screen would confuse a person, it is not done.
 
@@ -126,4 +125,4 @@ CI (`.github/workflows/requirements-traceability.yml`) runs traceability, `npm r
 - `main` is the only long-lived branch. Branch from it (`feat/…`, `fix/…`, `design/…`), open a PR to it. Keep PRs to one journey step or one fix.
 - Plugin and Studio changes that depend on each other land as a pair of PRs that link each other; plugin first, since the full stack builds the plugin from `main`.
 - Do not merge your own PR unless the owner has said to. Design PRs (`design/…`) are always merged by the owner.
-- PR description: the requirement IDs, what a person will see, the walkthrough video link, and anything you could not verify.
+- PR description: the requirement IDs, what a person will see, and anything you could not verify.

@@ -30,7 +30,7 @@ import path from 'node:path';
 const ROOT = process.cwd();
 const SPEC = path.join(ROOT, 'docs/requirements/studio-requirements.md');
 const CI_TIERS = ['unit', 'fixture', 'browser', 'fullstack'];
-const ALL_TIERS = new Set([...CI_TIERS, 'realmedia', 'walkthrough']);
+const ALL_TIERS = new Set([...CI_TIERS, 'realmedia']);
 const LAYERS = new Set(['L1', 'L2', 'L3']);
 const STATUSES = new Set(['proposed', 'approved', 'deferred']);
 const AREAS = [

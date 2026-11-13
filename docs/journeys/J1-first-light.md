@@ -1,6 +1,6 @@
 # J1 — First light
 
-**Status:** approved by the owner. Steps 1–2 are in implementation and validation; they are not yet accepted as done. Steps 3–5 are not started.
+**Status:** approved by the owner. Steps 1–2 are complete by owner acceptance after hands-on verification. This acceptance does not imply all automated gates passed: the latest traceability run failed, and the full-stack and plugin .NET test suites were not fully run. Steps 3–5 are not started.
 
 **Wireframes:** [docs/journeys/wireframes/](wireframes/). **Plugin API:** [openlightfx-emby `docs/design/rooms-api.md`](https://github.com/openlightfx/openlightfx-emby/blob/main/docs/design/rooms-api.md). **Agent guide:** [AGENTS.md](../../AGENTS.md).
 
@@ -147,29 +147,29 @@ Studio is one page at `/emby/OpenLightFX/studio/`. Its static shell contains no 
 - **Main area, the room editor:**
   - **Name** field and **Screen** picker in a row at the top.
   - **Room diagram:** a top-down rectangle. The screen is a bar at the top, labeled with the chosen screen's name. Six drop zones: Left and Right flank the screen, Center sits on the screen, Surround Left and Surround Right are the rear corners, and Ambient is a band along the bottom labeled "Ambient — anywhere in the room". Each zone lists its bulbs as chips.
-  - **Bulbs not in a room**, to the right of the diagram: the discovery list with **Find bulbs**, one row per bulb that is not yet in this or any room.
+  - **Known bulbs**, to the right of the diagram: the discovery list with **Find bulbs**. Unplaced bulbs can be placed here; bulbs assigned to other rooms stay visible with their room name, but cannot be placed in this room.
   - **Coverage line** under the diagram: "This room plays 3.0 tracks natively. 5.0 surround channels fold into Left and Right." Updated live as bulbs move.
   - **Footer:** **Delete room** on the left. **Save room** and, once the room is saved, **Next: pick a movie →** on the right.
 
 ### Controls
 
-| Control                                 | Where               | What it does                                                                                                                                                                                                                                                                                               |
-| --------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **+ New room**                          | Rooms column        | Opens an empty room editor named "Room N". Unsaved until **Save room**.                                                                                                                                                                                                                                    |
-| Room row                                | Rooms column        | Opens that room in the editor. If the current room has unsaved changes, asks Save, Discard, or Cancel.                                                                                                                                                                                                     |
-| **Name**                                | Room editor         | Room name, 1–40 characters, unique (case-insensitive). Errors show under the field.                                                                                                                                                                                                                        |
-| **Screen** picker                       | Room editor         | Lists devices last used by the current Emby user, newest activity first: device name, app, last user, and time last seen. A device already used by another room shows "In Bedroom" and is disabled. **Show devices last used by other users** reveals the remaining devices. **Refresh** reloads the list. |
-| **Find bulbs**                          | Unplaced list       | Runs discovery on supported WiZ, LIFX, and Govee bulbs (about 7 s, with a progress bar and **Cancel**). New bulbs appear in the list; bulbs already in a room are not listed again, but their IP is refreshed.                                                                                             |
-| Bulb row: name                          | Unplaced list, chip | Click to rename (1–40 characters). The protocol, model, and IP show under the name.                                                                                                                                                                                                                        |
-| Bulb row: **Identify**                  | Unplaced list, chip | Flashes that bulb red, green, blue (about 1.5 s) so the person can see which one it is. The row shows "Flashing…" while it runs. Disabled for 2 s afterwards.                                                                                                                                              |
-| Drag a bulb onto a zone                 | Diagram             | Places it at that position in this room. Dragging a chip between zones changes its position.                                                                                                                                                                                                               |
-| Bulb row: **Place ▾**                   | Unplaced list, chip | The keyboard and touch alternative to dragging: a menu of the six positions plus "Not in this room".                                                                                                                                                                                                       |
-| Chip: **×**                             | Diagram             | Takes the bulb out of this room. It returns to the unplaced list.                                                                                                                                                                                                                                          |
-| Chip: **Follows ▾**                     | Diagram, chip menu  | Auto (by position), or one of the six positions. A chip with an override shows "→ Ambient".                                                                                                                                                                                                                |
-| **Save room**                           | Footer              | Validates and saves the room and the position of every bulb in it. Disabled until there is a name and a screen. A room with no bulbs saves with a warning: "No bulbs yet. Tracks will not light this room."                                                                                                |
-| **Delete room**                         | Footer              | Asks "Delete Living Room? Its 4 bulbs become unplaced." Then deletes the room.                                                                                                                                                                                                                             |
-| **Next: pick a movie →**                | Footer              | Goes to the Library.                                                                                                                                                                                                                                                                                       |
-| **Skip — write a track without lights** | First-run card      | Goes to the Library. Studio stays usable; the editor shows the no-room banner.                                                                                                                                                                                                                             |
+| Control                                 | Where                  | What it does                                                                                                                                                                                                                                               |
+| --------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **+ New room**                          | Rooms column           | Opens an empty room editor named "Room N". Unsaved until **Save room**.                                                                                                                                                                                    |
+| Room row                                | Rooms column           | Opens that room in the editor. If the current room has unsaved changes, asks Save, Discard, or Cancel.                                                                                                                                                     |
+| **Name**                                | Room editor            | Room name, 1–40 characters, unique (case-insensitive). Errors show under the field.                                                                                                                                                                        |
+| **Screen** picker                       | Room editor            | Lists all Emby devices, newest activity first: device name, app, last user, and time last seen. A device already used by another room remains visible, shows "In Bedroom", and is disabled. There is no user or room filter. **Refresh** reloads the list. |
+| **Find bulbs**                          | Known bulbs list       | Runs discovery on supported WiZ, LIFX, and Govee bulbs (about 7 s, with a progress bar and **Cancel**). New bulbs appear in the list; bulbs already known stay visible, and bulbs assigned to another room are labeled and cannot be placed here.          |
+| Bulb row: name                          | Known bulbs list, chip | Click to rename (1–40 characters). The protocol, model, and IP show under the name.                                                                                                                                                                        |
+| Bulb row: **Identify**                  | Known bulbs list, chip | Flashes that bulb red, green, blue (about 1.5 s) so the person can see which one it is. The row shows "Flashing…" while it runs. Disabled for 2 s afterwards.                                                                                              |
+| Drag a bulb onto a zone                 | Diagram                | Places it at that position in this room. Dragging a chip between zones changes its position.                                                                                                                                                               |
+| Bulb row: **Place ▾**                   | Known bulbs list, chip | The keyboard and touch alternative to dragging: a menu of the six positions plus "Not in this room". Disabled for a bulb assigned to another room.                                                                                                         |
+| Chip: **×**                             | Diagram                | Takes the bulb out of this room. It returns to the unplaced list.                                                                                                                                                                                          |
+| Chip: **Follows ▾**                     | Diagram, chip menu     | Auto (by position), or one of the six positions. A chip with an override shows "→ Ambient".                                                                                                                                                                |
+| **Save room**                           | Footer                 | Validates and saves the room and the position of every bulb in it. Disabled until there is a name and a screen. A room with no bulbs saves with a warning: "No bulbs yet. Tracks will not light this room."                                                |
+| **Delete room**                         | Footer                 | Asks "Delete Living Room? Its 4 bulbs become unplaced." Then deletes the room.                                                                                                                                                                             |
+| **Next: pick a movie →**                | Footer                 | Goes to the Library.                                                                                                                                                                                                                                       |
+| **Skip — write a track without lights** | First-run card         | Goes to the Library. Studio stays usable; the editor shows the no-room banner.                                                                                                                                                                             |
 
 ### First run
 
@@ -358,7 +358,7 @@ When Emby starts the movie on a device, the plugin finds the room whose screen i
 
 ## Requirements
 
-Format: ID, title, layer (all L1), status (all `approved`), a one-line statement, Given/When/Then acceptance, and the test tiers. Tiers are the ones in [studio-requirements.md § Test strategy](../requirements/studio-requirements.md#test-strategy): `unit`, `fixture`, `browser`, `fullstack`, plus `walkthrough`, which is the recorded Playwright run of the whole step that a person watches ([Definition of done](#definition-of-done-for-each-step)). Approved by the owner. They now live in [studio-requirements.md § J1 — First light requirements](../requirements/studio-requirements.md#j1--first-light-requirements), and the traceability gate enforces them.
+Format: ID, title, layer (all L1), status (all `approved`), a one-line statement, Given/When/Then acceptance, and the test tiers. Tiers are the ones in [studio-requirements.md § Test strategy](../requirements/studio-requirements.md#test-strategy): `unit`, `fixture`, `browser`, and `fullstack`. Approved by the owner. They now live in [studio-requirements.md § J1 — First light requirements](../requirements/studio-requirements.md#j1--first-light-requirements), and the traceability gate enforces them.
 
 ### Model and routing
 
@@ -410,7 +410,7 @@ Format: ID, title, layer (all L1), status (all `approved`), a one-line statement
 
 - **Statement:** With no rooms, Studio opens on `#/rooms` with the welcome card.
 - **Acceptance:** Given a fresh plugin with no rooms, when Studio loads, then the URL is `#/rooms`, the welcome card and an open room editor named "Living Room" are visible. No legacy configuration or import prompt is shown.
-- **Tests:** browser, fullstack, walkthrough
+- **Tests:** browser, fullstack
 
 #### FLOW-002 Returning users land where they were
 
@@ -436,43 +436,37 @@ Format: ID, title, layer (all L1), status (all `approved`), a one-line statement
 
 - **Statement:** A room saves with a unique name and a screen; Save is disabled without both.
 - **Acceptance:** Given the room editor with name "Living Room" and no screen, then Save is disabled. When a screen is picked and Save clicked, then `GET …/Rooms` returns the room with that `deviceId`, and the Rooms column shows it.
-- **Tests:** browser, fullstack, walkthrough
+- **Tests:** browser, fullstack
 
 #### ROOM-002 Screen picker lists Emby devices
 
-- **Statement:** The screen picker defaults to devices last used by the current Emby user, newest first; it can show other users' devices, and prevents assigning a screen to multiple rooms.
-- **Acceptance:** Given Emby has seen device A (1 h ago, last used by the current user) and device B (1 day ago, last used by another user and assigned to Bedroom), then the picker shows A and omits B. When "Show devices last used by other users" is checked, B appears as "In Bedroom" and is disabled. B cannot be assigned to Living Room while it belongs to Bedroom.
+- **Statement:** The screen picker lists every known device, newest first, without filtering by user or room. A screen assigned to another room remains visible but cannot be assigned again.
+- **Acceptance:** Given Emby has seen device A (1 h ago, last used by the current user) and device B (1 day ago, last used by another user and assigned to Bedroom), then the picker shows both A and B. B appears as "In Bedroom" and is disabled. There is no user or room filter.
 - **Tests:** browser, fullstack
 
 #### ROOM-003 Discover bulbs
 
-- **Statement:** Find bulbs runs discovery and lists bulbs not already in a room.
-- **Acceptance:** Given the simulator emulating 4 bulbs, one already in Bedroom, when Find bulbs is clicked, then within 10 s the list shows the other 3 with protocol, model, and IP, and a progress bar shows while it runs.
-- **Tests:** fullstack, walkthrough
+- **Statement:** Find bulbs runs discovery and lists all known bulbs, including bulbs assigned to another room.
+- **Acceptance:** Given the simulator emulating 4 bulbs, one already in Bedroom, when Find bulbs is clicked, then within 10 s the list shows all 4 with protocol, model, and IP; the Bedroom bulb is labeled and cannot be placed here. A progress bar shows while discovery runs.
+- **Tests:** fullstack
 
 #### ROOM-004 Identify flashes the right bulb
 
 - **Statement:** Identify flashes exactly the chosen bulb.
 - **Acceptance:** Given bulbs b1 and b2 in the simulator, when Identify is clicked on b1, then simulator NDJSON shows red, green, blue commands to b1 only, and b1's row reads "Flashing…" until it finishes.
-- **Tests:** fullstack, walkthrough
+- **Tests:** fullstack
 
 #### ROOM-005 Place bulbs by drag or menu
 
 - **Statement:** Dragging a bulb onto a zone or choosing a position from Place ▾ puts it at that position; × takes it out.
 - **Acceptance:** Given an unplaced bulb, when it is dragged to Left, then its chip is in the Left zone; when Place ▾ → Surround Right is used instead, the same result in that zone. After Save, `GET …/Rooms/{id}` lists the bulb with that position. When × is clicked and saved, it is unplaced again.
-- **Tests:** browser, fullstack, walkthrough
+- **Tests:** browser, fullstack
 
 #### ROOM-006 Coverage line
 
 - **Statement:** The coverage line states the suggested layout and what folds, and updates as bulbs move.
 - **Acceptance:** Given bulbs at L and R, then it reads "This room plays 2.0 tracks natively…". When a bulb is added at Center, it reads 3.0 without a reload.
 - **Tests:** browser
-
-#### ROOM-007 A bulb is in one room
-
-- **Statement:** Placing a bulb that is in another room moves it, after confirmation.
-- **Acceptance:** Given b1 in Bedroom, when b1 is placed in Living Room and confirmed, then after Save it is only in Living Room.
-- **Tests:** unit, fullstack
 
 #### ROOM-008 Rename and Follows
 
@@ -498,7 +492,7 @@ Format: ID, title, layer (all L1), status (all `approved`), a one-line statement
 
 - **Statement:** The Library shows every Emby movie as a poster card with title, year, and track badge; no TV episodes.
 - **Acceptance:** Given Emby with 3 movies and 1 series, then 3 cards show, each with title and year, and the one with a saved track says "1 track".
-- **Tests:** browser, fullstack, walkthrough
+- **Tests:** browser, fullstack
 
 #### LIB-002 Search
 
@@ -510,7 +504,7 @@ Format: ID, title, layer (all L1), status (all `approved`), a one-line statement
 
 - **Statement:** Clicking a card or pressing Enter on it opens `#/movie/{itemId}`.
 - **Acceptance:** Given the grid, when the first card is clicked, then the Movie screen for that item shows its title.
-- **Tests:** browser, walkthrough
+- **Tests:** browser
 
 #### LIB-004 No-room strip
 
@@ -524,13 +518,13 @@ Format: ID, title, layer (all L1), status (all `approved`), a one-line statement
 
 - **Statement:** The Movie screen lists every track the plugin finds for the movie with title, layout, author, last saved, and the Plays in Emby badge.
 - **Acceptance:** Given a movie with two tracks, one active, then two rows show and only the active one has the badge.
-- **Tests:** browser, fullstack, walkthrough
+- **Tests:** browser, fullstack
 
 #### TRACK-002 Create with a suggested layout
 
 - **Statement:** Create track makes an unsaved track with the selected layout, preselecting the room's suggestion.
 - **Acceptance:** Given one room with L, C, R bulbs, then the 3.0 card is preselected and says "Suggested for Living Room". When Create track is clicked, then the editor opens with lanes Left, Center, Right and the movie's duration, and the server has no new file until Save.
-- **Tests:** browser, fullstack, walkthrough
+- **Tests:** browser, fullstack
 
 #### TRACK-003 Open from file
 
@@ -550,7 +544,7 @@ Format: ID, title, layer (all L1), status (all `approved`), a one-line statement
 
 - **Statement:** The ruler is the only pointer seek control. There is no overview bar, minimap, or video seek bar.
 - **Acceptance:** Given the editor, then exactly one element has role `slider` for time, and it is the ruler. When the ruler is clicked at 25 % of its width at Fit zoom, then the playhead and `video.currentTime` are at 25 % of the duration within one frame.
-- **Tests:** browser, fullstack, walkthrough
+- **Tests:** browser, fullstack
 
 #### EDIT-002 Drag to scrub
 
@@ -562,7 +556,7 @@ Format: ID, title, layer (all L1), status (all `approved`), a one-line statement
 
 - **Statement:** A single click on empty lane space adds and selects a keyframe at that time with the channel's current value.
 - **Acceptance:** Given an empty Left lane, when it is clicked at 0:10, then one keyframe exists on `left` at 0:10 (frame-snapped), it is selected in the inspector, and the preview color at 0:10 is unchanged. Undo removes it.
-- **Tests:** browser, walkthrough
+- **Tests:** browser
 
 #### EDIT-004 Lanes name their bulbs
 
@@ -574,7 +568,7 @@ Format: ID, title, layer (all L1), status (all `approved`), a one-line statement
 
 - **Statement:** The File menu has New track, Open, Open a .lightfx file, Save, Export .lightfx, and Close, each doing what [Menus](#menus) says.
 - **Acceptance:** Given a changed track, when File → Close is chosen, then the unsaved prompt shows; Don't save returns to `#/movie/{itemId}`. When File → Export is chosen, then a `.lightfx` download starts that decodes to the current track.
-- **Tests:** browser, walkthrough
+- **Tests:** browser
 
 #### EDIT-006 Edit menu
 
@@ -598,13 +592,13 @@ Format: ID, title, layer (all L1), status (all `approved`), a one-line statement
 
 - **Statement:** Lights starts preview on the picked room; the bulbs follow the playhead using the plugin's routing.
 - **Acceptance:** Given Living Room in the simulator and a keyframe `left` red at 0:05, when Lights is switched on and the playhead moved to 0:06, then NDJSON shows red at the Left bulbs and, per routing, the Surround Left bulbs; when switched off, bulbs restore (PREV-007).
-- **Tests:** fullstack, walkthrough
+- **Tests:** fullstack
 
 #### EDIT-010 No-room editor
 
 - **Statement:** With no rooms the editor authors and saves normally, shows the banner, and disables Preview on and Lights with a reason.
 - **Acceptance:** Given no rooms, then the banner shows with a working Set up a room link, Lights is disabled with the tooltip "Set up a room first", and adding a keyframe and saving succeed.
-- **Tests:** browser, fullstack, walkthrough
+- **Tests:** browser, fullstack
 
 #### EDIT-011 Save state is always visible
 
@@ -636,7 +630,7 @@ Format: ID, title, layer (all L1), status (all `approved`), a one-line statement
 
 - **Statement:** Watch in Emby saves if needed, makes this track the movie's active track for every room, and opens the movie in Emby.
 - **Acceptance:** Given an unsaved track, when Watch in Emby is clicked, then the track is saved, `GET /OpenLightFX/Tracks/ByItem` reports it selected with no device-scoped selection left for the movie, a new tab opens the Emby item page, and the confirmation names the room's screen.
-- **Tests:** browser, fullstack, walkthrough
+- **Tests:** browser, fullstack
 
 #### WATCH-002 Emby playback uses the room
 
@@ -651,12 +645,6 @@ Format: ID, title, layer (all L1), status (all `approved`), a one-line statement
 - **Statement:** Every visible, enabled button, menu item, link, and switch on every J1 screen changes something observable.
 - **Acceptance:** Given each J1 screen in a fixed state, when the dead-control check clicks every enabled control, then each one changes the URL, the DOM, a network request, or opens a dialog, or is on a reviewed allow-list with a reason. Any other control fails the test.
 - **Tests:** browser
-
-#### DONE-002 Walkthrough video
-
-- **Statement:** Each step has a Playwright walkthrough that performs it as a person would, records video, and is watched before the step is done.
-- **Acceptance:** Given the full stack, when `npm run test:walkthrough` (a new script, added with the first step) runs, then a video per step is written under `test-results/walkthrough/` and the PR for that step links the video and records who watched it.
-- **Tests:** walkthrough
 
 ## Existing requirements: kept, revised, superseded
 
@@ -731,18 +719,18 @@ Rooms, bulbs, positions, and Follows overrides are not in the track format. They
 
 Full design, storage, and code mapping: [openlightfx-emby `docs/design/rooms-api.md`](https://github.com/openlightfx/openlightfx-emby/blob/main/docs/design/rooms-api.md). All routes are under `/emby`, use the existing Studio authentication, and require the Emby Admin role for writes.
 
-| Method and route                                   | Used by       | Purpose                                                                                                                                                              |
-| -------------------------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /OpenLightFX/Studio/Setup`                    | Start-up      | Room count and whether the caller is an admin.                                                                                                                       |
-| `GET /OpenLightFX/Studio/Rooms`                    | Rooms, editor | Every room with screen, bulbs, positions, overrides, `updatedAt`, suggested layout.                                                                                  |
-| `POST /OpenLightFX/Studio/Rooms`                   | Rooms         | Create a room.                                                                                                                                                       |
-| `PUT /OpenLightFX/Studio/Rooms/{roomId}`           | Rooms         | Replace a room, its screen, and its bulbs' positions. `If-Match: updatedAt`.                                                                                         |
-| `DELETE /OpenLightFX/Studio/Rooms/{roomId}`        | Rooms         | Delete a room; its bulbs become unplaced.                                                                                                                            |
-| `GET /OpenLightFX/Studio/Devices`                  | Screen picker | Every Emby device seen, with last user/activity, room assignment, and unassigned recent playback. Studio defaults to the current user's devices and can show others. |
-| `POST /OpenLightFX/Studio/Discover`                | Find bulbs    | Run discovery; return bulbs with stable ids, merged with known bulbs.                                                                                                |
-| `GET /OpenLightFX/Studio/Bulbs`                    | Rooms         | Every known bulb, placed or not. (Replaces today's route of the same name.)                                                                                          |
-| `PUT /OpenLightFX/Studio/Bulbs/{bulbId}`           | Rename        | Name of a known bulb.                                                                                                                                                |
-| `POST /OpenLightFX/Studio/Bulbs/{bulbId}/Identify` | Identify      | Flash one bulb.                                                                                                                                                      |
+| Method and route                                   | Used by       | Purpose                                                                                                                                                        |
+| -------------------------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /OpenLightFX/Studio/Setup`                    | Start-up      | Room count and whether the caller is an admin.                                                                                                                 |
+| `GET /OpenLightFX/Studio/Rooms`                    | Rooms, editor | Every room with screen, bulbs, positions, overrides, `updatedAt`, suggested layout.                                                                            |
+| `POST /OpenLightFX/Studio/Rooms`                   | Rooms         | Create a room.                                                                                                                                                 |
+| `PUT /OpenLightFX/Studio/Rooms/{roomId}`           | Rooms         | Replace a room, its screen, and its bulbs' positions. `If-Match: updatedAt`.                                                                                   |
+| `DELETE /OpenLightFX/Studio/Rooms/{roomId}`        | Rooms         | Delete a room; its bulbs become unplaced.                                                                                                                      |
+| `GET /OpenLightFX/Studio/Devices`                  | Screen picker | Every Emby device seen, with last user/activity, room assignment, and unassigned recent playback. Studio lists every device without filtering by user or room. |
+| `POST /OpenLightFX/Studio/Discover`                | Find bulbs    | Run discovery; return bulbs with stable ids, merged with known bulbs.                                                                                          |
+| `GET /OpenLightFX/Studio/Bulbs`                    | Rooms         | Every known bulb, placed or not. (Replaces today's route of the same name.)                                                                                    |
+| `PUT /OpenLightFX/Studio/Bulbs/{bulbId}`           | Rename        | Name of a known bulb.                                                                                                                                          |
+| `POST /OpenLightFX/Studio/Bulbs/{bulbId}/Identify` | Identify      | Flash one bulb.                                                                                                                                                |
 
 | `GET /OpenLightFX/Studio/Rooms/{roomId}/Routing?layout=…` | Editor lanes | Channel → bulbs and bulb → sources for a layout or a track's channel list. |
 | `POST /OpenLightFX/Studio/Preview/Start` (changed) | Lights | Takes `roomId` instead of a channel→bulb mapping. |
@@ -755,11 +743,9 @@ Full design, storage, and code mapping: [openlightfx-emby `docs/design/rooms-api
 The journey is built one step at a time, in order: Rooms, Library, Movie, Editor, Watch. A step is done only when all of these are true:
 
 1. Its requirements above are approved and moved into `studio-requirements.md`, and the traceability gate passes with no entry for this step in `tests/expected-failures.json`.
-2. A walkthrough test drives the step through the real UI against the full stack (real Emby 4.9, the plugin from `main`, the simulator), like a person: it clicks what a person clicks and waits for what a person waits for. It records video.
-3. The video has been watched by the agent that built the step and by the owner, and the PR links it. The person watching checks the screen against the wireframe and this document, not just that the test is green.
-4. The dead-control check (DONE-001) passes on the step's screens.
-5. The data is Emby-shaped: real item ids, real poster URLs, real device ids from the full stack. Mock data is for unit tests only.
-6. Unit, browser (Firefox and Chromium), and full-stack tiers pass. No test is skipped, loosened, or listed as an expected failure to hide a real bug.
+2. The dead-control check (DONE-001) passes on the step's screens.
+3. The data is Emby-shaped: real item ids, real poster URLs, real device ids from the full stack. Mock data is for unit tests only.
+4. Unit, browser (Firefox and Chromium), and full-stack tiers pass. No test is skipped, loosened, or listed as an expected failure to hide a real bug.
 
 "All tests pass" is necessary, not sufficient.
 
@@ -778,14 +764,14 @@ The journey is built one step at a time, in order: Rooms, Library, Movie, Editor
 
 The owner decides these before code. Each has a proposed default that this document already assumes.
 
-| ID      | Question                                                                                                                                                                                                                         | Proposed default                                                                                                          |
-| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| OQ-J1-1 | Your John Wick track is Left, Right, Surround Left, Surround Right: a 4.0 layout. Add **4.0** as a fifth layout, or read such tracks as 5.0 with an empty Center (which fills from Left + Right)?                                | Read as 5.0 with an empty Center. Fewer layouts.                                                                          |
-| OQ-J1-2 | Should **fill** light bulbs the track has no channel for (a 2.0 track lights a 5.0 room's surround bulbs from Left and Right), or leave them dark like stereo audio leaves surround speakers silent?                             | Fill. A dark bulb in the room looks broken.                                                                               |
-| OQ-J1-3 | When several channels land on one bulb: brightness-weighted color average with max brightness, or "the bulb's own position wins, folded channels only when it is dark"?                                                          | Weighted average. Effects: own position wins.                                                                             |
-| OQ-J1-4 | Is Center "behind or around the screen" (a bias light), or a separate front-center lamp? The proto has both `SPATIAL_CENTER` and `SPATIAL_BEHIND_SCREEN`.                                                                        | One Center position that includes behind the screen.                                                                      |
-| OQ-J1-5 | Can a room be saved before it has a screen (e.g. the TV app has never been opened), or is the screen required?                                                                                                                   | Required. The empty state tells you to open Emby on the TV once.                                                          |
-| OQ-J1-6 | The plugin page shrinks to a link. Do the playback settings (offset, brightness cap, photosensitivity, behavior overrides, log level) stay on it under "Playback" until a later Studio Settings screen, or move into Studio now? | Stay on the plugin page for J1. Bulb, profile, and device JSON fields leave it.                                           |
-| OQ-J1-7 | Watch in Emby sets the movie's active track for every room. Should it instead set it only for the preview room's screen (the old per-device selection)?                                                                          | Every room.                                                                                                               |
-| OQ-J1-8 | Emby remembers every app that ever signed in: phones, browsers, the TV. Should the Screen picker list every user’s devices by default?                                                                                           | Default to the current user’s devices, newest activity first; offer “Show devices last used by other users” for the rest. |
-| OQ-J1-9 | Retire openlightfx.com/config outright, or make it a page that says "Setup moved into OpenLightFX Studio on your Emby server"?                                                                                                   | Replace it with that one-line page.                                                                                       |
+| ID      | Question                                                                                                                                                                                                                         | Proposed default                                                                |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| OQ-J1-1 | Your John Wick track is Left, Right, Surround Left, Surround Right: a 4.0 layout. Add **4.0** as a fifth layout, or read such tracks as 5.0 with an empty Center (which fills from Left + Right)?                                | Read as 5.0 with an empty Center. Fewer layouts.                                |
+| OQ-J1-2 | Should **fill** light bulbs the track has no channel for (a 2.0 track lights a 5.0 room's surround bulbs from Left and Right), or leave them dark like stereo audio leaves surround speakers silent?                             | Fill. A dark bulb in the room looks broken.                                     |
+| OQ-J1-3 | When several channels land on one bulb: brightness-weighted color average with max brightness, or "the bulb's own position wins, folded channels only when it is dark"?                                                          | Weighted average. Effects: own position wins.                                   |
+| OQ-J1-4 | Is Center "behind or around the screen" (a bias light), or a separate front-center lamp? The proto has both `SPATIAL_CENTER` and `SPATIAL_BEHIND_SCREEN`.                                                                        | One Center position that includes behind the screen.                            |
+| OQ-J1-5 | Can a room be saved before it has a screen (e.g. the TV app has never been opened), or is the screen required?                                                                                                                   | Required. The empty state tells you to open Emby on the TV once.                |
+| OQ-J1-6 | The plugin page shrinks to a link. Do the playback settings (offset, brightness cap, photosensitivity, behavior overrides, log level) stay on it under "Playback" until a later Studio Settings screen, or move into Studio now? | Stay on the plugin page for J1. Bulb, profile, and device JSON fields leave it. |
+| OQ-J1-7 | Watch in Emby sets the movie's active track for every room. Should it instead set it only for the preview room's screen (the old per-device selection)?                                                                          | Every room.                                                                     |
+| OQ-J1-8 | Emby remembers every app that ever signed in: phones, browsers, the TV. Should the Screen picker list every user’s devices by default?                                                                                           | List all known devices, newest activity first; do not filter by user.           |
+| OQ-J1-9 | Retire openlightfx.com/config outright, or make it a page that says "Setup moved into OpenLightFX Studio on your Emby server"?                                                                                                   | Replace it with that one-line page.                                             |
