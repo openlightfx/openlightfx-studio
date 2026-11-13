@@ -160,6 +160,9 @@ FIREFOX_OUTCOMES="$ROOT/test-results/outcomes-fullstack-firefox.jsonl"
 export OLFX_OUTCOMES="$CHROMIUM_OUTCOMES"
 npx playwright test --project=fullstack
 export OLFX_OUTCOMES="$FIREFOX_OUTCOMES"
+# Each project expects a fresh library, as the first run does: SAVE-001 writes the
+# new track proxy-fixture, which would otherwise already exist from the Chromium pass.
+find "$ROOT/media/generated" -type d -name lightfx -prune -exec rm -rf {} +
 npx playwright test --project=fullstack-firefox
 cat "$CHROMIUM_OUTCOMES" "$FIREFOX_OUTCOMES" > "$ROOT/test-results/outcomes-fullstack.jsonl"
 echo "Full stack finished. Simulator NDJSON is $WORK/simulator.ndjson"
