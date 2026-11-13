@@ -107,6 +107,7 @@ export class StudioSession {
   selection = $state<string[]>([]);
   activeChannelId = $state<string | null>(null);
   minSpacingMs = $state(200);
+  snapToSpacing = $state(true);
   spacingError = $state('');
   status = $state('');
   alert = $state('');
@@ -553,7 +554,7 @@ export class StudioSession {
     const duration = this.durationMs() || timeMs;
     const time = Math.min(Math.max(0, Math.round(timeMs)), duration);
     const own = this.track.keyframes.filter((kf) => kf.channelId === channel);
-    if (!canInsert(own, time, this.minSpacingMs)) {
+    if (!canInsert(own, time, this.spacingLimit())) {
       this.status = 'No keyframe: that time is too close on this channel';
       return;
     }
@@ -578,13 +579,14 @@ export class StudioSession {
     }
     const own = this.track.keyframes.filter((kf) => kf.channelId === channel);
     let time = Math.round(this.playheadMs);
-    if (!canInsert(own, time, this.minSpacingMs)) {
+    const spacing = this.spacingLimit();
+    if (!canInsert(own, time, spacing)) {
       const duration = this.durationMs() || time;
       const gap = own
         .map((kf) => kf.timestampMs)
         .concat([0, duration])
         .sort((a, b) => a - b)
-        .find((candidate) => canInsert(own, candidate, this.minSpacingMs));
+        .find((candidate) => canInsert(own, candidate, spacing));
       if (gap === undefined) {
         this.status = 'No keyframe: that time is too close on this channel';
         return;
@@ -671,6 +673,10 @@ export class StudioSession {
     }
     this.spacingError = '';
     this.minSpacingMs = value;
+  }
+
+  spacingLimit(): number {
+    return this.snapToSpacing ? this.minSpacingMs : 0;
   }
 
   setHex(raw: string): void {

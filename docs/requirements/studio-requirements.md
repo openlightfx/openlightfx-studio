@@ -275,7 +275,7 @@ On-demand, not CI. Characteristics, not a title: about 25 GB, 4K, HEVC 10-bit, H
 - Then Studio calls Items with that search and replaces the list
 - Given an item whose JSON uses Emby fields `Name` and `ProductionYear`
 - When the library renders
-- Then the visible row shows that title and year, plus a poster image, and does not show the year alone or the word movie in place of a title
+- Then the visible row shows that title and year, plus a poster loaded from the item's Primary image tag when one is present and a placeholder when the item has no image, and does not show the year alone or the word movie in place of a title
 
 #### MEDIA-002 Duration comes from the selected movie
 

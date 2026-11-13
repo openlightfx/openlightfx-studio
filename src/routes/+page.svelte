@@ -208,6 +208,20 @@
   });
   const playheadX = $derived(session.playheadMs * (session.pxPerMs || 0.032) - session.scrollX);
   const keyframeOpen = $derived(session.selection.length > 0);
+  let posterMissing = $state<Record<string, boolean>>({});
+
+  function positionLabel(hint: string): string {
+    const words = hint
+      .replace(/^SPATIAL_/, '')
+      .replace(/_/g, ' ')
+      .trim()
+      .toLowerCase();
+    return words ? words.charAt(0).toUpperCase() + words.slice(1) : '';
+  }
+
+  function activeChannel() {
+    return session.channels.find((channel) => channel.id === session.activeChannelId);
+  }
 </script>
 
 <svelte:window onkeydown={onKeydown} />
@@ -218,9 +232,29 @@
     <h1>{title}</h1>
     {#if session.dirty}<span>Unsaved</span>{/if}
     {#if session.localDev}<span>Local dev</span>{/if}
+    {#if session.localDev}
+      <label class="file-btn">
+        Open file
+        <input
+          type="file"
+          accept="video/mp4,.mp4,.mkv,.lightfx,application/octet-stream"
+          onchange={(event) => {
+            const file = (event.target as HTMLInputElement).files?.[0];
+            if (!file) return;
+            if (file.name.toLowerCase().endsWith('.lightfx')) void session.importFile(file);
+            else session.onLocalFile(file);
+          }}
+        />
+      </label>
+    {/if}
+    {#if session.localError}<span class="chip warn">{session.localError}</span>{/if}
     {#if session.restored}<span>{session.restored}</span>{/if}
     {#if session.adminMessage}<span>{session.adminMessage}</span>{/if}
     <span class="spacer"></span>
+    <span class="chip" data-bulb-status>
+      {session.bulbs.length === 0 ? 'No bulbs are configured' : `${session.bulbs.length} bulbs`}
+    </span>
+    {#if session.photosensitivity}<span class="chip">{session.photosensitivity}</span>{/if}
     <button type="button" onclick={() => session.save()}>Save</button>
     <button type="button" onclick={() => session.undo()} disabled={!session.canUndo}>Undo</button>
     <button type="button" onclick={() => session.redo()} disabled={!session.canRedo}>Redo</button>
@@ -249,7 +283,16 @@
             aria-selected={session.item?.itemId === item.itemId}
             onclick={() => session.selectItem(item.itemId)}
           >
-            {#if item.posterUrl}<img class="poster" src={item.posterUrl} alt="" />{/if}
+            {#if item.posterUrl && !posterMissing[item.itemId]}
+              <img
+                class="poster"
+                src={item.posterUrl}
+                alt=""
+                onerror={() => (posterMissing[item.itemId] = true)}
+              />
+            {:else}
+              <span class="poster placeholder" aria-hidden="true"></span>
+            {/if}
             <span class="movie-copy">
               <span class="movie-title">{item.name || 'Untitled'}</span>
               {#if item.year}<span class="movie-year">{item.year}</span>{/if}
@@ -257,24 +300,6 @@
           </button>
         {/each}
       </div>
-      {#if session.localDev}
-        <label class="file">
-          H.264 MP4
-          <input
-            type="file"
-            accept="video/mp4,.mp4,.mkv,.lightfx,application/octet-stream"
-            onchange={(event) => {
-              const file = (event.target as HTMLInputElement).files?.[0];
-              if (!file) return;
-              if (file.name.toLowerCase().endsWith('.lightfx')) void session.importFile(file);
-              else session.onLocalFile(file);
-            }}
-          />
-        </label>
-      {/if}
-      {#if session.localError}<p>{session.localError}</p>{/if}
-      {#if session.bulbs.length === 0}<p>No bulbs are configured</p>{/if}
-      {#if session.photosensitivity}<p>{session.photosensitivity}</p>{/if}
     </aside>
 
     <section class="stage">
@@ -313,34 +338,36 @@
         {/each}
       </div>
       <div class="transport">
-        <button
-          type="button"
-          aria-label={session.playing ? 'Pause' : 'Play'}
-          aria-describedby="transport-reason"
-          disabled={!session.canPlay}
-          onclick={() => session.togglePlay()}
-        >
-          {session.playing ? 'Pause' : 'Play'}
-        </button>
-        <span id="transport-reason">{session.playReason}</span>
-        {#if session.videoError}
-          <button type="button" onclick={() => session.retryProxy()}>Retry</button>
-        {/if}
-        <button type="button" onclick={() => session.skip(-1)}>Skip back 5 seconds</button>
-        <button type="button" onclick={() => session.skip(1)}>Skip forward 5 seconds</button>
-        <input
-          type="range"
-          aria-label="Scrub"
-          aria-valuemin="0"
-          aria-valuemax={session.durationMs() || 0}
-          aria-valuenow={Math.round(session.playheadMs)}
-          min="0"
-          max={session.durationMs() || 0}
-          value={session.playheadMs}
-          oninput={(event) => session.seek(Number((event.target as HTMLInputElement).value))}
-        />
-        <span class="clock">{formatClock(session.playheadMs)}</span>
-        <span class="clock">{formatClock(session.durationMs())}</span>
+        <div class="transport-controls">
+          <button
+            type="button"
+            aria-label={session.playing ? 'Pause' : 'Play'}
+            aria-describedby="transport-reason"
+            disabled={!session.canPlay}
+            onclick={() => session.togglePlay()}
+          >
+            {session.playing ? 'Pause' : 'Play'}
+          </button>
+          {#if session.videoError}
+            <button type="button" onclick={() => session.retryProxy()}>Retry</button>
+          {/if}
+          <button type="button" onclick={() => session.skip(-1)}>Skip back 5 seconds</button>
+          <button type="button" onclick={() => session.skip(1)}>Skip forward 5 seconds</button>
+          <input
+            type="range"
+            aria-label="Scrub"
+            aria-valuemin="0"
+            aria-valuemax={session.durationMs() || 0}
+            aria-valuenow={Math.round(session.playheadMs)}
+            min="0"
+            max={session.durationMs() || 0}
+            value={session.playheadMs}
+            oninput={(event) => session.seek(Number((event.target as HTMLInputElement).value))}
+          />
+          <span class="clock">{formatClock(session.playheadMs)}</span>
+          <span class="clock">{formatClock(session.durationMs())}</span>
+        </div>
+        <p id="transport-reason" class="transport-reason">{session.playReason}</p>
       </div>
     </section>
 
@@ -402,26 +429,27 @@
         <p class="empty-inspector">Select a keyframe to edit color and brightness.</p>
       {/if}
       {#if session.activeChannelId}
-        <p class="inspector-heading">
-          Channel {session.channels.find((channel) => channel.id === session.activeChannelId)
-            ?.displayName ?? ''}
-        </p>
-        <label
-          >Spatial <input
-            aria-label="Spatial"
-            value={session.channels.find((channel) => channel.id === session.activeChannelId)
-              ?.spatialHint ?? ''}
-          /></label
-        >
-        <p>Does not change plugin playback</p>
-        <p>
-          Playhead {Math.floor(session.playheadMs / 60000)}:{String(
-            Math.floor(session.playheadMs / 1000) % 60
-          ).padStart(2, '0')}
-        </p>
+        <section class="channel-editor">
+          <h2 class="inspector-heading">Channel {activeChannel()?.displayName ?? ''}</h2>
+          <label class="field"
+            >Position
+            <input
+              aria-label="Spatial"
+              readonly
+              value={positionLabel(activeChannel()?.spatialHint ?? '')}
+            />
+          </label>
+          <p class="hint">Does not change plugin playback</p>
+          <p>
+            Playhead {Math.floor(session.playheadMs / 60000)}:{String(
+              Math.floor(session.playheadMs / 1000) % 60
+            ).padStart(2, '0')}
+          </p>
+        </section>
       {/if}
       {#if session.track}
-        <div data-color-history>
+        <div class="history" data-color-history>
+          <span class="history-label">Recent colors</span>
           {#each session.historyColors as swatch, index (index)}
             <button
               type="button"
@@ -532,8 +560,20 @@
       <button type="button" onclick={() => session.zoomKey(']', false)}>Zoom in</button>
       <button type="button" onclick={() => session.zoomKey('[', false)}>Zoom out</button>
       <button type="button" onclick={() => session.zoomFit()}>Zoom to fit</button>
-      <span data-testid="px-per-ms">{session.pxPerMs}</span>
-      <span>Snap</span>
+      <span class="zoom-readout">
+        Zoom
+        <span data-testid="px-per-ms">{session.pxPerMs}</span>
+        px/ms
+      </span>
+      <label class="snap">
+        <input
+          type="checkbox"
+          aria-label="Snap"
+          checked={session.snapToSpacing}
+          onchange={(event) => (session.snapToSpacing = (event.target as HTMLInputElement).checked)}
+        />
+        Snap
+      </label>
       <label
         >Minimum spacing <input
           aria-label="Minimum spacing"
@@ -557,7 +597,9 @@
       role="img"
       aria-label="Minimap"
       onclick={() => session.seek(session.durationMs() / 2)}
-    ></div>
+    >
+      <span class="overview-label">Overview</span>
+    </div>
     {#if session.trackChoices.length > 1}
       <div class="choices">
         {#each session.trackChoices as choice (choice.trackId)}
@@ -613,7 +655,7 @@
   .shell {
     height: 100%;
     display: grid;
-    grid-template-rows: 48px minmax(0, 1fr) minmax(220px, 36vh);
+    grid-template-rows: auto minmax(0, 1fr) minmax(220px, 36vh);
     overflow: hidden;
     background: #0b0b16;
     color: #e2e8f0;
@@ -624,10 +666,41 @@
   .top {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 0 14px;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    min-height: 48px;
+    padding: 6px 14px;
     background: #12121f;
     border-bottom: 1px solid #2a2a44;
+  }
+  .chip {
+    border: 1px solid #334155;
+    border-radius: 999px;
+    padding: 2px 8px;
+    background: #1a1a2e;
+    color: #cbd5e1;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .chip.warn {
+    color: #fecaca;
+  }
+  .file-btn {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    padding: 4px 8px;
+    background: #1a1a2e;
+    cursor: pointer;
+  }
+  .file-btn input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
   }
   .brand {
     color: #a5b4fc;
@@ -706,6 +779,18 @@
     background: #312e81;
     flex: none;
   }
+  .poster.placeholder {
+    display: block;
+    background:
+      linear-gradient(160deg, #1e1b4b, #0f172a 70%),
+      repeating-linear-gradient(
+        135deg,
+        transparent,
+        transparent 6px,
+        rgba(255, 255, 255, 0.05) 6px,
+        rgba(255, 255, 255, 0.05) 7px
+      );
+  }
   .movie-copy {
     display: flex;
     flex-direction: column;
@@ -783,9 +868,28 @@
     min-width: 0;
   }
   .transport {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
     padding: 8px 12px;
     background: #12121f;
     border-top: 1px solid #2a2a44;
+  }
+  .transport-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .transport-reason {
+    margin: 0;
+    color: #94a3b8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .transport-reason:empty {
+    display: none;
   }
   .transport input[type='range'] {
     flex: 1;
@@ -858,7 +962,37 @@
   }
   .inspector-heading {
     margin: 8px 0 4px;
+    font-size: 13px;
     font-weight: 600;
+  }
+  .hint {
+    margin: 0 0 8px;
+    color: #94a3b8;
+    font-size: 12px;
+  }
+  .history {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+    margin-top: 8px;
+  }
+  .history-label {
+    width: 100%;
+    color: #94a3b8;
+    font-size: 12px;
+  }
+  .history button {
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border-radius: 999px;
+  }
+  .zoom-readout,
+  .snap {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
   }
   .canvas-wrap {
     position: relative;
@@ -881,10 +1015,19 @@
     flex-wrap: wrap;
   }
   .minimap {
+    display: flex;
+    align-items: center;
     height: 48px;
     margin: 0 10px 8px;
+    padding: 0 10px;
     border-radius: 6px;
     background: linear-gradient(90deg, #1e293b, #312e81);
+  }
+  .overview-label {
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #c7d2fe;
   }
   .props {
     padding: 12px;
@@ -897,10 +1040,6 @@
   }
   .empty-inspector {
     color: #94a3b8;
-  }
-  .file {
-    display: block;
-    margin-top: 8px;
   }
   @media (max-width: 800px) {
     .middle {

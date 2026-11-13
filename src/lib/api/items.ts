@@ -9,6 +9,22 @@ function number(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+/** Emby `ImageTags.Primary`, or the Studio field `primaryImageTag`. */
+export function primaryImageTag(raw: Record<string, unknown>): string {
+  const tags = raw.ImageTags ?? raw.imageTags;
+  if (tags && typeof tags === 'object' && !Array.isArray(tags)) {
+    const record = tags as Record<string, unknown>;
+    const tagged = text(record.Primary ?? record.primary);
+    if (tagged) return tagged;
+  }
+  return text(raw.primaryImageTag ?? raw.PrimaryImageTag);
+}
+
+export function embyPrimaryUrl(itemId: string, tag: string): string {
+  const query = new URLSearchParams({ tag, maxHeight: '240' });
+  return `/emby/Items/${encodeURIComponent(itemId)}/Images/Primary?${query}`;
+}
+
 /** Accept the Studio contract and the Emby item fields a large library actually returns. */
 export function libraryItemFromApi(raw: Record<string, unknown>): LibraryItem {
   const itemId = text(raw.itemId ?? raw.Id ?? raw.id);
@@ -17,8 +33,7 @@ export function libraryItemFromApi(raw: Record<string, unknown>): LibraryItem {
   let runtimeMs = number(raw.runtimeMs);
   if (!runtimeMs) runtimeMs = Math.round(number(raw.RunTimeTicks) / 10_000);
   const given = text(raw.posterUrl ?? raw.PosterUrl);
-  const posterUrl =
-    given ||
-    (itemId ? `/emby/Items/${encodeURIComponent(itemId)}/Images/Primary?maxHeight=160` : '');
+  const tag = primaryImageTag(raw);
+  const posterUrl = given || (itemId && tag ? embyPrimaryUrl(itemId, tag) : '');
   return { itemId, name, year, runtimeMs, posterUrl };
 }

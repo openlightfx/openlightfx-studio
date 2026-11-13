@@ -110,6 +110,7 @@ requirement(
             Name: 'Glass Harbor',
             ProductionYear: 2017,
             RunTimeTicks: 6_060_000 * 10_000,
+            ImageTags: { Primary: 'harbor' },
           },
           { Id: '9002', Name: '', ProductionYear: 0 },
         ],
@@ -119,8 +120,14 @@ requirement(
     const row = page.getByRole('option', { name: /glass harbor/i });
     await expect(row).toContainText('Glass Harbor');
     await expect(row).toContainText('2017');
-    await expect(row.locator('img')).toHaveAttribute('src', /\/emby\/Items\/9001\/Images\/Primary/);
-    await expect(page.getByRole('option', { name: /untitled/i })).toBeVisible();
+    await expect(row.locator('img')).toHaveAttribute(
+      'src',
+      /\/emby\/Items\/9001\/Images\/Primary\?tag=harbor/
+    );
+    const untitled = page.getByRole('option', { name: /untitled/i });
+    await expect(untitled).toBeVisible();
+    await expect(untitled.locator('.placeholder')).toBeVisible();
+    await expect(untitled.locator('img')).toHaveCount(0);
     await expect(page.getByText(/^movie$/)).toHaveCount(0);
   }
 );
