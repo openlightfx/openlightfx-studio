@@ -11,39 +11,12 @@ import { computeSafetyInfo } from './safety.js';
 
 // ---- Project file (.lightfx-project) ----
 
-/**
- * Save a project file by triggering a download of JSON .lightfx-project.
- * Uses the File System Access API (showSaveFilePicker) when available,
- * falls back to the <a download> trick.
- */
+/** Save a project file by downloading JSON. There is no File System Access API path. */
 export async function saveProjectFile(project: ProjectFile): Promise<void> {
   const json = JSON.stringify(project, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
   const fileName =
     sanitizeFileName(project.track?.metadata?.title || 'untitled') + '.lightfx-project';
-
-  if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
-    try {
-      const handle = await (window as any).showSaveFilePicker({
-        suggestedName: fileName,
-        types: [
-          {
-            description: 'OpenLightFX Project',
-            accept: { 'application/json': ['.lightfx-project'] },
-          },
-        ],
-      });
-      const writable = await handle.createWritable();
-      await writable.write(blob);
-      await writable.close();
-      return;
-    } catch (err: unknown) {
-      // User cancelled or API unavailable — fall through to download fallback
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-    }
-  }
-
-  // Fallback: <a download> trick
   triggerDownload(blob, fileName);
 }
 

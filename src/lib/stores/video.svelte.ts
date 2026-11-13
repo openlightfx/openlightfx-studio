@@ -5,8 +5,6 @@
 import type { VideoState, PlaybackSpeed } from '$lib/types/index.js';
 import { DEFAULT_PLAYBACK_SPEED, DEFAULT_FRAME_RATE } from '$lib/types/index.js';
 import { projectStore } from './project.svelte.js';
-import { probeHdr } from '$lib/services/hdr-tonemap.js';
-import { isFFmpegSupported } from '$lib/services/ffmpeg-frame-extractor.js';
 
 function createDefaultVideoState(): VideoState {
   return {
@@ -172,18 +170,6 @@ class VideoStoreClass {
       isLoading: true,
     };
 
-    // Probe for HDR10 content in the background
-    if (isFFmpegSupported()) {
-      probeHdr(file)
-        .then((isHdr) => {
-          this.state = { ...this.state, isHdr };
-        })
-        .catch((err) => {
-          console.warn('[videoStore] probeHdr failed:', err);
-        });
-    } else {
-      console.warn('[videoStore] ffmpeg not supported, skipping HDR probe');
-    }
   }
 
   unloadFile(): void {

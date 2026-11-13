@@ -151,8 +151,7 @@ export async function saveProject(): Promise<void> {
 }
 
 export async function saveProjectAs(): Promise<void> {
-  // saveProjectFile already uses showSaveFilePicker which prompts for location
-  // For "Save As", we just always call it (no cached handle)
+  // Save As downloads a project file. There is no directory picker.
   try {
     await saveProjectFile(projectStore.project.file);
     projectStore.markClean();

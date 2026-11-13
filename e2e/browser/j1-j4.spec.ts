@@ -5,6 +5,19 @@ import { StudioPage } from '../pages/studio-page';
 async function shell(page: import('@playwright/test').Page) {
   const studio = new StudioPage(page);
   await studio.openLocal();
+  await page.getByRole('option', { name: /proxy fixture/i }).click();
+  await page.locator('video').evaluate(
+    (node) =>
+      new Promise<void>((resolve) => {
+        const video = node as HTMLVideoElement;
+        if (video.readyState >= 2) {
+          resolve();
+          return;
+        }
+        video.addEventListener('loadeddata', () => resolve(), { once: true });
+      })
+  );
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   return studio;
 }
 
@@ -105,14 +118,12 @@ requirement('MEDIA-006 @browser proxy seek lands within one GOP', async ({ page 
   const studio = await shell(page);
   const video = page.locator('video');
   const started = Date.now();
-  await video.evaluate((node) => {
-    (node as HTMLVideoElement).currentTime = 4;
-  });
   await video.evaluate(
     (node) =>
       new Promise((resolve, reject) => {
+        const videoNode = node as HTMLVideoElement;
         const timer = setTimeout(() => reject(new Error('seeked did not fire')), 3000);
-        node.addEventListener(
+        videoNode.addEventListener(
           'seeked',
           () => {
             clearTimeout(timer);
@@ -120,6 +131,7 @@ requirement('MEDIA-006 @browser proxy seek lands within one GOP', async ({ page 
           },
           { once: true }
         );
+        videoNode.currentTime = 4;
       })
   );
   expect(Date.now() - started).toBeLessThanOrEqual(400);
@@ -149,7 +161,8 @@ requirement('MEDIA-009 @browser space toggles playback unless a field has focus'
 });
 
 requirement('MEDIA-010 @browser transport is present before a movie and has no duration field', async ({ page }) => {
-  const studio = await shell(page);
+  const studio = new StudioPage(page);
+  await studio.openLocal();
   const play = studio.button(/^play$/i);
   await expect(play).toBeVisible();
   await expect(play).toBeDisabled();
@@ -181,7 +194,7 @@ requirement('MEDIA-013 @browser reload restores the Emby item', async ({ page })
 
 requirement('MEDIA-014 @browser an H.264 MP4 plays in dev and MKV is refused', async ({ page }) => {
   const studio = await shell(page);
-  await page.locator('input[type="file"]').setInputFiles('media/generated/clip-a-h264.mp4');
+  await page.locator('input[type="file"]').setInputFiles('static/media/clip-a-h264.mp4');
   await studio.button(/^play$/i).click();
   await expect.poll(async () => page.locator('video').evaluate((node) => (node as HTMLVideoElement).currentTime)).toBeGreaterThan(0);
   await page.locator('input[type="file"]').setInputFiles({ name: 'movie.mkv', mimeType: 'video/x-matroska', buffer: Buffer.from('not a movie') });
@@ -190,6 +203,7 @@ requirement('MEDIA-014 @browser an H.264 MP4 plays in dev and MKV is refused', a
 
 requirement('MEDIA-016 @browser editing works while the proxy is building', async ({ page }) => {
   const studio = await shell(page);
+  await page.getByRole('option', { name: /building proxy/i }).click();
   await expect(page.getByText(/prepar/i)).toBeVisible();
   await page.keyboard.press('k');
   await expect(page.getByText(/keyframe/i)).toBeVisible();
@@ -291,6 +305,7 @@ requirement('KEY-002 @browser K inserts at the playhead', async ({ page }) => {
 
 requirement('KEY-004 @browser delete removes the selection in one undo', async ({ page }) => {
   const studio = await shell(page);
+  await studio.canvas().click({ position: { x: 40, y: 40 } });
   await page.keyboard.press('Delete');
   await studio.button(/^undo$/i).click();
 });
@@ -352,9 +367,10 @@ requirement('PROP-002 @browser hex 00FF00 sets green and an invalid hex is refus
 requirement('PROP-003 @browser kelvin stays between 1000 and 10000', async ({ page }) => {
   const studio = await shell(page);
   await page.getByRole('radio', { name: /kelvin/i }).check();
-  await page.getByLabel(/kelvin/i).fill('4200');
-  await expect(page.getByLabel(/kelvin/i)).toHaveValue('4200');
-  await page.getByLabel(/kelvin/i).fill('500');
+  const kelvin = page.getByRole('textbox', { name: /^kelvin$/i });
+  await kelvin.fill('4200');
+  await expect(kelvin).toHaveValue('4200');
+  await kelvin.fill('500');
   await expect(page.getByText(/1000/)).toBeVisible();
 });
 
@@ -429,6 +445,21 @@ requirement('SAVE-006 @browser a successful save wins over the crash copy', asyn
 
 requirement('SAVE-007 @browser a newer crash copy is restored', async ({ page }) => {
   const studio = await shell(page);
+  await page.keyboard.press('k');
+  await expect.poll(async () =>
+    page.evaluate(async () => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('openlightfx-studio');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      return new Promise<boolean>((resolve) => {
+        const tx = db.transaction('crash', 'readonly');
+        const request = tx.objectStore('crash').getAll();
+        request.onsuccess = () => resolve(request.result.some((row) => row && row.dirty));
+      });
+    })
+  ).toBe(true);
   await page.reload();
   await expect(page.getByText(/unsaved edits were restored/i)).toBeVisible();
 });
@@ -450,6 +481,7 @@ requirement('IO-001 @browser import replaces channels and keeps the movie', asyn
 
 requirement('IO-004 @browser a duration warning appears only for a mismatched import', async ({ page }) => {
   const studio = await shell(page);
+  await page.locator('input[type="file"][accept*="lightfx"]').setInputFiles('tests/fixtures/sampling/mismatch.lightfx');
   await expect(page.getByRole('button', { name: /use movie duration/i })).toBeVisible();
 });
 
@@ -477,7 +509,7 @@ requirement('PREV-004 @browser a bulb follows one channel', async ({ page }) => 
 });
 
 requirement('PREV-008 @browser Emby keeps the bulbs until takeover', async ({ page }) => {
-  const studio = await shell(page);
+  await page.goto('/?playback=active');
   await expect(page.getByRole('button', { name: /use bulbs for editing/i })).toBeVisible();
 });
 
@@ -488,7 +520,8 @@ requirement('PREV-009 @browser no bulbs still draws the overlay', async ({ page 
 });
 
 requirement('PREV-010 @browser a non-admin can download and cannot drive bulbs', async ({ page }) => {
-  const studio = await shell(page);
+  const studio = new StudioPage(page);
+  await page.goto('/?api_key=viewer');
   await expect(page.getByText(/admin is required/i)).toBeVisible();
   await expect(studio.button(/download/i)).toBeVisible();
 });
@@ -568,24 +601,28 @@ requirement('A11Y-003 @browser question mark lists shortcuts', async ({ page }) 
 
 requirement('ERR-001 @browser a playback error keeps the transport and offers retry', async ({ page }) => {
   const studio = await shell(page);
+  await page.getByRole('option', { name: /broken proxy/i }).click();
   await expect(page.getByRole('button', { name: /retry/i })).toBeVisible();
   await expect(studio.button(/^play$/i)).toBeVisible();
 });
 
 requirement('ERR-002 @browser a dead plugin does not invent a library', async ({ page }) => {
-  const studio = await shell(page);
+  await page.goto('/emby/OpenLightFX/studio/?api_key=test-admin&plugin=down');
   await expect(page.getByText(/plugin is unreachable/i)).toBeVisible();
   await expect(page.getByRole('option')).toHaveCount(0);
 });
 
 requirement('ERR-003 @browser a save conflict shows the server text', async ({ page }) => {
-  const studio = await shell(page);
+  const studio = new StudioPage(page);
+  await page.goto('/emby/OpenLightFX/studio/?api_key=test-admin&itemId=48');
+  await expect(page.getByText('Conflict')).toBeVisible();
   await studio.button(/^save$/i).click();
   await expect(page.getByRole('alert')).toBeVisible();
 });
 
 requirement('ERR-004 @browser a forbidden save explains admin and offers download', async ({ page }) => {
-  const studio = await shell(page);
+  const studio = new StudioPage(page);
+  await page.goto('/?api_key=viewer');
   await expect(page.getByText(/admin is required/i)).toBeVisible();
   await expect(studio.button(/download/i)).toBeVisible();
 });
@@ -604,6 +641,7 @@ requirement('ERR-005 @browser an unplayable local file points at Emby', async ({
 
 requirement('ERR-006 @browser unknown duration blocks save and does not ask', async ({ page }) => {
   const studio = await shell(page);
+  await page.getByRole('option', { name: /unknown duration/i }).click();
   await studio.button(/^save$/i).click();
   await expect(page.getByText(/duration is unknown/i)).toBeVisible();
   await studio.expectNoDurationField();
@@ -611,6 +649,7 @@ requirement('ERR-006 @browser unknown duration blocks save and does not ask', as
 
 requirement('ERR-007 @browser an eyedropper failure keeps the color', async ({ page }) => {
   const studio = await shell(page);
+  await page.getByRole('option', { name: /no frame/i }).click();
   await studio.button(/eyedropper/i).click();
   await expect(page.getByRole('status')).toContainText(/could not be sampled/i);
 });

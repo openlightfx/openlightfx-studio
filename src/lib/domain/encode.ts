@@ -1,12 +1,10 @@
-import path from 'node:path';
 import protobuf from 'protobufjs';
 import type { EffectKeyframe, Keyframe, SafetyInfo, Track } from './types';
+import { LIGHTFX_PROTO } from './lightfx-proto';
 import { validateTrack } from './validate';
 
-const PROTO = path.join(process.cwd(), 'proto/lightfx.proto');
-
 function trackType(): protobuf.Type {
-  const root = protobuf.loadSync(PROTO);
+  const root = protobuf.parse(LIGHTFX_PROTO).root;
   const type = root.lookupType('openlightfx.LightFXTrack');
   if (!type) throw new Error('openlightfx.LightFXTrack is missing from proto/lightfx.proto');
   return type;

@@ -4,7 +4,6 @@
   import { projectStore } from '$lib/stores/project.svelte.js';
   import { videoStore } from '$lib/stores/video.svelte.js';
   import { rgbToHex } from '$lib/services/color-utils.js';
-  import { extractAndTonemapFrame } from '$lib/services/hdr-tonemap.js';
   import type { RGBColor } from '$lib/types/index.js';
   import { LS_KEY_COLOR_HISTORY, MAX_COLOR_HISTORY } from '$lib/types/index.js';
   import type { ColorHistoryEntry } from '$lib/types/ui.js';
@@ -40,32 +39,12 @@
     magnifierCtx = magnifierCanvas.getContext('2d');
 
     frameCanvas = document.createElement('canvas');
-    const file = videoStore.state.file;
-    const timestampMs = videoStore.state.currentTimeMs;
-    const isHdr = videoStore.state.isHdr;
-
-    if (file && isHdr) {
-      isExtracting = true;
-      extractAndTonemapFrame(file, videoEl, timestampMs, true).then((imageData) => {
-        if (!frameCanvas) return;
-        frameCanvas.width = imageData.width;
-        frameCanvas.height = imageData.height;
-        frameCtx = frameCanvas.getContext('2d', { willReadFrequently: true });
-        if (frameCtx) {
-          frameCtx.putImageData(imageData, 0, 0);
-          frameReady = true;
-        }
-        isExtracting = false;
-      });
-    } else {
-      // No File available — fall back to direct canvas draw
-      frameCanvas.width = videoEl.videoWidth;
-      frameCanvas.height = videoEl.videoHeight;
-      frameCtx = frameCanvas.getContext('2d', { willReadFrequently: true });
-      if (frameCtx) {
-        frameCtx.drawImage(videoEl, 0, 0);
-        frameReady = true;
-      }
+    frameCanvas.width = videoEl.videoWidth;
+    frameCanvas.height = videoEl.videoHeight;
+    frameCtx = frameCanvas.getContext('2d', { willReadFrequently: true });
+    if (frameCtx) {
+      frameCtx.drawImage(videoEl, 0, 0);
+      frameReady = true;
     }
   });
 
