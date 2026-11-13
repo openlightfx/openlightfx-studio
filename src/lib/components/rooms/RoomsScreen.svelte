@@ -5,6 +5,7 @@
     discoverBulbs,
     identifyBulb,
     loadBulbs,
+    loadCurrentUser,
     loadDevices,
     loadRooms,
     loadSetup,
@@ -19,6 +20,8 @@
   } from '$lib/api/rooms';
   let rooms = $state<Room[]>([]);
   let devices = $state<EmbyDevice[]>([]);
+  let currentUser = $state<{ id: string; name: string } | null>(null);
+  let showAllDevices = $state(false);
   let bulbs = $state<RoomBulb[]>([]);
   let setup = $state<Setup | null>(null);
   let selected = $state<string | null>(null);
@@ -58,6 +61,15 @@
   );
   const assigned = $derived(new Set(placed.map((b) => b.id)));
   const unplaced = $derived(bulbs.filter((b) => !assigned.has(b.id)));
+  const screenDevices = $derived(
+    showAllDevices || !currentUser
+      ? devices
+      : devices.filter(
+          (device) =>
+            device.lastUserId?.toLowerCase() === currentUser.id.toLowerCase() ||
+            device.roomId === selected
+        )
+  );
   const positionsUsed = $derived(
     new Set(placed.map((b) => b.position).filter((p): p is Position => !!p))
   );
@@ -82,11 +94,12 @@
     connectionFailed = false;
     error = '';
     try {
-      [rooms, devices, bulbs, setup] = await Promise.all([
+      [rooms, devices, bulbs, setup, currentUser] = await Promise.all([
         loadRooms(),
         loadDevices(),
         loadBulbs(),
         loadSetup(),
+        loadCurrentUser().catch(() => null),
       ]);
       const id = location.hash.match(/^#\/rooms\/([^/?]+)/)?.[1];
       const room = rooms.find((r) => r.id === id) ?? rooms[0];
@@ -234,9 +247,9 @@
     }
   }
   function lastSeen(value?: string): string {
-    if (!value) return 'last seen time unknown';
+    if (!value) return '';
     const elapsed = Math.max(0, Date.now() - Date.parse(value));
-    if (!Number.isFinite(elapsed)) return 'last seen time unknown';
+    if (!Number.isFinite(elapsed)) return '';
     const minutes = Math.floor(elapsed / 60_000);
     if (minutes < 1) return 'last seen just now';
     if (minutes < 60) return `last seen ${minutes} min ago`;
@@ -426,9 +439,9 @@
           disabled={setup?.isAdmin !== true}
           bind:value={screenId}
           onchange={() => (notice = 'Unsaved changes')}
-          ><option value="">{devices.length ? 'Choose a device…' : 'No devices yet. Open Emby on the room’s TV once, then click Refresh.'}</option
-          >{#each devices as device (device.deviceId)}<option value={device.deviceId}
-              >{device.name} · {device.appName}{device.lastUserName ? ` · ${device.lastUserName}` : ''} · {lastSeen(device.lastActivity)}{device.roomId && device.roomId !== selected
+          ><option value="">{screenDevices.length ? 'Choose a device…' : 'No devices yet. Open Emby on the room’s TV once, then click Refresh.'}</option
+          >{#each screenDevices as device (device.deviceId)}<option value={device.deviceId}
+              >{device.name} · {device.appName}{device.lastUserName ? ` · ${device.lastUserName}` : ''}{lastSeen(device.lastActivity) ? ` · ${lastSeen(device.lastActivity)}` : ''}{device.roomId && device.roomId !== selected
                 ? ` · In ${device.roomName ?? 'another room'}`
                 : ''}</option
             >{/each}</select
@@ -438,6 +451,9 @@
         onclick={() => loadDevices().then((x) => (devices = x))}>Refresh</button
       >
     </div>
+    {#if currentUser && devices.some((device) => device.lastUserId && device.lastUserId.toLowerCase() !== currentUser.id.toLowerCase() && device.roomId !== selected)}
+      <label class="device-filter"><input type="checkbox" bind:checked={showAllDevices} /> Show devices last used by other users</label>
+    {/if}
     <div class="columns">
       <div class="diagram-area">
         <div class="diagram">
@@ -736,6 +752,13 @@
     gap: 24px;
     align-items: end;
     margin-bottom: 12px;
+  }
+  .device-filter {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: -4px 0 12px;
+    color: var(--text-muted);
   }
   .topfields label {
     display: grid;

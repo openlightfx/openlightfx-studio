@@ -33,6 +33,7 @@ export interface EmbyDevice {
   name: string;
   appName: string;
   lastUserName?: string;
+  lastUserId?: string;
   lastActivity?: string;
   roomId?: string | null;
   roomName?: string;
@@ -66,6 +67,14 @@ export async function loadSetup(): Promise<Setup> {
 }
 export const loadRooms = () => roomApi<Room[]>('Rooms');
 export const loadDevices = () => roomApi<EmbyDevice[]>('Devices');
+export async function loadCurrentUser(): Promise<{ id: string; name: string } | null> {
+  const response = await fetch('/emby/Users/Me', { headers: authHeaders() });
+  if (!response.ok) return null;
+  const user = await response.json();
+  return typeof user?.Id === 'string'
+    ? { id: user.Id, name: typeof user.Name === 'string' ? user.Name : '' }
+    : null;
+}
 export const loadBulbs = () => roomApi<RoomBulb[]>('Bulbs');
 export const discoverBulbs = () =>
   roomApi<{
