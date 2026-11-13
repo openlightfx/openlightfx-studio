@@ -7,7 +7,9 @@ const root = process.cwd();
 const dir = path.join(root, 'test-results');
 fs.mkdirSync(dir, { recursive: true });
 
-const files = fs.readdirSync(dir).filter((name) => name.startsWith('outcomes') && name.endsWith('.jsonl'));
+const files = fs
+  .readdirSync(dir)
+  .filter((name) => name.startsWith('outcomes') && name.endsWith('.jsonl'));
 const outcomes = [];
 for (const name of files) {
   for (const line of fs.readFileSync(path.join(dir, name), 'utf8').split('\n')) {
@@ -17,13 +19,20 @@ for (const name of files) {
 }
 
 const allow = new Set(
-  JSON.parse(fs.readFileSync(path.join(root, 'tests/expected-failures.json'), 'utf8')).failures ?? []
+  JSON.parse(fs.readFileSync(path.join(root, 'tests/expected-failures.json'), 'utf8')).failures ??
+    []
 );
 
 const groups = new Map();
 for (const outcome of outcomes) {
   const key = `${outcome.id}@${outcome.tier}`;
-  const group = groups.get(key) ?? { id: outcome.id, tier: outcome.tier, passed: 0, failed: 0, titles: [] };
+  const group = groups.get(key) ?? {
+    id: outcome.id,
+    tier: outcome.tier,
+    passed: 0,
+    failed: 0,
+    titles: [],
+  };
   group.titles.push(outcome.title);
   if (outcome.status === 'passed') group.passed += 1;
   else group.failed += 1;
@@ -66,10 +75,16 @@ fs.writeFileSync(path.join(dir, 'requirements-report.md'), lines.join('\n') + '\
 
 fs.writeFileSync(
   path.join(dir, 'traceability.json'),
-  JSON.stringify({ tests: outcomes.map((outcome) => ({ name: outcome.title, status: outcome.status })) }, null, 2)
+  JSON.stringify(
+    { tests: outcomes.map((outcome) => ({ name: outcome.title, status: outcome.status })) },
+    null,
+    2
+  )
 );
 
 const fullstackRan = outcomes.some((outcome) => outcome.tier === 'fullstack');
 if (!fullstackRan) console.log('fullstack: not run');
-console.log(`requirements: ${summary.passed} passed, ${summary.expectedFail} expected-fail, ${summary.failed} failed`);
+console.log(
+  `requirements: ${summary.passed} passed, ${summary.expectedFail} expected-fail, ${summary.failed} failed`
+);
 if (summary.failed > 0) process.exit(1);

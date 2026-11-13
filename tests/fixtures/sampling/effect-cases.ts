@@ -44,7 +44,8 @@ export function effectCases(): { name: string; input: EffectInput }[] {
         effectType,
         durationMs: 1000,
         intensity: 80,
-        primaryColor: effectType === 'NEON' || effectType === 'AURORA' ? { r: 0, g: 255, b: 180 } : null,
+        primaryColor:
+          effectType === 'NEON' || effectType === 'AURORA' ? { r: 0, g: 255, b: 180 } : null,
         secondaryColor: null,
         params,
       },

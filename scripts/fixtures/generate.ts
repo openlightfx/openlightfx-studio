@@ -21,7 +21,8 @@ fs.writeFileSync(
   path.join(dir, 'effects.json'),
   JSON.stringify(
     {
-      source: 'TypeScript transcription of openlightfx-emby effect renderers at cursor/studio-host-api-18c1. Regenerate with npx vite-node scripts/fixtures/generate.ts and confirm with the plugin dotnet test.',
+      source:
+        'TypeScript transcription of openlightfx-emby effect renderers at cursor/studio-host-api-18c1. Regenerate with npx vite-node scripts/fixtures/generate.ts and confirm with the plugin dotnet test.',
       cases,
     },
     null,

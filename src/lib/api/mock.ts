@@ -103,7 +103,12 @@ function growingProgress(): { revealed: number; size: number; throughMs: number;
   else index = Math.min(ends.length - 1, burst + Math.floor((elapsed - burstMs) / 4000));
   const revealed = ends.length > 0 ? ends[Math.max(0, index)] : 0;
   const ready = size > 0 && revealed >= size;
-  return { revealed, size, throughMs: ready ? 10_000 : Math.floor((revealed / Math.max(size, 1)) * 10_000), ready };
+  return {
+    revealed,
+    size,
+    throughMs: ready ? 10_000 : Math.floor((revealed / Math.max(size, 1)) * 10_000),
+    ready,
+  };
 }
 
 function growingProxy(): MediaInfo['proxy'] {
@@ -285,7 +290,11 @@ function json(status: number, body: unknown): MockResult {
   return { status, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) };
 }
 
-function text(status: number, body: string, headers: Record<string, string> = { 'content-type': 'text/plain' }): MockResult {
+function text(
+  status: number,
+  body: string,
+  headers: Record<string, string> = { 'content-type': 'text/plain' }
+): MockResult {
   return { status, headers, body };
 }
 
@@ -370,7 +379,10 @@ export function handleMock(
     const itemId = url.searchParams.get('itemId') ?? '';
     const item = CATALOG.find((entry) => entry.itemId === itemId);
     const track = item?.tracks[0];
-    return json(200, track ? { itemId, trackPath: `lightfx/${track.trackId}.lightfx` } : { itemId });
+    return json(
+      200,
+      track ? { itemId, trackPath: `lightfx/${track.trackId}.lightfx` } : { itemId }
+    );
   }
 
   const trackMatch = path.match(/^\/OpenLightFX\/Studio\/Tracks\/([^/]+)$/);
@@ -389,7 +401,10 @@ export function handleMock(
     const presented = ifMatch.trim().replace(/^"|"$/g, '');
     const tokenNow = stamp(trackId);
     if (exists && presented !== tokenNow) {
-      return text(409, `conflict: the server track was updated at ${tokenNow}. Send If-Match with that updatedAt.`);
+      return text(
+        409,
+        `conflict: the server track was updated at ${tokenNow}. Send If-Match with that updatedAt.`
+      );
     }
     stored.set(trackId, body);
     const next = new Date().toISOString().replace(/Z$/, '.0000000Z');
@@ -421,8 +436,10 @@ export function handleMock(
     if (!admin) return text(403, 'Admin is required');
     return text(409, 'playback_active');
   }
-  if (path === '/OpenLightFX/Studio/Preview/Stop' && method === 'POST') return json(200, { ok: true });
-  if (path === '/OpenLightFX/Studio/Preview/Frame' && method === 'POST') return json(200, { ok: true });
+  if (path === '/OpenLightFX/Studio/Preview/Stop' && method === 'POST')
+    return json(200, { ok: true });
+  if (path === '/OpenLightFX/Studio/Preview/Frame' && method === 'POST')
+    return json(200, { ok: true });
   return text(404, 'not found');
 }
 
@@ -465,7 +482,11 @@ export function serveGrowingProxy(req: IncomingMessage, res: ServerResponse): vo
   const finish = () => {
     if (closed) return;
     closed = true;
-    try { fs.closeSync(fd); } catch { /* already closed */ }
+    try {
+      fs.closeSync(fd);
+    } catch {
+      /* already closed */
+    }
   };
   const pump = () => {
     if (closed || res.writableEnded) return;
@@ -504,7 +525,7 @@ export function mockMiddleware(req: IncomingMessage, res: ServerResponse, next: 
   req.on('data', (chunk: Buffer) => chunks.push(chunk));
   req.on('end', () => {
     const header = req.headers['if-match'];
-    const ifMatch = Array.isArray(header) ? header[0] ?? '' : header ?? '';
+    const ifMatch = Array.isArray(header) ? (header[0] ?? '') : (header ?? '');
     const result = handleMock(
       req.method ?? 'GET',
       raw,

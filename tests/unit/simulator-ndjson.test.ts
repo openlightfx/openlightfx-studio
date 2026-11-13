@@ -9,6 +9,8 @@ const sample = [
 it('reads simulator command_received NDJSON by bulb_id and the sent color', () => {
   const events = parseNdjson(sample);
   expect(events).toHaveLength(2);
-  expect(findColor(events, { bulbId: 'left', r: 255, g: 0, b: 0, brightness: 100 })?.power).toBe(true);
+  expect(findColor(events, { bulbId: 'left', r: 255, g: 0, b: 0, brightness: 100 })?.power).toBe(
+    true
+  );
   expect(colorCommands(events)[0].transitionMs).toBe(0);
 });

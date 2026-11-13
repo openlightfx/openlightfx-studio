@@ -134,7 +134,8 @@ const seeded = await json(
   'PUT'
 );
 const pluginLoaded =
-  seeded.status < 400 && String(seeded.body?.bulbConfigJson ?? seeded.body?.BulbConfigJson ?? '').includes('simulator');
+  seeded.status < 400 &&
+  String(seeded.body?.bulbConfigJson ?? seeded.body?.BulbConfigJson ?? '').includes('simulator');
 
 // MEDIA-015: wait for clip-zero to be scanned. Emby's item update API ignores
 // RunTimeTicks and the scan always probes the file, so run.sh clears the runtime
@@ -159,4 +160,14 @@ if (!zeroId) {
   process.exit(1);
 }
 
-console.log(JSON.stringify({ apiKey: token, viewerToken, user, emby: base, pluginLoaded, zeroId, zeroRuntimeTicks }));
+console.log(
+  JSON.stringify({
+    apiKey: token,
+    viewerToken,
+    user,
+    emby: base,
+    pluginLoaded,
+    zeroId,
+    zeroRuntimeTicks,
+  })
+);

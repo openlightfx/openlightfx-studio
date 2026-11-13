@@ -17,11 +17,11 @@ The March rewrite design (`docs/superpowers/specs/2026-03-28-studio-rewrite-desi
 
 **Layers:**
 
-| Layer | Meaning |
-| --- | --- |
-| L1 | The core loop a person can finish on a desktop browser, including Firefox: open Studio from Emby, pick a movie, play it with visible transport, edit channels and keyframes, preview on screen and on bulbs, save, and have Emby playback use that track. |
-| L2 | Effects, groups, markers, command palette, light theme, tablet layout, metadata depth. The core loop does not depend on these. |
-| L3 | Marketplace, cloud publish, and automatic track generation. No L1 or L2 screen shows a disabled marketplace control. |
+| Layer | Meaning                                                                                                                                                                                                                                                   |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| L1    | The core loop a person can finish on a desktop browser, including Firefox: open Studio from Emby, pick a movie, play it with visible transport, edit channels and keyframes, preview on screen and on bulbs, save, and have Emby playback use that track. |
+| L2    | Effects, groups, markers, command palette, light theme, tablet layout, metadata depth. The core loop does not depend on these.                                                                                                                            |
+| L3    | Marketplace, cloud publish, and automatic track generation. No L1 or L2 screen shows a disabled marketplace control.                                                                                                                                      |
 
 **Out of scope for L1:** ffmpeg.wasm, the File System Access API, COOP/COEP, hosting at openlightfx.studio, slaving Studio's playhead to a living-room Emby session, persisting undo history, and the reserved loop-point auto-swap mentioned in TODO.md.
 
@@ -1046,14 +1046,14 @@ Conversion: `temp = clamp(kelvin, 1000, 40000) / 100`. At `temp ≤ 66`, red is 
 
 Templates:
 
-| Template | Channels and spatial hints |
-| --- | --- |
-| Ambient | `ambient` / `SPATIAL_AMBIENT` |
-| Stereo | `left` / `SPATIAL_LEFT`, `right` / `SPATIAL_RIGHT` |
-| Stereo + Ambient | stereo plus `ambient` / `SPATIAL_AMBIENT` |
-| Surround | stereo plus `surround-left` / `SPATIAL_SURROUND_LEFT`, `surround-right` / `SPATIAL_SURROUND_RIGHT` |
-| 6-Channel Theater | surround plus `center` / `SPATIAL_CENTER` and `ambient` / `SPATIAL_AMBIENT` |
-| 8-Channel Home Theater | 6-channel plus `back-left` / `SPATIAL_SURROUND_LEFT` and `back-right` / `SPATIAL_SURROUND_RIGHT` |
+| Template               | Channels and spatial hints                                                                         |
+| ---------------------- | -------------------------------------------------------------------------------------------------- |
+| Ambient                | `ambient` / `SPATIAL_AMBIENT`                                                                      |
+| Stereo                 | `left` / `SPATIAL_LEFT`, `right` / `SPATIAL_RIGHT`                                                 |
+| Stereo + Ambient       | stereo plus `ambient` / `SPATIAL_AMBIENT`                                                          |
+| Surround               | stereo plus `surround-left` / `SPATIAL_SURROUND_LEFT`, `surround-right` / `SPATIAL_SURROUND_RIGHT` |
+| 6-Channel Theater      | surround plus `center` / `SPATIAL_CENTER` and `ambient` / `SPATIAL_AMBIENT`                        |
+| 8-Channel Home Theater | 6-channel plus `back-left` / `SPATIAL_SURROUND_LEFT` and `back-right` / `SPATIAL_SURROUND_RIGHT`   |
 
 The proto has no separate back hint, so the back channels share the surround hint. Display names are the English words for those ids.
 
@@ -1375,22 +1375,22 @@ The proto has no separate back hint, so the back channels share the surround hin
 - When each row is invoked
 - Then the action runs
 
-| Action | Shortcut | Also a button |
-| --- | --- | --- |
-| Save | Ctrl+S or Cmd+S | Yes |
-| Undo | Ctrl+Z or Cmd+Z | Yes |
-| Redo | Ctrl+Shift+Z or Cmd+Shift+Z | Yes |
-| Play or pause | Space | Yes |
-| Add keyframe | K | Double-click is the pointer path |
-| Delete selection | Delete or Backspace | Context menu |
-| Step one frame grid | Left or Right | Yes |
-| Skip 5 seconds | Shift+Left or Shift+Right | Yes |
-| Zoom in | `]` | Yes |
-| Zoom out | `[` | Yes |
-| Zoom to fit | `\` | Yes |
-| Toggle on-screen lights | V | Yes |
-| Eyedropper | I | Yes |
-| Shortcut help | `?` | Yes |
+| Action                  | Shortcut                    | Also a button                    |
+| ----------------------- | --------------------------- | -------------------------------- |
+| Save                    | Ctrl+S or Cmd+S             | Yes                              |
+| Undo                    | Ctrl+Z or Cmd+Z             | Yes                              |
+| Redo                    | Ctrl+Shift+Z or Cmd+Shift+Z | Yes                              |
+| Play or pause           | Space                       | Yes                              |
+| Add keyframe            | K                           | Double-click is the pointer path |
+| Delete selection        | Delete or Backspace         | Context menu                     |
+| Step one frame grid     | Left or Right               | Yes                              |
+| Skip 5 seconds          | Shift+Left or Shift+Right   | Yes                              |
+| Zoom in                 | `]`                         | Yes                              |
+| Zoom out                | `[`                         | Yes                              |
+| Zoom to fit             | `\`                         | Yes                              |
+| Toggle on-screen lights | V                           | Yes                              |
+| Eyedropper              | I                           | Yes                              |
+| Shortcut help           | `?`                         | Yes                              |
 
 - Then the shortcut registry contains these bindings and the browser test performs Save, Undo, K, Space, V, I, and the zoom keys in Firefox
 
@@ -1507,22 +1507,22 @@ The proto has no separate back hint, so the back channels share the surround hin
 - When the user saves
 - Then no PUT body is stored and the message contains that rule id
 
-| Rule | Condition |
-| --- | --- |
-| V-001 | `version` is not 1 |
-| V-002 | metadata is missing |
-| V-003 | a non-empty IMDB id does not match `tt` plus at least 7 digits |
-| V-004 | `duration_ms` is 0 |
-| V-005 | duplicate channel ids |
+| Rule  | Condition                                                                      |
+| ----- | ------------------------------------------------------------------------------ |
+| V-001 | `version` is not 1                                                             |
+| V-002 | metadata is missing                                                            |
+| V-003 | a non-empty IMDB id does not match `tt` plus at least 7 digits                 |
+| V-004 | `duration_ms` is 0                                                             |
+| V-005 | duplicate channel ids                                                          |
 | V-006 | a keyframe channel is unknown, or a channel's times go backwards in file order |
-| V-007 | brightness > 100 |
-| V-008 | an RGB component > 255 |
-| V-009 | COLOR_TEMPERATURE kelvin outside 1000–10000 |
-| V-010 | a keyframe time is past `duration_ms` |
-| V-011 | there is no channel |
-| V-012 | `transition_ms` > `timestamp_ms` |
-| V-013 | an effect duration is 0 |
-| V-014 | an effect intensity is > 100 |
+| V-007 | brightness > 100                                                               |
+| V-008 | an RGB component > 255                                                         |
+| V-009 | COLOR_TEMPERATURE kelvin outside 1000–10000                                    |
+| V-010 | a keyframe time is past `duration_ms`                                          |
+| V-011 | there is no channel                                                            |
+| V-012 | `transition_ms` > `timestamp_ms`                                               |
+| V-013 | an effect duration is 0                                                        |
+| V-014 | an effect intensity is > 100                                                   |
 
 #### SAVE-005 Autosave is IndexedDB every 30 seconds
 
@@ -1689,16 +1689,16 @@ The proto has no separate back hint, so the back channels share the surround hin
 - When the overlay is on
 - Then each region below is tinted with that color
 
-| Hint | Region |
-| --- | --- |
-| `SPATIAL_LEFT` | top-left edge, 15% of the video height |
-| `SPATIAL_CENTER` and `SPATIAL_BEHIND_SCREEN` | top-center, 15% of the video height |
-| `SPATIAL_RIGHT` | top-right, 15% of the video height |
-| `SPATIAL_SURROUND_LEFT` | bottom-left, 15% of the video height |
-| `SPATIAL_SURROUND_RIGHT` | bottom-right, 15% of the video height |
-| `SPATIAL_AMBIENT` | border glow, 20% of the smaller video side |
-| `SPATIAL_CEILING` | top edge, full width, 10% of the video height |
-| `SPATIAL_FLOOR` | bottom edge, full width, 10% of the video height |
+| Hint                                         | Region                                           |
+| -------------------------------------------- | ------------------------------------------------ |
+| `SPATIAL_LEFT`                               | top-left edge, 15% of the video height           |
+| `SPATIAL_CENTER` and `SPATIAL_BEHIND_SCREEN` | top-center, 15% of the video height              |
+| `SPATIAL_RIGHT`                              | top-right, 15% of the video height               |
+| `SPATIAL_SURROUND_LEFT`                      | bottom-left, 15% of the video height             |
+| `SPATIAL_SURROUND_RIGHT`                     | bottom-right, 15% of the video height            |
+| `SPATIAL_AMBIENT`                            | border glow, 20% of the smaller video side       |
+| `SPATIAL_CEILING`                            | top edge, full width, 10% of the video height    |
+| `SPATIAL_FLOOR`                              | bottom edge, full width, 10% of the video height |
 
 - Given a channel with an empty hint
 - When the overlay renders
@@ -2262,7 +2262,13 @@ These requirements are changes or guarantees the Emby plugin must provide. Studi
   "trackId": "proxy-fixture",
   "sceneMarkers": [{ "id": "m1", "timeMs": 1000, "label": "Intro", "kind": "manual" }],
   "channelGroups": [
-    { "id": "g1", "name": "Walls", "mode": "mirror", "channelIds": ["left", "right"], "spreadMs": 150 }
+    {
+      "id": "g1",
+      "name": "Walls",
+      "mode": "mirror",
+      "channelIds": ["left", "right"],
+      "spreadMs": 150
+    }
   ]
 }
 ```
@@ -2305,17 +2311,17 @@ These requirements are changes or guarantees the Emby plugin must provide. Studi
 - When each call below is made
 - Then the response shape matches this table
 
-| Call | Result |
-| --- | --- |
-| GET `/OpenLightFX/Studio/Bulbs` | array of `id`, `name`, `protocol`, `capabilities.rgb`, `capabilities.minTransitionMs` |
-| GET `/OpenLightFX/Studio/Items?search=` | movies only, at most 200, each with `itemId`, `name`, `year`, `runtimeMs` |
-| GET `/OpenLightFX/Studio/Tracks?itemId=` | array of `trackId`, `title`, `itemId`, `updatedAt` |
-| GET `/OpenLightFX/Studio/Tracks/{trackId}` | protobuf bytes |
-| PUT `/OpenLightFX/Studio/Tracks/{trackId}?itemId=` | stores `{movieDir}/lightfx/{trackId}.lightfx` after `TrackParser` accepts the bytes |
-| POST `/OpenLightFX/Studio/Preview/Frame` | accepts `states[]` of `bulbId`, `r`, `g`, `b`, `brightness`, `transitionMs` |
-| POST `/OpenLightFX/Tracks/Select` | body `itemId` and `trackPath` selects the file for later playback |
-| GET `/OpenLightFX/Tracks/ByItem?itemId=` | includes `trackPath` for the saved file |
-| GET `/OpenLightFX/Settings` | includes `photosensitivityMode` and the active mapping profile |
+| Call                                               | Result                                                                                |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| GET `/OpenLightFX/Studio/Bulbs`                    | array of `id`, `name`, `protocol`, `capabilities.rgb`, `capabilities.minTransitionMs` |
+| GET `/OpenLightFX/Studio/Items?search=`            | movies only, at most 200, each with `itemId`, `name`, `year`, `runtimeMs`             |
+| GET `/OpenLightFX/Studio/Tracks?itemId=`           | array of `trackId`, `title`, `itemId`, `updatedAt`                                    |
+| GET `/OpenLightFX/Studio/Tracks/{trackId}`         | protobuf bytes                                                                        |
+| PUT `/OpenLightFX/Studio/Tracks/{trackId}?itemId=` | stores `{movieDir}/lightfx/{trackId}.lightfx` after `TrackParser` accepts the bytes   |
+| POST `/OpenLightFX/Studio/Preview/Frame`           | accepts `states[]` of `bulbId`, `r`, `g`, `b`, `brightness`, `transitionMs`           |
+| POST `/OpenLightFX/Tracks/Select`                  | body `itemId` and `trackPath` selects the file for later playback                     |
+| GET `/OpenLightFX/Tracks/ByItem?itemId=`           | includes `trackPath` for the saved file                                               |
+| GET `/OpenLightFX/Settings`                        | includes `photosensitivityMode` and the active mapping profile                        |
 
 - Then track ids are safe file names of at most 120 characters
 - Then a new track id Studio generates matches `[a-z0-9][a-z0-9_-]{0,63}`
@@ -2324,26 +2330,26 @@ These requirements are changes or guarantees the Emby plugin must provide. Studi
 
 ## Requirement counts
 
-| Area | Prefix | L1 | L2 | L3 | Total |
-| --- | --- | ---: | ---: | ---: | ---: |
-| App shell and navigation | SHELL | 6 | 3 | 0 | 9 |
-| Media loading and playback | MEDIA | 17 | 0 | 0 | 17 |
-| Timeline view | TIME | 11 | 2 | 0 | 13 |
-| Keyframe editing | KEY | 14 | 1 | 0 | 15 |
-| Effects | FX | 0 | 4 | 1 | 5 |
-| Channels and groups | CHAN | 6 | 1 | 0 | 7 |
-| Properties | PROP | 8 | 1 | 0 | 9 |
-| Undo and redo | UNDO | 4 | 0 | 0 | 4 |
-| Shortcuts | KEYB | 3 | 1 | 0 | 4 |
-| Save, load, and autosave | SAVE | 9 | 0 | 0 | 9 |
-| Import and export | IO | 4 | 0 | 1 | 5 |
-| Live preview | PREV | 11 | 1 | 0 | 12 |
-| Safety | SAFE | 2 | 1 | 0 | 3 |
-| Performance | PERF | 4 | 0 | 0 | 4 |
-| Accessibility and input | A11Y | 3 | 1 | 0 | 4 |
-| Error handling | ERR | 7 | 0 | 0 | 7 |
-| Plugin contract | PLUG | 6 | 0 | 0 | 6 |
-| **Total** |  | **115** | **16** | **2** | **133** |
+| Area                       | Prefix |      L1 |     L2 |    L3 |   Total |
+| -------------------------- | ------ | ------: | -----: | ----: | ------: |
+| App shell and navigation   | SHELL  |       6 |      3 |     0 |       9 |
+| Media loading and playback | MEDIA  |      17 |      0 |     0 |      17 |
+| Timeline view              | TIME   |      11 |      2 |     0 |      13 |
+| Keyframe editing           | KEY    |      14 |      1 |     0 |      15 |
+| Effects                    | FX     |       0 |      4 |     1 |       5 |
+| Channels and groups        | CHAN   |       6 |      1 |     0 |       7 |
+| Properties                 | PROP   |       8 |      1 |     0 |       9 |
+| Undo and redo              | UNDO   |       4 |      0 |     0 |       4 |
+| Shortcuts                  | KEYB   |       3 |      1 |     0 |       4 |
+| Save, load, and autosave   | SAVE   |       9 |      0 |     0 |       9 |
+| Import and export          | IO     |       4 |      0 |     1 |       5 |
+| Live preview               | PREV   |      11 |      1 |     0 |      12 |
+| Safety                     | SAFE   |       2 |      1 |     0 |       3 |
+| Performance                | PERF   |       4 |      0 |     0 |       4 |
+| Accessibility and input    | A11Y   |       3 |      1 |     0 |       4 |
+| Error handling             | ERR    |       7 |      0 |     0 |       7 |
+| Plugin contract            | PLUG   |       6 |      0 |     0 |       6 |
+| **Total**                  |        | **115** | **16** | **2** | **133** |
 
 The checker recomputes this table from the headings. Do not keep a second list.
 
@@ -2451,7 +2457,7 @@ Shipped master code has a Mono template with id `main` and `SPATIAL_CENTER`. The
 
 ### C16 — Overlay names versus proto hints
 
-The March overlay section uses names like FRONT_LEFT. The proto and the shipped editor use `SPATIAL_*`.
+The March overlay section uses names like FRONT*LEFT. The proto and the shipped editor use `SPATIAL*\*`.
 
 **Decision:** Files and the overlay use the proto names (`PREV-001`).
 
@@ -2487,11 +2493,11 @@ Vitest on pure modules: sampler, encoder, validation, safety, snap, shortcut reg
 
 JSON fixtures in `tests/fixtures/sampling/` used by Studio's Vitest tests and by the plugin's dotnet tests. The plugin test names include the same requirement ids.
 
-| Fixture | Normative content |
-| --- | --- |
-| `keyframes.json` | The cases in `KEY-009`, `KEY-010`, `KEY-011`, `KEY-012`, `KEY-013`, and `KEY-014`, including half-to-even and the kelvin integers named there |
-| `effects.json` | One default case and one non-default parameter case per effect type, generated by the plugin renderers and copied into this repo |
-| `roundtrip.lightfx` | A valid version-1 file for `IO-002` |
+| Fixture             | Normative content                                                                                                                             |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `keyframes.json`    | The cases in `KEY-009`, `KEY-010`, `KEY-011`, `KEY-012`, `KEY-013`, and `KEY-014`, including half-to-even and the kelvin integers named there |
+| `effects.json`      | One default case and one non-default parameter case per effect type, generated by the plugin renderers and copied into this repo              |
+| `roundtrip.lightfx` | A valid version-1 file for `IO-002`                                                                                                           |
 
 A Studio `@fixture` test fails if the sampler differs by any RGB level, brightness level, or kelvin integer. Effect commands match offset, RGB, and brightness exactly.
 
@@ -2527,7 +2533,24 @@ OQ-3 is answered. The full-stack rig runs [openlightfx-simulator](https://github
 A color command looks like this (fields the program actually emits):
 
 ```json
-{"ts":"2026-11-12T00:00:00.000Z","event":"command_received","bulb_id":"left","bulb_name":"Left","protocol":"rest","ip":"","command":"GET /api/light","params":{"r":255,"g":0,"b":0,"brightness":"100","power":"true","transition_ms":"0"},"state_after":{"r":255,"g":0,"b":0,"brightness":100,"power":true,"transition_ms":0}}
+{
+  "ts": "2026-11-12T00:00:00.000Z",
+  "event": "command_received",
+  "bulb_id": "left",
+  "bulb_name": "Left",
+  "protocol": "rest",
+  "ip": "",
+  "command": "GET /api/light",
+  "params": {
+    "r": 255,
+    "g": 0,
+    "b": 0,
+    "brightness": "100",
+    "power": "true",
+    "transition_ms": "0"
+  },
+  "state_after": { "r": 255, "g": 0, "b": 0, "brightness": 100, "power": true, "transition_ms": 0 }
+}
 ```
 
 Assertions read `event` (`command_received`), `bulb_id`, and `state_after.r`, `state_after.g`, `state_after.b`, `state_after.brightness`, and `state_after.power`. They ignore kelvin: the generic REST driver writes 4000 when kelvin is null, and these RGB commands do not assert it. `ts` is the simulator's UTC time. `brightness` may be a float. Other events (`simulator_started`, `transition_start`, `transition_end`, `parse_error`) are not color assertions.
@@ -2568,24 +2591,24 @@ OQ-1, OQ-2, and OQ-3 are decided for this spec. The decisions below are normativ
 
 These `STU` ids are the gaps TODO.md listed. They are not requirements.
 
-| Hint | What this spec does |
-| --- | --- |
-| STU-029 reorder only outside the timeline | `CHAN-003` reorders lanes |
-| STU-029n solo missing from the context menu | `CHAN-004` |
-| STU-059o reserved loop-point swap | Out of scope |
-| STU-069 snapshot not cleared on save | `SAVE-006` |
-| STU-074, STU-100, STU-101, STU-102 marketplace stubs | `IO-005` removes them from L1 and L2 |
-| STU-087, STU-089 metadata never wired | `MEDIA-002`, `PLUG-001`, `PROP-009` take metadata from Emby |
-| STU-112 startup not measured | `PERF-001` |
-| STU-113 no streaming for huge files | `MEDIA-003`, `PERF-004`, `PLUG-003` |
-| STU-124 autosave 60 s versus 2 min | `SAVE-005` is 30 s in IndexedDB |
-| STU-016 aspect ratio | `SHELL-003` |
-| STU-032a, STU-037 snap gaps | `TIME-010`, `TIME-012` |
-| STU-038 no time-range selection | `TIME-008` Shift-click and `TIME-009` marquee |
-| STU-059 effects not verified on the timeline | `FX-002`, `FX-003` |
-| STU-066 prompt to reselect a video file | Withdrawn. `MEDIA-013` restores the Emby item |
-| STU-084 metadata only on export | `PROP-008` is L2 and is not required to save |
-| STU-110 no 10k benchmark | `PERF-002` |
-| STU-132 scaling | `A11Y-004` |
-| Unbound zoom, eyedropper, theme, overlay chords | `KEYB-001`, `KEYB-002` |
-| Silent paste and select-all | `KEYB-003`, `KEY-015` |
+| Hint                                                 | What this spec does                                         |
+| ---------------------------------------------------- | ----------------------------------------------------------- |
+| STU-029 reorder only outside the timeline            | `CHAN-003` reorders lanes                                   |
+| STU-029n solo missing from the context menu          | `CHAN-004`                                                  |
+| STU-059o reserved loop-point swap                    | Out of scope                                                |
+| STU-069 snapshot not cleared on save                 | `SAVE-006`                                                  |
+| STU-074, STU-100, STU-101, STU-102 marketplace stubs | `IO-005` removes them from L1 and L2                        |
+| STU-087, STU-089 metadata never wired                | `MEDIA-002`, `PLUG-001`, `PROP-009` take metadata from Emby |
+| STU-112 startup not measured                         | `PERF-001`                                                  |
+| STU-113 no streaming for huge files                  | `MEDIA-003`, `PERF-004`, `PLUG-003`                         |
+| STU-124 autosave 60 s versus 2 min                   | `SAVE-005` is 30 s in IndexedDB                             |
+| STU-016 aspect ratio                                 | `SHELL-003`                                                 |
+| STU-032a, STU-037 snap gaps                          | `TIME-010`, `TIME-012`                                      |
+| STU-038 no time-range selection                      | `TIME-008` Shift-click and `TIME-009` marquee               |
+| STU-059 effects not verified on the timeline         | `FX-002`, `FX-003`                                          |
+| STU-066 prompt to reselect a video file              | Withdrawn. `MEDIA-013` restores the Emby item               |
+| STU-084 metadata only on export                      | `PROP-008` is L2 and is not required to save                |
+| STU-110 no 10k benchmark                             | `PERF-002`                                                  |
+| STU-132 scaling                                      | `A11Y-004`                                                  |
+| Unbound zoom, eyedropper, theme, overlay chords      | `KEYB-001`, `KEYB-002`                                      |
+| Silent paste and select-all                          | `KEYB-003`, `KEY-015`                                       |

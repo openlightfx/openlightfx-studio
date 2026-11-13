@@ -16,6 +16,28 @@ jobs:
       - name: Every approved L1 requirement has a test title
         run: node docs/requirements/check-traceability.mjs
 
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+
+  prettier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prettier --check .
+
   unit:
     runs-on: ubuntu-latest
     steps:
@@ -78,7 +100,7 @@ jobs:
           OLFX_FULLSTACK_REQUIRE=1 npm run test:fullstack
 
   report:
-    needs: [unit, browser]
+    needs: [check, prettier, unit, browser]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

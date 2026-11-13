@@ -32,7 +32,12 @@ export function recordOutcome(outcome: Outcome): void {
   fs.appendFileSync(OUTCOMES, `${JSON.stringify(outcome)}\n`);
 }
 
-export async function runExpected(id: string, tier: string, title: string, fn: () => Promise<void> | void): Promise<void> {
+export async function runExpected(
+  id: string,
+  tier: string,
+  title: string,
+  fn: () => Promise<void> | void
+): Promise<void> {
   const key = `${id}@${tier}`;
   const allowed = expectedSet().has(key);
   try {

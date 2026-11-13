@@ -19,10 +19,7 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: 0,
-  reporter: [
-    ['list'],
-    ['json', { outputFile: 'test-results/playwright.json' }],
-  ],
+  reporter: [['list'], ['json', { outputFile: 'test-results/playwright.json' }]],
   globalSetup: './tests/harness/reset-outcomes.ts',
   webServer: {
     command: 'npm run build && npm run preview -- --host 127.0.0.1 --port 4173',

@@ -47,7 +47,8 @@ function expectCase(id: string): void {
     if (item.expect.r !== undefined) expect(sample.r, `${id} @ ${item.timeMs}`).toBe(item.expect.r);
     if (item.expect.g !== undefined) expect(sample.g, `${id} @ ${item.timeMs}`).toBe(item.expect.g);
     if (item.expect.b !== undefined) expect(sample.b, `${id} @ ${item.timeMs}`).toBe(item.expect.b);
-    if (item.expect.brightness !== undefined) expect(sample.brightness).toBe(item.expect.brightness);
+    if (item.expect.brightness !== undefined)
+      expect(sample.brightness).toBe(item.expect.brightness);
     if (item.expect.kelvin !== undefined) expect(sample.kelvin).toBe(item.expect.kelvin);
     if (item.expect.mode !== undefined) expect(sample.mode).toBe(item.expect.mode);
     if (item.expect.powerOn !== undefined) expect(sample.powerOn).toBe(item.expect.powerOn);
@@ -87,9 +88,12 @@ requirement('KEY-012 @unit kelvin conversion matches the truncated Tanner Hellan
   expectCase('KEY-012');
 });
 
-requirement('KEY-012 @fixture kelvin conversion matches the truncated Tanner Helland values', () => {
-  expectCase('KEY-012');
-});
+requirement(
+  'KEY-012 @fixture kelvin conversion matches the truncated Tanner Helland values',
+  () => {
+    expectCase('KEY-012');
+  }
+);
 
 requirement('KEY-013 @unit an unspecified interpolation blends as linear', () => {
   expectCase('KEY-013');
@@ -147,8 +151,12 @@ requirement('KEY-008 @fixture encoded keyframes are ordered and version 1', () =
   const source = roundTripTrack();
   source.keyframes.reverse();
   const decoded = decodeTrack(encodeTrack(source));
-  const left = decoded.keyframes.filter((kf) => kf.channelId === 'left').map((kf) => kf.timestampMs);
-  const right = decoded.keyframes.filter((kf) => kf.channelId === 'right').map((kf) => kf.timestampMs);
+  const left = decoded.keyframes
+    .filter((kf) => kf.channelId === 'left')
+    .map((kf) => kf.timestampMs);
+  const right = decoded.keyframes
+    .filter((kf) => kf.channelId === 'right')
+    .map((kf) => kf.timestampMs);
   expect(left).toEqual([...left].sort((a, b) => a - b));
   expect(right).toEqual([...right].sort((a, b) => a - b));
   expect(decoded.version).toBe(1);
@@ -162,12 +170,19 @@ function assertRoundTrip(): void {
   const decoded = decodeTrack(bytes);
   expect(decoded.metadata.durationMs).toBe(source.metadata.durationMs);
   expect(decoded.channels.map((channel) => channel.id)).toEqual(['left', 'right']);
-  expect(decoded.keyframes.map((kf) => [kf.channelId, kf.timestampMs, kf.colorMode, kf.brightness, kf.interpolation, kf.transitionMs])).toEqual(
-    [
-      ['left', 0, 'RGB', 40, 'STEP', 0],
-      ['right', 1000, 'COLOR_TEMPERATURE', 80, 'LINEAR', 400],
-    ]
-  );
+  expect(
+    decoded.keyframes.map((kf) => [
+      kf.channelId,
+      kf.timestampMs,
+      kf.colorMode,
+      kf.brightness,
+      kf.interpolation,
+      kf.transitionMs,
+    ])
+  ).toEqual([
+    ['left', 0, 'RGB', 40, 'STEP', 0],
+    ['right', 1000, 'COLOR_TEMPERATURE', 80, 'LINEAR', 400],
+  ]);
   expect(decoded.keyframes[0].color).toEqual({ r: 10, g: 20, b: 30 });
   expect(decoded.keyframes[1].colorTemperature).toBe(2700);
   expect(decoded.effects[0]).toMatchObject({
@@ -205,15 +220,18 @@ requirement('FX-004 @fixture effect fields round-trip', () => {
 
 requirement('FX-003 @fixture effect commands match the shared renderer fixture', () => {
   const fixture = JSON.parse(fs.readFileSync(path.join(FIXTURES, 'effects.json'), 'utf8')) as {
-    cases: { name: string; commands: { offsetMs: number; r: number; g: number; b: number; brightness: number }[] }[];
+    cases: {
+      name: string;
+      commands: { offsetMs: number; r: number; g: number; b: number; brightness: number }[];
+    }[];
   };
   for (const item of effectCases()) {
     const commands = renderEffect(item.input);
     const expected = fixture.cases.find((entry) => entry.name === item.name);
     expect(expected, item.name).toBeTruthy();
-    expect(commands.map(({ offsetMs, r, g, b, brightness }) => ({ offsetMs, r, g, b, brightness }))).toEqual(
-      expected?.commands
-    );
+    expect(
+      commands.map(({ offsetMs, r, g, b, brightness }) => ({ offsetMs, r, g, b, brightness }))
+    ).toEqual(expected?.commands);
   }
 });
 

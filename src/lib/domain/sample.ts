@@ -77,7 +77,8 @@ export function interpolate(previous: Keyframe | null, next: Keyframe, timeMs: n
   const nextState = keyframeToSample(next);
   const transitionDuration = next.transitionMs;
   const transitionEnd = next.timestampMs;
-  const transitionStart = transitionDuration <= transitionEnd ? transitionEnd - transitionDuration : 0;
+  const transitionStart =
+    transitionDuration <= transitionEnd ? transitionEnd - transitionDuration : 0;
   if (timeMs >= transitionEnd) return nextState;
   if (transitionDuration === 0) return previous ? keyframeToSample(previous) : { ...BLACK_SAMPLE };
   if (timeMs <= transitionStart) return previous ? keyframeToSample(previous) : { ...BLACK_SAMPLE };

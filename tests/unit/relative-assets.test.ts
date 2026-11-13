@@ -33,7 +33,7 @@ requirement('SHELL-001 @unit asset URLs are relative to the hosting directory', 
     url: '/_app/immutable/entry/start.js',
   });
 
-  const env = { ...process.env, NODE_ENV: 'production' };
+  const env: NodeJS.ProcessEnv = { ...process.env, NODE_ENV: 'production' };
   delete env.VITEST;
   delete env.VITEST_POOL_ID;
   execSync('npm run build', { stdio: 'inherit', cwd: process.cwd(), env });

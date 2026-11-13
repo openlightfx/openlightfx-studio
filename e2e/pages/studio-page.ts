@@ -31,11 +31,16 @@ export class StudioPage {
   }
 
   durationInputs(): Locator {
-    return this.page.locator('input').filter({ hasText: /duration/i }).or(this.page.getByLabel(/duration/i));
+    return this.page
+      .locator('input')
+      .filter({ hasText: /duration/i })
+      .or(this.page.getByLabel(/duration/i));
   }
 
   async expectNoDurationField(): Promise<void> {
-    await expect(this.page.getByLabel(/track duration|movie duration|length in minutes/i)).toHaveCount(0);
+    await expect(
+      this.page.getByLabel(/track duration|movie duration|length in minutes/i)
+    ).toHaveCount(0);
   }
 
   canvas(): Locator {

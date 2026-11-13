@@ -32,7 +32,11 @@ export interface EffectSampleContext {
   brightnessCap: number;
 }
 
-const FAST_CONTEXT: EffectSampleContext = { supportsRgb: true, minTransitionMs: 0, brightnessCap: 100 };
+const FAST_CONTEXT: EffectSampleContext = {
+  supportsRgb: true,
+  minTransitionMs: 0,
+  brightnessCap: 100,
+};
 
 export function defaultEffectContext(): EffectSampleContext {
   return { ...FAST_CONTEXT };
@@ -72,12 +76,28 @@ function simplify(context: EffectSampleContext): boolean {
 
 function fallback(input: EffectInput, context: EffectSampleContext): EffectCommand[] {
   if (!input.fallbackColor) return [];
-  const brightness = scaleBrightness(input.fallbackBrightness && input.fallbackBrightness > 0 ? input.fallbackBrightness : 50, 100, context.brightnessCap);
+  const brightness = scaleBrightness(
+    input.fallbackBrightness && input.fallbackBrightness > 0 ? input.fallbackBrightness : 50,
+    100,
+    context.brightnessCap
+  );
   return [cmd(0, input.fallbackColor, brightness, 200)];
 }
 
-function cmd(offsetMs: number, color: Rgb, brightness: number, transitionMs: number): EffectCommand {
-  return { offsetMs: offsetMs >>> 0, r: color.r & 255, g: color.g & 255, b: color.b & 255, brightness: brightness >>> 0, transitionMs: transitionMs >>> 0 };
+function cmd(
+  offsetMs: number,
+  color: Rgb,
+  brightness: number,
+  transitionMs: number
+): EffectCommand {
+  return {
+    offsetMs: offsetMs >>> 0,
+    r: color.r & 255,
+    g: color.g & 255,
+    b: color.b & 255,
+    brightness: brightness >>> 0,
+    transitionMs: transitionMs >>> 0,
+  };
 }
 
 function trunc(value: number): number {
@@ -91,7 +111,10 @@ function lightning(input: EffectInput, context: EffectSampleContext): EffectComm
   const decayMs = trunc(param(input, 'decay_ms', 500));
   const peak = scaleBrightness(100, intensity, cap);
   if (simplify(context)) {
-    return [cmd(0, { r: 255, g: 255, b: 255 }, peak, 0), cmd(50, { r: 255, g: 255, b: 255 }, 0, 500)];
+    return [
+      cmd(0, { r: 255, g: 255, b: 255 }, peak, 0),
+      cmd(50, { r: 255, g: 255, b: 255 }, 0, 500),
+    ];
   }
   flashCount = Math.min(4, Math.max(1, flashCount));
   const commands: EffectCommand[] = [];
@@ -188,7 +211,14 @@ function pulse(input: EffectInput, context: EffectSampleContext): EffectCommand[
   for (let i = 0; i < steps; i++) {
     const t = i * stepMs;
     const sine = (Math.sin((2 * Math.PI * rateHz * t) / 1000 - Math.PI / 2) + 1) / 2;
-    commands.push(cmd(trunc(t), color, scaleBrightness(trunc(sine * 100), intensity, context.brightnessCap), trunc(stepMs)));
+    commands.push(
+      cmd(
+        trunc(t),
+        color,
+        scaleBrightness(trunc(sine * 100), intensity, context.brightnessCap),
+        trunc(stepMs)
+      )
+    );
   }
   return commands;
 }
@@ -270,7 +300,11 @@ function hsvToRgb(h: number, s: number, v: number): Rgb {
   else if (h < 240) [r, g, b] = [0, x, c];
   else if (h < 300) [r, g, b] = [x, 0, c];
   else [r, g, b] = [c, 0, x];
-  return { r: trunc((r + m) * 255) & 255, g: trunc((g + m) * 255) & 255, b: trunc((b + m) * 255) & 255 };
+  return {
+    r: trunc((r + m) * 255) & 255,
+    g: trunc((g + m) * 255) & 255,
+    b: trunc((b + m) * 255) & 255,
+  };
 }
 
 function aurora(input: EffectInput, context: EffectSampleContext): EffectCommand[] {
@@ -350,7 +384,11 @@ function neon(input: EffectInput, context: EffectSampleContext): EffectCommand[]
   const dim = scaleBrightness(20, intensity, context.brightnessCap);
   if (simplify(context)) {
     const third = trunc(duration / 3);
-    return [cmd(0, color, steady, 200), cmd(third, color, dim, 200), cmd(third + 200, color, steady, 200)];
+    return [
+      cmd(0, color, steady, 200),
+      cmd(third, color, dim, 200),
+      cmd(third + 200, color, steady, 200),
+    ];
   }
   const commands = [cmd(0, color, steady, 0)];
   let seed = (duration * 7 + 13) >>> 0;
@@ -379,7 +417,9 @@ function breathing(input: EffectInput, context: EffectSampleContext): EffectComm
     const t = i * stepMs;
     const sine = (Math.sin((2 * Math.PI * rateHz * t) / 1000 - Math.PI / 2) + 1) / 2;
     const eased = Math.pow(sine, 1.5);
-    commands.push(cmd(t, color, scaleBrightness(trunc(eased * 100), intensity, context.brightnessCap), stepMs));
+    commands.push(
+      cmd(t, color, scaleBrightness(trunc(eased * 100), intensity, context.brightnessCap), stepMs)
+    );
   }
   return commands;
 }
@@ -392,7 +432,10 @@ function spark(input: EffectInput, context: EffectSampleContext): EffectCommand[
   return [cmd(0, color, peak, 0), cmd(30, color, 0, 0)];
 }
 
-const RENDERERS: Record<EffectType, (input: EffectInput, context: EffectSampleContext) => EffectCommand[]> = {
+const RENDERERS: Record<
+  EffectType,
+  (input: EffectInput, context: EffectSampleContext) => EffectCommand[]
+> = {
   LIGHTNING: lightning,
   FLAME: flame,
   FLASHBANG: flashbang,
@@ -408,7 +451,10 @@ const RENDERERS: Record<EffectType, (input: EffectInput, context: EffectSampleCo
   SPARK: spark,
 };
 
-export function renderEffect(input: EffectInput, context: EffectSampleContext = defaultEffectContext()): EffectCommand[] {
+export function renderEffect(
+  input: EffectInput,
+  context: EffectSampleContext = defaultEffectContext()
+): EffectCommand[] {
   if (!meets(input, context)) return fallback(input, context);
   return RENDERERS[input.effectType](input, context);
 }

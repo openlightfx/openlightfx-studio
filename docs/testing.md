@@ -13,16 +13,16 @@ npm install
 npx playwright install chromium firefox
 ```
 
-| Tier | Command |
-| --- | --- |
-| Traceability (titles exist) | `npm run test:traceability` |
-| Unit and fixture | `npm test` |
-| Browser, Firefox and Chromium | `OLFX_OUTCOMES=test-results/outcomes-browser.jsonl npm run test:browser` |
-| Synthetic media | `npm run media:generate` |
-| Full stack | `npm run test:fullstack` |
-| Real media, J5, not CI | `OLFX_REAL_MEDIA=~/Videos/John_Wick.mkv OLFX_REAL_TRACK=~/Videos/John_Wick.lightfx npm run test:realmedia` |
-| Requirement report | `npm run test:report` |
-| Report gate | `node docs/requirements/check-traceability.mjs --report test-results/traceability.json --allow-expected tests/expected-failures.json` |
+| Tier                          | Command                                                                                                                               |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Traceability (titles exist)   | `npm run test:traceability`                                                                                                           |
+| Unit and fixture              | `npm test`                                                                                                                            |
+| Browser, Firefox and Chromium | `OLFX_OUTCOMES=test-results/outcomes-browser.jsonl npm run test:browser`                                                              |
+| Synthetic media               | `npm run media:generate`                                                                                                              |
+| Full stack                    | `npm run test:fullstack`                                                                                                              |
+| Real media, J5, not CI        | `OLFX_REAL_MEDIA=~/Videos/John_Wick.mkv OLFX_REAL_TRACK=~/Videos/John_Wick.lightfx npm run test:realmedia`                            |
+| Requirement report            | `npm run test:report`                                                                                                                 |
+| Report gate                   | `node docs/requirements/check-traceability.mjs --report test-results/traceability.json --allow-expected tests/expected-failures.json` |
 
 `npm run test:browser` runs every `@browser` test in Firefox and in Chromium. `npm run test:fullstack` is the local Docker stack. It validates `docker-compose.fullstack.yml` and, when Docker, the .NET 8 SDK, and a clone of `openlightfx-simulator` are available, boots Emby, builds the plugin from `openlightfx-emby` `main` (override with `OLFX_EMBY_BRANCH`, or put a checkout at `.emby-stack/emby/src`) with this Studio build embedded, starts `openlightfx-simulator --no-gui`, and runs the `@fullstack` tests against simulator NDJSON.
 

@@ -41,7 +41,11 @@ function displaySet(width, height, pts) {
   const ods = Buffer.concat([
     u16(0),
     Buffer.from([0x00, 0xc0]),
-    Buffer.from([(objectDataLength >> 16) & 0xff, (objectDataLength >> 8) & 0xff, objectDataLength & 0xff]),
+    Buffer.from([
+      (objectDataLength >> 16) & 0xff,
+      (objectDataLength >> 8) & 0xff,
+      objectDataLength & 0xff,
+    ]),
     u16(1),
     u16(1),
     rle,
