@@ -30,7 +30,13 @@
   let identifying = $state('');
   let notice = $state('');
   let error = $state('');
+  let connectionFailed = $state(false);
+  let noBulbs = $state(false);
+  let conflict = $state(false);
   let menuBulb = $state('');
+  let pendingRoom = $state<Room | null>(null);
+  let pendingNewRoom = $state(false);
+  let unsavedPrompt = $state(false);
   let dragBulb = '';
   const labels: Record<Position, string> = {
     left: 'Left',
@@ -41,6 +47,14 @@
     ambient: 'Ambient',
   };
   const current = $derived(rooms.find((r) => r.id === selected));
+  const validName = $derived(
+    name.trim().length >= 1 &&
+      name.trim().length <= 40 &&
+      !rooms.some(
+        (room) =>
+          room.id !== selected && room.name.trim().toLowerCase() === name.trim().toLowerCase()
+      )
+  );
   const assigned = $derived(new Set(placed.map((b) => b.id)));
   const unplaced = $derived(bulbs.filter((b) => !assigned.has(b.id)));
   const positionsUsed = $derived(
@@ -64,6 +78,8 @@
     return () => window.removeEventListener('hashchange', changed);
   });
   async function refresh() {
+    connectionFailed = false;
+    error = '';
     try {
       [rooms, devices, bulbs, setup] = await Promise.all([
         loadRooms(),
@@ -84,14 +100,47 @@
         placed = [];
       }
     } catch (e) {
+      connectionFailed = true;
       error = (e as Error).message;
     }
   }
   function openRoom(room: Room) {
+    if (notice === 'Unsaved changes') {
+      pendingNewRoom = false;
+      pendingRoom = room;
+      unsavedPrompt = true;
+      return;
+    }
+    selectRoom(room);
+  }
+  function selectRoom(room: Room) {
     selected = room.id;
     name = room.name;
     screenId = room.screen.deviceId;
     placed = room.bulbs.map((b) => ({ ...b }));
+    notice = '';
+  }
+  function finishPendingChange() {
+    const target = pendingRoom;
+    pendingRoom = null;
+    const createNew = pendingNewRoom;
+    pendingNewRoom = false;
+    if (target) selectRoom(target);
+    else if (createNew) newRoom();
+  }
+  async function resolveUnsaved(action: 'save' | 'discard' | 'cancel') {
+    unsavedPrompt = false;
+    if (action === 'cancel') return;
+    if (action === 'save') {
+      await save();
+      if (notice !== 'Room saved.') {
+        if (!conflict) unsavedPrompt = true;
+        return;
+      }
+    } else {
+      notice = '';
+    }
+    finishPendingChange();
   }
   function newRoom() {
     selected = null;
@@ -103,12 +152,21 @@
   }
   async function discover() {
     busy = true;
+    noBulbs = false;
     error = '';
     notice = 'Searching for bulbs…';
     try {
-      await discoverBulbs();
+      const result = await discoverBulbs();
       bulbs = await loadBulbs();
-      notice = `Found ${bulbs.length} known bulbs.`;
+      const foundCount = result.foundCount ?? result.bulbs.length;
+      if (foundCount === 0) {
+        noBulbs = true;
+        error =
+          'No bulbs answered. Check the bulbs are powered and on the same network as the Emby server. If Emby runs in Docker, it needs host networking for discovery.';
+        notice = '';
+      } else {
+        notice = `Found ${foundCount} bulbs.`;
+      }
     } catch (e) {
       error = (e as Error).message;
       notice = '';
@@ -162,8 +220,33 @@
     menuBulb = '';
     notice = 'Unsaved changes';
   }
+  async function reloadConflict() {
+    conflict = false;
+    try {
+      rooms = await loadRooms();
+      const latest = rooms.find((room) => room.id === selected);
+      if (latest) selectRoom(latest);
+      if (pendingRoom || pendingNewRoom) finishPendingChange();
+      error = '';
+    } catch (e) {
+      error = (e as Error).message;
+      connectionFailed = true;
+    }
+  }
+  async function keepMine() {
+    try {
+      rooms = await loadRooms();
+      if (!rooms.some((room) => room.id === selected)) throw new Error('This room was deleted.');
+      conflict = false;
+      await save();
+      if (notice === 'Room saved.') finishPendingChange();
+    } catch (e) {
+      error = (e as Error).message;
+    }
+  }
   async function save() {
     error = '';
+    notice = 'Saving…';
     try {
       const device = devices.find((d) => d.deviceId === screenId);
       if (!device) throw new Error('Choose a screen for this room.');
@@ -181,6 +264,10 @@
       notice = 'Room saved.';
     } catch (e) {
       error = (e as Error).message;
+      if (/stale|changed in another tab/i.test(error)) {
+        conflict = true;
+        return;
+      }
       if (
         error.includes('another room') &&
         confirm('This screen or bulb belongs to another room. Move it here?')
@@ -224,9 +311,8 @@
 <svelte:head><title>Rooms · OpenLightFX Studio</title></svelte:head>
 <div class="rooms-app">
   <header>
-    <strong>OpenLightFX Studio</strong><a class="active" href="#/rooms">Rooms</a><span
-      aria-disabled="true"
-      title="Library is outside the room-setup step">Library</span
+    <strong>OpenLightFX Studio</strong><a class="active" href="#/rooms">Rooms</a><a href="#/library"
+      >Library</a
     ><span class="spacer"></span><span>Emby</span><a
       href="https://github.com/openlightfx/openlightfx-studio/blob/main/docs/journeys/J1-first-light.md"
       >Help</a
@@ -245,20 +331,54 @@
             ?.replace('LAYOUT_', '')
             .replace('_', '.') ?? '—'}</small
         ></button
-      >{/each}<button disabled={setup?.isAdmin !== true} onclick={newRoom}>+ New room</button>
+      >{/each}<button
+      disabled={setup?.isAdmin !== true}
+      onclick={() => {
+        if (notice === 'Unsaved changes') {
+          pendingRoom = null;
+          pendingNewRoom = true;
+          unsavedPrompt = true;
+        } else newRoom();
+      }}>+ New room</button
+    >
   </aside>
   <main>
+    {#if conflict}<div class="dialog-backdrop">
+        <dialog open aria-labelledby="conflict-title" class="unsaved-dialog">
+          <h2 id="conflict-title">This room changed in another tab</h2>
+          <p>Reload the latest version, or keep your edits and overwrite it.</p>
+          <div>
+            <button onclick={() => void reloadConflict()}>Reload</button>
+            <button onclick={() => void keepMine()}>Keep mine</button>
+            <button onclick={() => (conflict = false)}>Cancel</button>
+          </div>
+        </dialog>
+      </div>{/if}
+    {#if unsavedPrompt}<div class="dialog-backdrop">
+        <dialog open aria-labelledby="unsaved-title" class="unsaved-dialog">
+          <h2 id="unsaved-title">This room has unsaved changes</h2>
+          <p>Save your changes before leaving this room?</p>
+          <div>
+            <button onclick={() => void resolveUnsaved('save')}>Save</button>
+            <button onclick={() => void resolveUnsaved('discard')}>Discard</button>
+            <button onclick={() => void resolveUnsaved('cancel')}>Cancel</button>
+          </div>
+        </dialog>
+      </div>{/if}
     {#if fresh && rooms.length === 0}<div class="card welcome">
         <h1>Welcome to OpenLightFX</h1>
         <p>
           OpenLightFX lights your room in time with a movie. First, tell it about the room you watch
           in: its screen and its bulbs. It takes a few minutes.
         </p>
-        <button disabled title="Track writing is outside the room-setup step"
+        <button onclick={() => (location.hash = '#/library')}
           >Skip — write a track without lights</button
         >
       </div>{/if}
-    {#if error}<p class="error" role="alert">{error}</p>{/if}
+    {#if error}<p class="error" role="alert">
+        {error}{#if connectionFailed}<button onclick={() => void refresh()}>Retry</button
+          >{/if}{#if noBulbs}<button onclick={() => void discover()}>Try again</button>{/if}
+      </p>{/if}
     {#if placed.length === 0}<p class="notice" role="status">
         No bulbs yet. Tracks will not light this room until you add bulbs.
       </p>{/if}
@@ -276,9 +396,7 @@
           bind:value={screenId}
           onchange={() => (notice = 'Unsaved changes')}
           ><option value="">Choose a device…</option
-          >{#each devices as device (device.deviceId)}<option
-              value={device.deviceId}
-              disabled={!!device.roomId && device.roomId !== selected}
+          >{#each devices as device (device.deviceId)}<option value={device.deviceId}
               >{device.name} · {device.appName}{device.roomId && device.roomId !== selected
                 ? ` · In ${device.roomName ?? 'another room'}`
                 : ''}</option
@@ -424,14 +542,18 @@
       <button disabled={!current || setup?.isAdmin !== true} onclick={removeRoom}
         >Delete room</button
       ><span>{notice}</span><button
-        disabled={!name.trim() || !screenId || setup?.isAdmin !== true}
+        disabled={!validName || !screenId || setup?.isAdmin !== true}
         onclick={save}>Save room</button
-      >
+      ><button onclick={() => (location.hash = '#/library')}>Next: pick a movie →</button>
     </footer>
   </main>
 </div>
 {#snippet chip(b: { id: string; position: Position | null; follows: Position | null })}<span
     class="chip"
+    role="group"
+    aria-label="Placed bulb"
+    draggable="true"
+    ondragstart={() => (dragBulb = b.id)}
     >⠿ {bulbs.find((x) => x.id === b.id)?.name ?? b.id}
     {#if b.follows}→ {labels[b.follows]}{/if}<button
       aria-label="Bulb options"
@@ -460,29 +582,39 @@
 <style>
   .rooms-app {
     font:
-      13px/1.4 system-ui,
+      13px/1.4 'Inter',
+      system-ui,
       sans-serif;
-    color: #222;
-    background: #fff;
+    color: var(--text);
+    background: var(--bg);
     min-height: 100vh;
+    position: relative;
   }
   header {
     height: 42px;
-    border-bottom: 1px solid #999;
-    background: #eee;
+    border-bottom: 1px solid var(--surface2);
+    background: var(--surface);
     display: flex;
     align-items: center;
     gap: 22px;
     padding: 0 16px;
   }
-  header a {
-    color: inherit;
-    text-decoration: none;
-    padding: 7px;
+  header strong {
+    color: var(--text);
   }
-  .active {
-    border: 1px solid #555;
-    background: white;
+  header a {
+    color: var(--text-muted);
+    text-decoration: none;
+    padding: 6px 8px;
+    border-radius: 4px;
+  }
+  header a:hover {
+    color: var(--text);
+    background: var(--surface2);
+  }
+  header a.active {
+    color: var(--text);
+    background: var(--surface3);
   }
   .spacer {
     flex: 1;
@@ -494,11 +626,13 @@
     left: 0;
     width: 196px;
     padding: 12px;
-    border-right: 1px solid #aaa;
-    background: #fafafa;
+    border-right: 1px solid var(--surface2);
+    background: var(--surface);
   }
   .room-list h2 {
     font-size: 14px;
+    margin: 0 0 8px;
+    color: var(--text);
   }
   .room-list button {
     display: block;
@@ -506,30 +640,62 @@
     text-align: left;
     margin-bottom: 8px;
     padding: 8px;
-    background: #fff;
+    color: var(--text);
+    background: var(--surface2);
+    border: 1px solid transparent;
+    border-radius: 6px;
   }
   .room-list button.chosen {
-    border: 2px solid #333;
+    border-color: var(--accent);
   }
   .room-list small,
   .bulb small {
     display: block;
-    color: #777;
+    color: var(--text-muted);
   }
   main {
     margin: 14px 18px 0 220px;
   }
+  .dialog-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: grid;
+    place-items: center;
+    background: rgba(0, 0, 0, 0.65);
+  }
+  .unsaved-dialog {
+    width: min(420px, calc(100vw - 32px));
+    padding: 20px;
+    border: 1px solid var(--surface3);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+  }
+  .unsaved-dialog h2 {
+    margin: 0 0 8px;
+    font-size: 17px;
+    color: var(--text);
+  }
+  .unsaved-dialog p {
+    color: var(--text-muted);
+  }
+  .unsaved-dialog div {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
   .card {
     padding: 12px;
-    border: 1px solid #aaa;
+    border: 1px solid var(--surface2);
+    border-radius: 8px;
+    background: var(--surface);
     margin-bottom: 12px;
-  }
-  .welcome {
-    background: white;
   }
   .welcome h1 {
     font-size: 18px;
     margin: 0 0 6px;
+    color: var(--text);
   }
   .topfields {
     display: flex;
@@ -540,12 +706,16 @@
   .topfields label {
     display: grid;
     gap: 4px;
-    color: #555;
+    color: var(--text-muted);
   }
   .topfields input,
   .topfields select {
     min-width: 220px;
     padding: 7px;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--surface3);
+    border-radius: 6px;
   }
   .columns {
     display: grid;
@@ -555,8 +725,9 @@
   .diagram {
     position: relative;
     height: 410px;
-    border: 2px solid #444;
-    background: white;
+    border: 1px solid var(--surface3);
+    border-radius: 8px;
+    background: var(--timeline-lane-bg);
   }
   .screen {
     position: absolute;
@@ -564,14 +735,16 @@
     left: 30%;
     width: 40%;
     text-align: center;
-    background: #555;
-    color: #fff;
+    background: var(--surface3);
+    color: var(--text);
     padding: 6px;
+    border-radius: 4px;
   }
   .zone {
     position: absolute;
-    border: 1px dashed #666;
-    background: #f2f2f2;
+    border: 1px dashed var(--surface3);
+    border-radius: 6px;
+    background: var(--surface);
     padding: 5px;
     min-height: 80px;
   }
@@ -579,6 +752,7 @@
     display: block;
     font-size: 12px;
     margin-bottom: 6px;
+    color: var(--text);
   }
   .left {
     left: 10px;
@@ -622,11 +796,12 @@
     top: 200px;
     width: 30%;
     height: 45px;
-    border: 1px solid #aaa;
-    background: #eee;
+    border: 1px solid var(--surface3);
+    border-radius: 4px;
+    background: var(--surface2);
     text-align: center;
     padding-top: 12px;
-    color: #777;
+    color: var(--text-muted);
   }
   .chip {
     position: relative;
@@ -635,13 +810,15 @@
     gap: 3px;
     margin: 3px;
     padding: 3px 5px;
-    background: white;
-    border: 1px solid #888;
+    color: var(--text);
+    background: var(--surface2);
+    border: 1px solid var(--surface3);
     border-radius: 4px;
   }
   .chip button {
     border: 0;
     background: transparent;
+    color: var(--text);
     padding: 0 3px;
   }
   .chip-menu {
@@ -650,23 +827,32 @@
     top: 100%;
     left: 0;
     min-width: 160px;
-    background: white;
-    border: 1px solid #555;
-    box-shadow: 0 2px 6px #888;
+    background: var(--surface);
+    border: 1px solid var(--surface3);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
     display: grid;
     padding: 5px;
   }
   .chip-menu button,
   .chip-menu select {
     padding: 5px;
+    color: var(--text);
+    background: var(--surface2);
+    border: 1px solid var(--surface3);
+    border-radius: 4px;
   }
   .coverage {
-    border: 1px solid #aaa;
-    background: #eee;
+    border: 1px solid var(--surface2);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text-muted);
     padding: 10px;
   }
   .bulb-panel {
-    border: 1px solid #aaa;
+    border: 1px solid var(--surface2);
+    border-radius: 8px;
+    background: var(--surface);
     padding: 10px;
     min-height: 350px;
   }
@@ -674,18 +860,23 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 12px;
   }
   .bulb {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    border-bottom: 1px solid #ccc;
+    border-bottom: 1px solid var(--surface2);
     padding: 8px 0;
   }
   .bulb .text {
     padding: 0;
     border: 0;
+    color: var(--accent2);
     text-decoration: underline;
     background: none;
   }
@@ -695,14 +886,15 @@
   .place-menu {
     position: absolute;
     z-index: 4;
-    background: white;
-    border: 1px solid #777;
+    background: var(--surface);
+    border: 1px solid var(--surface3);
+    border-radius: 6px;
     display: grid;
     min-width: 150px;
   }
   .empty {
     text-align: center;
-    color: #777;
+    color: var(--text-muted);
     margin-top: 45px;
   }
   footer {
@@ -713,15 +905,33 @@
   }
   footer span {
     flex: 1;
-    color: #777;
+    color: var(--text-muted);
   }
   .error {
-    color: #900;
-    background: #fee;
+    color: var(--danger);
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    border-radius: 6px;
     padding: 8px;
+  }
+  .notice {
+    color: var(--text-muted);
   }
   button {
     cursor: pointer;
+    font: inherit;
+    color: var(--text);
+    background: var(--surface2);
+    border: 1px solid var(--surface3);
+    border-radius: 6px;
+    padding: 6px 10px;
+  }
+  button:hover:not(:disabled) {
+    border-color: var(--accent);
+  }
+  button:focus-visible {
+    outline: 2px solid var(--accent2);
+    outline-offset: 2px;
   }
   button:disabled {
     opacity: 0.5;
