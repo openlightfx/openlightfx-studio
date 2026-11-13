@@ -1,3 +1,4 @@
+import { libraryItemFromApi } from './items';
 import type {
   Bulb,
   LibraryItem,
@@ -29,7 +30,9 @@ async function send(path: string, init: RequestInit = {}): Promise<Response> {
 export async function fetchItems(search = ''): Promise<LibraryItem[]> {
   const response = await send(`/OpenLightFX/Studio/Items?search=${encodeURIComponent(search)}`);
   if (!response.ok) throw new Error(`Items ${response.status}`);
-  return response.json();
+  const body = await response.json();
+  const rows = Array.isArray(body) ? body : (body?.Items ?? []);
+  return rows.map((row: Record<string, unknown>) => libraryItemFromApi(row));
 }
 
 export async function restartProxy(itemId: string): Promise<ProxyInfo> {

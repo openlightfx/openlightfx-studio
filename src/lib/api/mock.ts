@@ -366,7 +366,13 @@ export function handleMock(
     const search = (url.searchParams.get('search') ?? '').trim().toLowerCase();
     const items = CATALOG.filter((item) => !search || item.name.toLowerCase().includes(search))
       .slice(0, 200)
-      .map(({ itemId, name, year, runtimeMs }) => ({ itemId, name, year, runtimeMs }));
+      .map(({ itemId, name, year, runtimeMs }) => ({
+        itemId,
+        name,
+        year,
+        runtimeMs,
+        posterUrl: '/posters/fixture.svg',
+      }));
     return json(200, items);
   }
   if (path === '/OpenLightFX/Studio/Bulbs' && method === 'GET') return json(200, BULBS);

@@ -78,7 +78,7 @@ requirement(
   'SHELL-006 @browser the top bar shows the title and unsaved state',
   async ({ page }) => {
     const studio = await shell(page);
-    await expect(page.getByText('Proxy Fixture')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Proxy Fixture' })).toBeVisible();
     await page.keyboard.press('k');
     await expect(page.getByText(/unsaved/i)).toBeVisible();
   }
@@ -94,10 +94,41 @@ requirement(
   }
 );
 
+requirement(
+  'MEDIA-001 @browser Emby Name and ProductionYear are the visible title',
+  async ({ page }) => {
+    await page.route('**/OpenLightFX/Studio/Items**', async (route) => {
+      const url = new URL(route.request().url());
+      if ((url.searchParams.get('search') ?? '').length > 0) {
+        await route.fulfill({ json: [] });
+        return;
+      }
+      await route.fulfill({
+        json: [
+          {
+            Id: '9001',
+            Name: 'Glass Harbor',
+            ProductionYear: 2017,
+            RunTimeTicks: 6_060_000 * 10_000,
+          },
+          { Id: '9002', Name: '', ProductionYear: 0 },
+        ],
+      });
+    });
+    await page.goto('/');
+    const row = page.getByRole('option', { name: /glass harbor/i });
+    await expect(row).toContainText('Glass Harbor');
+    await expect(row).toContainText('2017');
+    await expect(row.locator('img')).toHaveAttribute('src', /\/emby\/Items\/9001\/Images\/Primary/);
+    await expect(page.getByRole('option', { name: /untitled/i })).toBeVisible();
+    await expect(page.getByText(/^movie$/)).toHaveCount(0);
+  }
+);
+
 requirement('MEDIA-002 @browser duration comes from the selected movie', async ({ page }) => {
   const studio = await shell(page);
   await page.getByRole('option', { name: /proxy fixture/i }).click();
-  await expect(page.getByText(/00:10|10\.0|10000|0:10/)).toBeVisible();
+  await expect(page.locator('.clock').nth(1)).toHaveText('00:00:10.000');
   await studio.expectNoDurationField();
 });
 
@@ -214,9 +245,9 @@ requirement('MEDIA-013 @browser reload restores the Emby item', async ({ page })
   const studio = new StudioPage(page);
   const response = await studio.openHosted('api_key=test-admin&itemId=42');
   expect(response?.status()).toBeLessThan(400);
-  await expect(page.getByText(/item 42|proxy fixture/i)).toBeVisible();
+  await expect(page.getByRole('heading', { name: /proxy fixture/i })).toBeVisible();
   await page.reload();
-  await expect(page.getByText(/item 42|proxy fixture/i)).toBeVisible();
+  await expect(page.getByRole('heading', { name: /proxy fixture/i })).toBeVisible();
   await expect(page.getByText(/choose a file|open file/i)).toHaveCount(0);
 });
 
@@ -374,6 +405,12 @@ requirement(
   'KEY-007 @browser mixed values show a dash and apply to the selection',
   async ({ page }) => {
     const studio = await shell(page);
+    const box = await studio.canvas().boundingBox();
+    if (!box) throw new Error('timeline canvas missing');
+    await page.mouse.move(box.x + 10, box.y + 10);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width - 10, box.y + box.height - 10);
+    await page.mouse.up();
     await expect(page.getByRole('textbox', { name: /brightness/i })).toHaveValue('—');
   }
 );
@@ -423,6 +460,7 @@ requirement(
   'PROP-001 @browser the popover edits color brightness transition and interpolation',
   async ({ page }) => {
     const studio = await shell(page);
+    await studio.canvas().click({ position: { x: 40, y: 40 } });
     await expect(page.getByLabel(/brightness/i)).toBeVisible();
     await expect(page.getByRole('option', { name: /ease/i })).toHaveCount(0);
   }
@@ -432,6 +470,7 @@ requirement(
   'PROP-002 @browser hex 00FF00 sets green and an invalid hex is refused',
   async ({ page }) => {
     const studio = await shell(page);
+    await studio.canvas().click({ position: { x: 40, y: 40 } });
     await page.getByLabel(/hex/i).fill('00FF00');
     await expect(page.getByLabel(/green/i)).toHaveValue('255');
     await page.getByLabel(/hex/i).fill('GG0000');
@@ -441,6 +480,7 @@ requirement(
 
 requirement('PROP-003 @browser kelvin stays between 1000 and 10000', async ({ page }) => {
   const studio = await shell(page);
+  await studio.canvas().click({ position: { x: 40, y: 40 } });
   await page.getByRole('radio', { name: /kelvin/i }).check();
   const kelvin = page.getByRole('textbox', { name: /^kelvin$/i });
   await kelvin.fill('4200');
@@ -557,7 +597,7 @@ requirement('IO-001 @browser import replaces channels and keeps the movie', asyn
     .locator('input[type="file"][accept*="lightfx"]')
     .setInputFiles('tests/fixtures/sampling/roundtrip.lightfx');
   await expect(page.getByText(/^left$/i)).toBeVisible();
-  await expect(page.getByText('Proxy Fixture')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Proxy Fixture' })).toBeVisible();
 });
 
 requirement(
@@ -584,7 +624,7 @@ requirement('PREV-002 @browser the overlay color matches the sampler', async ({ 
 
 requirement('PREV-003 @browser mute and solo change the overlay', async ({ page }) => {
   const studio = await shell(page);
-  await studio.button(/mute/i).first().click();
+  await page.getByRole('button', { name: /mute right/i }).click();
   await expect(page.locator('[data-region="SPATIAL_RIGHT"]')).toBeHidden();
 });
 
@@ -722,7 +762,7 @@ requirement('ERR-002 @browser a dead plugin does not invent a library', async ({
 requirement('ERR-003 @browser a save conflict shows the server text', async ({ page }) => {
   const studio = new StudioPage(page);
   await page.goto('/emby/OpenLightFX/studio/?api_key=test-admin&itemId=48');
-  await expect(page.getByText('Conflict')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Conflict' })).toBeVisible();
   await studio.button(/^save$/i).click();
   await expect(page.getByRole('alert')).toBeVisible();
 });
