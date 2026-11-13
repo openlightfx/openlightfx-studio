@@ -30,7 +30,7 @@ import path from 'node:path';
 const ROOT = process.cwd();
 const SPEC = path.join(ROOT, 'docs/requirements/studio-requirements.md');
 const CI_TIERS = ['unit', 'fixture', 'browser', 'fullstack'];
-const ALL_TIERS = new Set([...CI_TIERS, 'realmedia']);
+const ALL_TIERS = new Set([...CI_TIERS, 'realmedia', 'walkthrough']);
 const LAYERS = new Set(['L1', 'L2', 'L3']);
 const STATUSES = new Set(['proposed', 'approved', 'deferred']);
 const AREAS = [
@@ -51,6 +51,14 @@ const AREAS = [
   ['Accessibility and input', 'A11Y'],
   ['Error handling', 'ERR'],
   ['Plugin contract', 'PLUG'],
+  ['Model and routing', 'MODEL'],
+  ['Navigation', 'FLOW'],
+  ['Step 1 — Rooms', 'ROOM'],
+  ['Step 2 — Library', 'LIB'],
+  ['Step 3 — Open or create', 'TRACK'],
+  ['Step 4 — Editor', 'EDIT'],
+  ['Step 5 — Watch in Emby', 'WATCH'],
+  ['Process', 'DONE'],
 ];
 
 const problems = [];

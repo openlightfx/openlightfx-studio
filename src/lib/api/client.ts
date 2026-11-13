@@ -28,11 +28,25 @@ async function send(path: string, init: RequestInit = {}): Promise<Response> {
 }
 
 export async function fetchItems(search = ''): Promise<LibraryItem[]> {
-  const response = await send(`/OpenLightFX/Studio/Items?search=${encodeURIComponent(search)}`);
-  if (!response.ok) throw new Error(`Items ${response.status}`);
-  const body = await response.json();
-  const rows = Array.isArray(body) ? body : (body?.Items ?? []);
-  return rows.map((row: Record<string, unknown>) => libraryItemFromApi(row));
+  const pageSize = 200;
+  const items: LibraryItem[] = [];
+  const seen = new Set<string>();
+  for (let startIndex = 0; ; startIndex += pageSize) {
+    const query = new URLSearchParams({
+      search,
+      startIndex: String(startIndex),
+      limit: String(pageSize),
+    });
+    const response = await send(`/OpenLightFX/Studio/Items?${query}`);
+    if (!response.ok) throw new Error(`Items ${response.status}`);
+    const body = await response.json();
+    const rows = Array.isArray(body) ? body : (body?.Items ?? []);
+    const page: LibraryItem[] = rows.map((row: Record<string, unknown>) => libraryItemFromApi(row));
+    const unseen = page.filter((item) => item.itemId && !seen.has(item.itemId));
+    for (const item of unseen) seen.add(item.itemId);
+    items.push(...unseen);
+    if (page.length < pageSize || unseen.length === 0) return items;
+  }
 }
 
 export async function restartProxy(itemId: string): Promise<ProxyInfo> {

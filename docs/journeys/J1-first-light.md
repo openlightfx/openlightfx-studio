@@ -1,6 +1,6 @@
 # J1 — First light
 
-**Status:** draft for owner review. Nothing in this document is approved, and no code is written against it until it is.
+**Status:** approved by the owner. Step 1 (rooms) is the next code to finish. Steps 2–5 are not started.
 
 **Wireframes:** [docs/journeys/wireframes/](wireframes/). **Plugin API:** [openlightfx-emby `docs/design/rooms-api.md`](https://github.com/openlightfx/openlightfx-emby/blob/main/docs/design/rooms-api.md). **Agent guide:** [AGENTS.md](../../AGENTS.md).
 
@@ -360,7 +360,7 @@ When Emby starts the movie on a device, the plugin finds the room whose screen i
 
 ## Requirements
 
-Format: ID, title, layer (all L1), status (all `proposed`), a one-line statement, Given/When/Then acceptance, and the test tiers. Tiers are the ones in [studio-requirements.md § Test strategy](../requirements/studio-requirements.md#test-strategy): `unit`, `fixture`, `browser`, `fullstack`, plus `walkthrough`, which is the recorded Playwright run of the whole step that a person watches ([Definition of done](#definition-of-done-for-each-step)). When approved, these move into `studio-requirements.md` and the traceability gate starts enforcing them.
+Format: ID, title, layer (all L1), status (all `approved`), a one-line statement, Given/When/Then acceptance, and the test tiers. Tiers are the ones in [studio-requirements.md § Test strategy](../requirements/studio-requirements.md#test-strategy): `unit`, `fixture`, `browser`, `fullstack`, plus `walkthrough`, which is the recorded Playwright run of the whole step that a person watches ([Definition of done](#definition-of-done-for-each-step)). Approved by the owner. They now live in [studio-requirements.md § J1 — First light requirements](../requirements/studio-requirements.md#j1--first-light-requirements), and the traceability gate enforces them.
 
 ### Model and routing
 

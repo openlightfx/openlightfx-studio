@@ -299,6 +299,50 @@ requirement(
 );
 
 requirement(
+  'LIB-001 @fullstack movies show a real poster card and track count from Emby',
+  async ({ page, request }) => {
+    const id = await itemId(request, 'h264');
+    const track = freshTrackId();
+    const saved = await saveTrack(request, id, track);
+    expect(saved.ok()).toBeTruthy();
+
+    await page.goto(`${emby()}/emby/OpenLightFX/studio/?api_key=${token()}#/library`);
+    const card = page.locator('a.movie').filter({ hasText: CLIPS.h264 });
+    await expect(card).toBeVisible();
+    await expect(card.getByText('1 track')).toBeVisible();
+    await expect(card.locator('img')).toHaveAttribute('src', /\/emby\/Items\//);
+  }
+);
+
+requirement(
+  'LIB-003 @fullstack selecting a real movie opens its movie screen',
+  async ({ page, request }) => {
+    await itemId(request, 'h264');
+    await page.goto(`${emby()}/emby/OpenLightFX/studio/?api_key=${token()}#/library`);
+    await page.locator('a.movie').filter({ hasText: CLIPS.h264 }).click();
+    await expect(page).toHaveURL(/#\/movie\//);
+    await expect(page.getByRole('heading', { name: CLIPS.h264 })).toBeVisible();
+  }
+);
+
+requirement(
+  'LIB-002 @fullstack title search filters real Emby movies',
+  async ({ page, request }) => {
+    await itemId(request, 'h264');
+    await itemId(request, 'long');
+    await page.goto(`${emby()}/emby/OpenLightFX/studio/?api_key=${token()}#/library`);
+    const search = page.getByRole('searchbox', { name: /search/i });
+    await search.fill('long');
+    await expect(page.locator('a.movie')).toHaveCount(1);
+    await expect(page.locator('a.movie')).toContainText(CLIPS.long);
+    await search.fill('zzz-no-such-movie');
+    await expect(page.getByText(/no movies match/i)).toBeVisible();
+    await page.getByRole('button', { name: /clear search/i }).click();
+    await expect(page.locator('a.movie')).not.toHaveCount(0);
+  }
+);
+
+requirement(
   'MEDIA-011 @fullstack the first picture is ready within 10 seconds',
   async ({ page }) => {
     await page.goto(`${emby()}/emby/OpenLightFX/studio/?api_key=${token()}`);

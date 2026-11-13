@@ -58,10 +58,11 @@ export const loadRooms = () => roomApi<Room[]>('Rooms');
 export const loadDevices = () => roomApi<EmbyDevice[]>('Devices');
 export const loadBulbs = () => roomApi<RoomBulb[]>('Bulbs');
 export const discoverBulbs = () =>
-  roomApi<{ bulbs: RoomBulb[]; hueBridges: { bridgeId: string; ip: string; paired: boolean }[] }>(
-    'Discover',
-    { method: 'POST', body: '{}' }
-  );
+  roomApi<{
+    bulbs: RoomBulb[];
+    hueBridges: { bridgeId: string; ip: string; paired: boolean }[];
+    foundCount: number;
+  }>('Discover', { method: 'POST', body: '{}' });
 export const identifyBulb = (id: string) =>
   roomApi(`Bulbs/${encodeURIComponent(id)}/Identify`, { method: 'POST', body: '{}' });
 export const renameBulb = (id: string, name: string) =>

@@ -1,6 +1,21 @@
 import { expect, it } from 'vitest';
 import { libraryItemFromApi } from '$lib/api/items';
 
+it('LIB-001 @unit track count, active state, and date are normalized from the item response', () => {
+  expect(
+    libraryItemFromApi({
+      itemId: '9001',
+      dateAdded: '2025-01-02T03:04:05.0000000Z',
+      trackCount: 2,
+      hasActiveTrack: true,
+    })
+  ).toMatchObject({
+    dateAdded: '2025-01-02T03:04:05.0000000Z',
+    trackCount: 2,
+    hasActiveTrack: true,
+  });
+});
+
 it('MEDIA-001 @unit Emby Name and ProductionYear become the visible movie', () => {
   const item = libraryItemFromApi({
     Id: '9001',

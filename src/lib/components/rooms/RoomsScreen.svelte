@@ -28,6 +28,7 @@
   let placed = $state<{ id: string; position: Position | null; follows: Position | null }[]>([]);
   let busy = $state(false);
   let identifying = $state('');
+  let identifyFailure = $state<{ id: string; message: string } | null>(null);
   let notice = $state('');
   let error = $state('');
   let connectionFailed = $state(false);
@@ -177,6 +178,10 @@
   function place(id: string, pos: Position | null) {
     const bulb = bulbs.find((b) => b.id === id);
     if (!bulb) return;
+    if (pos === null) {
+      if (placed.some((entry) => entry.id === id)) remove(id);
+      return;
+    }
     if (
       bulb.roomId &&
       bulb.roomId !== selected &&
@@ -192,26 +197,52 @@
   }
   async function identify(id: string) {
     identifying = id;
+    identifyFailure = null;
     try {
       await identifyBulb(id);
       notice = 'Identify finished.';
-    } catch (e) {
-      error = (e as Error).message;
+    } catch {
+      const bulb = bulbs.find((item) => item.id === id);
+      identifyFailure = {
+        id,
+        message: `Didn't answer${bulb?.ipAddress ? ` at ${bulb.ipAddress}` : ''}`,
+      };
+      setTimeout(() => {
+        if (identifyFailure?.id === id) identifyFailure = null;
+      }, 10_000);
     } finally {
-      setTimeout(() => (identifying = ''), 1500);
+      setTimeout(() => {
+        if (identifying === id) identifying = '';
+      }, 2000);
     }
   }
   async function rename(id: string) {
     const bulb = bulbs.find((b) => b.id === id);
     const next = prompt('Bulb name', bulb?.name);
-    if (!next) return;
+    if (next === null) return;
+    const trimmed = next.trim();
+    if (trimmed.length < 1 || trimmed.length > 40) {
+      error = 'Bulb names must be 1–40 characters.';
+      return;
+    }
     try {
-      await renameBulb(id, next);
+      await renameBulb(id, trimmed);
       bulbs = await loadBulbs();
       notice = 'Bulb renamed.';
     } catch (e) {
       error = (e as Error).message;
     }
+  }
+  function lastSeen(value?: string): string {
+    if (!value) return 'last seen time unknown';
+    const elapsed = Math.max(0, Date.now() - Date.parse(value));
+    if (!Number.isFinite(elapsed)) return 'last seen time unknown';
+    const minutes = Math.floor(elapsed / 60_000);
+    if (minutes < 1) return 'last seen just now';
+    if (minutes < 60) return `last seen ${minutes} min ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `last seen ${hours} h ago`;
+    return `last seen ${Math.floor(hours / 24)} d ago`;
   }
   function setFollows(id: string, value: string) {
     placed = placed.map((b) =>
@@ -395,9 +426,9 @@
           disabled={setup?.isAdmin !== true}
           bind:value={screenId}
           onchange={() => (notice = 'Unsaved changes')}
-          ><option value="">Choose a device…</option
+          ><option value="">{devices.length ? 'Choose a device…' : 'No devices yet. Open Emby on the room’s TV once, then click Refresh.'}</option
           >{#each devices as device (device.deviceId)}<option value={device.deviceId}
-              >{device.name} · {device.appName}{device.roomId && device.roomId !== selected
+              >{device.name} · {device.appName}{device.lastUserName ? ` · ${device.lastUserName}` : ''} · {lastSeen(device.lastActivity)}{device.roomId && device.roomId !== selected
                 ? ` · In ${device.roomName ?? 'another room'}`
                 : ''}</option
             >{/each}</select
@@ -522,11 +553,14 @@
                   ? ` · In ${rooms.find((r) => r.id === bulb.roomId)?.name ?? 'another room'}`
                   : ''}</small
               ></span
-            ><button
-              disabled={identifying === bulb.id || setup?.isAdmin !== true}
-              onclick={() => identify(bulb.id)}
-              >{identifying === bulb.id ? 'Flashing…' : 'Identify'}</button
-            >
+            ><span>
+              {#if identifyFailure?.id === bulb.id}<small role="status">{identifyFailure.message}</small>{/if}
+              <button
+                disabled={identifying === bulb.id || setup?.isAdmin !== true}
+                onclick={() => identify(bulb.id)}
+                >{identifying === bulb.id ? 'Flashing…' : 'Identify'}</button
+              >
+            </span>
             <details>
               <summary>Place ▾</summary>
               <div class="place-menu">

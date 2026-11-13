@@ -1,6 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import RoomsScreen from '$lib/components/rooms/RoomsScreen.svelte';
+  import LibraryScreen from '$lib/components/LibraryScreen.svelte';
+  import { loadRooms } from '$lib/api/rooms';
+  import MovieSelectionScreen from '$lib/components/MovieSelectionScreen.svelte';
   import { L1_SHORTCUTS, visibleMarks } from '$lib/domain';
   import { formatClock, StudioSession } from '$lib/studio/session.svelte';
 
@@ -15,7 +18,14 @@
   onMount(() => {
     const updateRoute = () => {
       hashRoute = location.hash || '';
-      if (hashRoute && !hashRoute.startsWith('#/rooms') && !editorBooted) {
+      if (hashRoute) localStorage.setItem('olfx-last-route', hashRoute);
+      if (
+        hashRoute &&
+        !hashRoute.startsWith('#/rooms') &&
+        !hashRoute.startsWith('#/library') &&
+        !hashRoute.startsWith('#/movie/') &&
+        !editorBooted
+      ) {
         editorBooted = true;
         void session.boot().then(() => {
           document.body.dataset.frameP95Ms = String(session.frameP95);
@@ -24,9 +34,24 @@
     };
     updateRoute();
     window.addEventListener('hashchange', updateRoute);
+    if (!location.hash) {
+      void loadRooms()
+        .then((rooms) => {
+          if (location.hash) return;
+          const lastRoute = localStorage.getItem('olfx-last-route');
+          const validLastRoute =
+            /^#\/(rooms(?:\/[^/?]+)?|library|movie\/[^/?]+|edit\/[^/?]+\/[^/?]+)$/.test(
+              lastRoute ?? ''
+            );
+          location.hash =
+            rooms.length === 0 ? '#/rooms' : validLastRoute ? lastRoute! : '#/library';
+        })
+        .catch(() => {
+          if (!location.hash) location.hash = '#/rooms';
+        });
+    }
     document.body.dataset.frameP95Ms = String(session.frameP95);
     const stop = session.startAutosave();
-    if (!location.hash) location.hash = '#/rooms';
     let frame = 0;
     const loop = () => {
       session.syncFromVideo();
@@ -244,8 +269,18 @@
 {/if}
 {#if hashRoute.startsWith('#/rooms')}
   <RoomsScreen />
+{:else if hashRoute.startsWith('#/library')}
+  <LibraryScreen />
+{:else if hashRoute.startsWith('#/movie/')}
+  <MovieSelectionScreen />
 {/if}
-<div class="shell" class:hidden={hashRoute.startsWith('#/rooms') || !hashRoute}>
+<div
+  class="shell"
+  class:hidden={hashRoute.startsWith('#/rooms') ||
+    hashRoute.startsWith('#/library') ||
+    hashRoute.startsWith('#/movie/') ||
+    !hashRoute}
+>
   <header class="top">
     <strong class="brand">OpenLightFX</strong>
     <h1>{title}</h1>

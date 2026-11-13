@@ -4,6 +4,9 @@ export interface LibraryItem {
   year: number;
   runtimeMs: number;
   posterUrl?: string;
+  dateAdded?: string;
+  trackCount?: number;
+  hasActiveTrack?: boolean;
 }
 
 export interface ProxyInfo {

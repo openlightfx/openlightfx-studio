@@ -133,13 +133,13 @@ On-demand, not CI. Characteristics, not a title: about 25 GB, 4K, HEVC 10-bit, H
 - **Layer:** L1
 - **Status:** approved
 - **Tests:** browser
-- **Statement:** At 1280×720 the movie, transport, and timeline are all inside the viewport, and the movie keeps its aspect ratio.
+- **Statement:** In the editor at 1280×720 the movie, transport, and full-width timeline are all inside the viewport, and the movie keeps its aspect ratio.
 
 **Acceptance:**
 
 - Given a 1280×720 viewport and a 16:9 movie selected
 - When the shell has finished loading
-- Then the play button, the scrubber, the current time, and the duration are within the viewport and are not `display: none`, `visibility: hidden`, or `aria-hidden`
+- Then the play button, the timeline ruler, the current time, and the duration are within the viewport and are not `display: none`, `visibility: hidden`, or `aria-hidden`
 - Then the movie box letterboxes the frame and the video element is not cropped to a different aspect ratio
 - Given a 375×700 viewport
 - When L1 layout is used
@@ -186,23 +186,6 @@ On-demand, not CI. Characteristics, not a title: about 25 GB, 4K, HEVC 10-bit, H
 - Then the top bar shows "Proxy Fixture" and a visible unsaved state
 - When save succeeds
 - Then the unsaved state clears
-
-#### SHELL-010 An empty studio explains how to start
-
-- **Layer:** L1
-- **Status:** approved
-- **Tests:** browser
-- **Statement:** With no movie open, Studio tells the user how to pick a movie, add a keyframe, map bulbs, and save.
-
-**Acceptance:**
-
-- Given no movie is selected
-- When the shell renders
-- Then a guide says to pick a movie, add a channel, click the timeline to add a keyframe, map bulbs, and save
-- Then the timeline shows a time ruler
-- Given a movie is open
-- When the editor renders
-- Then the library row shows the movie title and a poster, and the timeline ruler is still visible
 
 #### SHELL-007 Command palette
 
@@ -255,27 +238,6 @@ On-demand, not CI. Characteristics, not a title: about 25 GB, 4K, HEVC 10-bit, H
 - Then play, save, and the scrubber have a CSS hit box of at least 44×44 px
 
 ### Media loading and playback
-
-#### MEDIA-001 Library lists Emby movies
-
-- **Layer:** L1
-- **Status:** approved
-- **Tests:** browser, fullstack
-- **Statement:** The library lists movies from the plugin Items API and the search box narrows that list.
-
-**Acceptance:**
-
-- Given the plugin returns two movies, one with `runtimeMs` 101000 and `year` 2020
-- When the library renders
-- Then both names are shown with year and runtime, and virtual items are absent because the API omitted them
-- Given the API returns 200 items
-- When they render
-- Then the UI says the list is capped and that search narrows it
-- When the user types a search of at least one character
-- Then Studio calls Items with that search and replaces the list
-- Given an item whose JSON uses Emby fields `Name` and `ProductionYear`
-- When the library renders
-- Then the visible row shows that title and year, plus a poster loaded from the item's Primary image tag when one is present and a placeholder when the item has no image, and does not show the year alone or the word movie in place of a title
 
 #### MEDIA-002 Duration comes from the selected movie
 
@@ -408,13 +370,13 @@ On-demand, not CI. Characteristics, not a title: about 25 GB, 4K, HEVC 10-bit, H
 - **Layer:** L1
 - **Status:** approved
 - **Tests:** browser
-- **Statement:** The transport is always rendered, and it is disabled with a reason until a movie or a local file is loaded.
+- **Statement:** The transport exists only in the editor, which always has a movie, so it is never shown without one.
 
 **Acceptance:**
 
-- Given no movie is selected
+- Given the editor is open for a movie
 - When the shell renders
-- Then the play control is visible, disabled, and exposes a reason such as "Choose a movie"
+- Then the play control is visible and enabled, and the timeline ruler is the only scrubber
 - Then the document contains no input whose name or label is a track duration
 - Given a movie is selected and the proxy is still building
 - When the user looks at the transport
@@ -454,37 +416,18 @@ On-demand, not CI. Characteristics, not a title: about 25 GB, 4K, HEVC 10-bit, H
 - **Layer:** L1
 - **Status:** approved
 - **Tests:** browser, fullstack
-- **Statement:** The selected movie is an Emby item id, so a reload opens that movie again.
+- **Statement:** The route carries the Emby item id and track id, so a reload reopens that movie and track.
 
 **Acceptance:**
 
-- Given the user selected item 42
+- Given the user opened item 42 and track t1
 - When the URL is inspected
-- Then the query contains `itemId=42`
+- Then the hash is `#/edit/42/t1`
 - When the page reloads
 - Then Studio requests the proxy for item 42 and does not open a file picker
 - Given a hosted session
 - When local files were never chosen
 - Then reload still restores the item
-
-#### MEDIA-014 Local files are browser-playable only
-
-- **Layer:** L1
-- **Status:** approved
-- **Tests:** browser, unit
-- **Statement:** Local dev plays H.264 MP4 in Firefox and refuses HEVC, MKV, and TrueHD without ffmpeg.wasm or the File System Access API.
-
-**Acceptance:**
-
-- Given local dev and an H.264/AAC MP4 of clip A
-- When the user picks it in Firefox
-- Then it plays with the same transport as a proxy
-- Given a file whose type or extension is MKV, HEVC, or TrueHD
-- When the user picks it
-- Then playback does not start and the message tells them to open the movie from Emby
-- Given the production bundle and the dev bundle
-- When their module graphs are inspected
-- Then neither imports ffmpeg.wasm, neither references `showSaveFilePicker` or `showOpenFilePicker`, and the app still reaches the shell when COOP and COEP are absent
 
 #### MEDIA-015 Missing runtime is probed
 
@@ -516,22 +459,6 @@ On-demand, not CI. Characteristics, not a title: about 25 GB, 4K, HEVC 10-bit, H
 - When the seek is requested
 - Then the picture can already be playing from time 0 while `state` is still `building`
 - Then the UI shows `Still encoding to 00:05` and waits there, and the network log has no full-movie transcode request
-
-#### MEDIA-017 Existing tracks open with the movie
-
-- **Layer:** L1
-- **Status:** approved
-- **Tests:** browser, fullstack
-- **Statement:** A movie with one track opens that track, and a movie with several tracks asks which one.
-
-**Acceptance:**
-
-- Given the plugin lists one track for the item
-- When the user selects the movie
-- Then that track's channels and keyframes render and the proxy starts
-- Given the plugin lists two tracks
-- When the user selects the movie
-- Then both titles are shown plus New track, and no keyframes appear until one is chosen
 
 ### Timeline view
 
@@ -613,21 +540,6 @@ On-demand, not CI. Characteristics, not a title: about 25 GB, 4K, HEVC 10-bit, H
 - Given the user scrubs to a time outside the view
 - When the scrub commits
 - Then the playhead is inside the view
-
-#### TIME-006 Minimap
-
-- **Layer:** L1
-- **Status:** approved
-- **Tests:** browser
-- **Statement:** A minimap at least 48 px tall shows the whole movie and navigates when clicked.
-
-**Acceptance:**
-
-- Given a timeline
-- When it renders
-- Then the minimap height is ≥ 48 px and ≤ 80 px
-- When the user clicks the midpoint of the minimap
-- Then the view scrolls so the midpoint time is inside the lanes
 
 #### TIME-007 Offscreen keyframes are not drawn
 
@@ -743,12 +655,12 @@ On-demand, not CI. Characteristics, not a title: about 25 GB, 4K, HEVC 10-bit, H
 - **Layer:** L1
 - **Status:** approved
 - **Tests:** browser
-- **Statement:** Double-clicking a lane inserts a keyframe at that time on that channel and selects it.
+- **Statement:** A single click on a lane inserts a keyframe at that time on that channel and selects it.
 
 **Acceptance:**
 
 - Given a stereo track and a click time that maps to 2500 ms
-- When the user double-clicks the left lane there
+- When the user clicks the left lane there
 - Then a keyframe exists on `left` within 50 ms of 2500 ms after snapping, and it is the only selection
 - Then the properties popover is open
 
@@ -1047,69 +959,6 @@ Conversion: `temp = clamp(kelvin, 1000, 40000) / 100`. At `temp ≤ 66`, red is 
 
 ### Channels and groups
 
-#### CHAN-001 Templates without a duration step
-
-- **Layer:** L1
-- **Status:** approved
-- **Tests:** unit, browser
-- **Statement:** A new movie starts on the Stereo template, and the other templates can replace it before the user adds keyframes.
-
-**Acceptance:**
-
-- Given a newly selected movie
-- When the timeline appears
-- Then the channels are `left` (`SPATIAL_LEFT`) and `right` (`SPATIAL_RIGHT`), and no duration control was shown
-- When the user picks another template before adding any keyframe beyond the automatic ones at 0
-- Then the channels match that template
-- When the user picks a template after adding their own keyframe
-- Then Studio asks for confirmation before replacing channels
-
-Templates:
-
-| Template               | Channels and spatial hints                                                                         |
-| ---------------------- | -------------------------------------------------------------------------------------------------- |
-| Ambient                | `ambient` / `SPATIAL_AMBIENT`                                                                      |
-| Stereo                 | `left` / `SPATIAL_LEFT`, `right` / `SPATIAL_RIGHT`                                                 |
-| Stereo + Ambient       | stereo plus `ambient` / `SPATIAL_AMBIENT`                                                          |
-| Surround               | stereo plus `surround-left` / `SPATIAL_SURROUND_LEFT`, `surround-right` / `SPATIAL_SURROUND_RIGHT` |
-| 6-Channel Theater      | surround plus `center` / `SPATIAL_CENTER` and `ambient` / `SPATIAL_AMBIENT`                        |
-| 8-Channel Home Theater | 6-channel plus `back-left` / `SPATIAL_SURROUND_LEFT` and `back-right` / `SPATIAL_SURROUND_RIGHT`   |
-
-The proto has no separate back hint, so the back channels share the surround hint. Display names are the English words for those ids.
-
-#### CHAN-002 Add, rename, and delete channels
-
-- **Layer:** L1
-- **Status:** approved
-- **Tests:** browser, unit
-- **Statement:** The user can add, rename, and delete channels, and new ids must be unique lowercase slugs.
-
-**Acceptance:**
-
-- Given a track
-- When the user adds a channel with id `rear_1`
-- Then the channel exists and has a black keyframe at 0
-- When the user enters an id that is not `[a-z0-9_-]{1,64}` or that already exists
-- Then the add is refused and the error is inline
-- When the user deletes a channel
-- Then a confirmation is required, and confirming removes its keyframes
-- Given an imported id that does not match the slug rule
-- When the track is saved without renaming it
-- Then the original id is kept
-
-#### CHAN-003 Reorder channels
-
-- **Layer:** L1
-- **Status:** approved
-- **Tests:** browser
-- **Statement:** Dragging a channel header reorders the lanes and the encoded channel list.
-
-**Acceptance:**
-
-- Given channels `left` then `right`
-- When the user drags `right` above `left`
-- Then the lane order is `right`, `left` and the encoded `channels` array matches
-
 #### CHAN-004 Solo and mute
 
 - **Layer:** L1
@@ -1278,13 +1127,13 @@ The proto has no separate back hint, so the back channels share the surround hin
 - **Layer:** L1
 - **Status:** approved
 - **Tests:** browser
-- **Statement:** The channel popover edits id, display name, spatial hint, default color, and the optional flag.
+- **Statement:** The channel popover edits default color and brightness; id, display name, and spatial hint come from the layout and are shown read-only.
 
 **Acceptance:**
 
 - Given a channel header
 - When the user opens channel properties
-- Then id, display name, a spatial-hint list of the proto values, default color, and optional are shown
+- Then default color and brightness are editable, and id, display name, and spatial hint are shown from the layout
 - When optional is toggled and the track is saved
 - Then the protobuf field matches
 - Then the UI does not claim that optional changes plugin playback
@@ -1478,25 +1327,6 @@ The proto has no separate back hint, so the back channels share the surround hin
 - When it is saved
 - Then the plugin rejects it and Studio shows the error
 
-#### SAVE-002 Save selects the track for Emby playback
-
-- **Layer:** L1
-- **Status:** approved
-- **Tests:** fullstack
-- **Statement:** After a hosted save, Emby playback of that movie uses the saved file.
-
-**Acceptance:**
-
-- Given the save in `SAVE-001` succeeded and another `.lightfx` already exists for the movie
-- When Studio finishes the save
-- Then it POSTs `/OpenLightFX/Tracks/Select` with that item id and the `lightfx/proxy-fixture.lightfx` path from Tracks ByItem
-- Given Emby then plays the movie past a STEP keyframe of RGB 0,255,0 brightness 80 at 1000 ms
-- When the collector log is read, with poll interval set to 200 ms for the test
-- Then a sample with r 0, g 255, b 0, brightness 80 appears within 1000 ms after the player position crosses 1000 ms
-- Given the default poll of 500 ms on the real-media tier
-- When the same kind of keyframe plays
-- Then the sample appears within 1500 ms
-
 #### SAVE-003 Save writes the project sidecar
 
 - **Layer:** L1
@@ -1686,13 +1516,13 @@ The proto has no separate back hint, so the back channels share the surround hin
 - **Layer:** L3
 - **Status:** approved
 - **Tests:** browser
-- **Statement:** Marketplace publish is absent from the L1 and L2 interface.
+- **Statement:** Marketplace publish is absent from the L1 and L2 interface, and the only marketplace text is a plain-text "coming later" note on the Movie screen.
 
 **Acceptance:**
 
 - Given the L1 shell
 - When the user inspects menus and the save flow
-- Then there is no Publish control, disabled or otherwise
+- Then there is no Publish control, disabled or otherwise, and any marketplace text is the plain note only
 
 ### Live preview
 
@@ -1760,40 +1590,6 @@ The proto has no separate back hint, so the back channels share the surround hin
 - When `left` is soloed
 - Then only the left region is tinted
 
-#### PREV-004 Channel to bulb mapping
-
-- **Layer:** L1
-- **Status:** approved
-- **Tests:** browser, fullstack
-- **Statement:** The user maps each bulb to at most one channel, and a channel may drive several bulbs.
-
-**Acceptance:**
-
-- Given bulbs `b1` and `b2` and channels `left` and `right`
-- When the user assigns both bulbs to `left`
-- Then preview Start sends `left: [b1, b2]`
-- When the user also assigns `b1` to `right`
-- Then the UI refuses and explains that a bulb follows one channel
-- Given no mapping has been confirmed
-- When the user turns bulb preview on
-- Then preview does not start and the mapping UI opens
-
-#### PREV-005 Mapping is saved for Emby playback
-
-- **Layer:** L1
-- **Status:** approved
-- **Tests:** fullstack
-- **Statement:** Confirming a mapping updates the active plugin mapping profile.
-
-**Acceptance:**
-
-- Given the user confirms `left` → `b1`
-- When Studio finishes the write
-- Then plugin settings' active profile maps channel `left` to bulb `b1`
-- Given Emby later plays a track
-- When `left` has a color
-- Then bulb `b1` receives it
-
 #### PREV-006 Preview latency and color
 
 - **Layer:** L1
@@ -1845,19 +1641,6 @@ The proto has no separate back hint, so the back channels share the surround hin
 - When the user then stops preview
 - Then bulbs return to the snapshot from the takeover moment within 2 seconds, and live movie lighting does not resume until Emby plays again
 - Then Studio's playhead is not forced to the Emby playback position
-
-#### PREV-009 No bulbs
-
-- **Layer:** L1
-- **Status:** approved
-- **Tests:** browser
-- **Statement:** With no configured bulbs the on-screen overlay still works and bulb preview explains that none are configured.
-
-**Acceptance:**
-
-- Given Bulbs returns an empty list
-- When the user turns the overlay on and opens bulb preview
-- Then the overlay draws and bulb preview shows that no bulbs are configured
 
 #### PREV-010 Preview and save require an admin
 
@@ -2129,20 +1912,6 @@ The proto has no separate back hint, so the back channels share the surround hin
 - When the error renders
 - Then the text says an admin is required and a Download control produces a `.lightfx` file
 
-#### ERR-005 Unplayable local files point at Emby
-
-- **Layer:** L1
-- **Status:** approved
-- **Tests:** browser
-- **Statement:** A local file the browser cannot play tells the user to open it through Emby.
-
-**Acceptance:**
-
-- Given local dev and an MKV file
-- When the user picks it
-- Then the message says this browser cannot play it and names Emby as the way to open the movie
-- Then no duration field appears
-
 #### ERR-006 Unknown duration blocks plugin save
 
 - **Layer:** L1
@@ -2318,33 +2087,677 @@ These requirements are changes or guarantees the Emby plugin must provide. Studi
 - When Start is called
 - Then the status is 400
 
-#### PLUG-006 Editor routes already on the plugin
+## J1 — First light requirements
+
+Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). Steps are built in order; the gate enforces each requirement once its tests exist.
+
+### Model and routing
+
+#### MODEL-001 Layouts are fixed sets of positions
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** unit, fixture
+- **Statement:** A track's channels are exactly the channels of its layout, with the ids and hints in [Positions](../journeys/J1-first-light.md#positions).
+
+**Acceptance:**
+
+- Given a new 3.0 track
+- When it is created
+- Then it has channels `left` (`SPATIAL_LEFT`), `center` (`SPATIAL_CENTER`), `right` (`SPATIAL_RIGHT`) in that order and `channel_layout` is `LAYOUT_3_0`
+- Given a 5.0 track
+- When a sixth channel is added
+- Then validation rejects it
+
+#### MODEL-002 Suggested layout for a room
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** unit
+- **Statement:** The suggested layout is the smallest layout with a channel for every non-Ambient position the room uses.
+
+**Acceptance:**
+
+- Given rooms with positions {Ambient}, {L,R}, {L,C,R}, {L,R,SL,SR}, {L}
+- When the suggested layout is computed
+- Then the suggestions are Ambient, 2.0, 3.0, 5.0, 2.0
+
+#### MODEL-003 Every bulb in a room is lit by every track
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** unit, fixture
+- **Statement:** Fold-down and fill route every track channel to at least one bulb and give every bulb at least one source.
+
+**Acceptance:**
+
+- Given any of the four layouts and any non-empty room
+- When routing is computed
+- Then no bulb has zero sources and no channel reaches zero bulbs
+
+#### MODEL-004 Routing has one implementation and one fixture
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** fixture, fullstack
+- **Statement:** The plugin computes routing; Studio only displays it; both repos test the same fixture.
+
+**Acceptance:**
+
+- Given `tests/fixtures/routing/cases.json` (the worked-example table as data)
+- When the plugin's routing tests and Studio's lane-label tests run
+- Then both match every case. Given Studio
+- Then it contains no fold-down table of its own
+
+#### MODEL-005 Mixing
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** unit, fixture
+- **Statement:** A bulb with several sources takes the highest brightness and the brightness-weighted average color.
+
+**Acceptance:**
+
+- Given `left` red at 100 and `center` blue at 50 folded onto one bulb
+- When the bulb is rendered
+- Then the bulb is brightness 100, color (170, 0, 85)
+- Given both at 0
+- When the bulb is rendered
+- Then the bulb is off
+
+#### MODEL-006 Follows override
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** unit, fullstack
+- **Statement:** A bulb's Follows override replaces its position for routing in every track.
+
+**Acceptance:**
+
+- Given a Center bulb set to follow Ambient and a 3.0 track
+- When the track plays
+- Then that bulb receives the mix of all three channels, and `center` folds to Left and Right as if no Center bulb existed
+
+#### MODEL-007 Tracks without a layout
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** unit, fixture, fullstack
+- **Statement:** A track without `channel_layout` is read by [Tracks that predate layouts](../journeys/J1-first-light.md#tracks-that-predate-layouts) without rewriting channel ids.
+
+**Acceptance:**
+
+- Given the fixture copy of John Wick's channel list (UUID ids, L/R/SL/SR hints)
+- When it is read and then saved
+- Then it reads as 5.0 with no `center`, routing matches the "L, R, SL, SR" column, and the saved file gains `LAYOUT_5_0` and an empty `center` channel while every keyframe keeps its `channel_id`
+
+### Navigation
+
+#### FLOW-001 First run lands on room setup
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser, fullstack, walkthrough
+- **Statement:** With no rooms, Studio opens on `#/rooms` with the welcome card.
+
+**Acceptance:**
+
+- Given a fresh plugin with no rooms
+- When Studio loads
+- Then the URL is `#/rooms`, the welcome card and an open room editor named "Living Room" are visible. No legacy configuration or import prompt is shown
+
+#### FLOW-002 Returning users land where they were
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser
+- **Statement:** With rooms, Studio opens on the last route used, else the Library.
+
+**Acceptance:**
+
+- Given one room and a last route `#/edit/m1/t1`
+- When Studio loads
+- Then the editor for `m1`/`t1` is open
+
+#### FLOW-003 Routes keep the API key and survive reload
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser
+- **Statement:** Every screen is a hash route that keeps the `?api_key=` query and restores on reload.
+
+**Acceptance:**
+
+- Given `…/studio/?api_key=K#/movie/m1`
+- When the page reloads or Back is pressed
+- Then the query is unchanged and the screen matches the route
+
+#### FLOW-004 Header navigation
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser
+- **Statement:** Rooms and Library are one click from every screen except the editor, which reaches them through File → Close.
+
+**Acceptance:**
+
+- Given the Library
+- When Rooms is clicked
+- Then `#/rooms` shows and the Rooms link is marked current
+
+### Step 1 — Rooms
+
+#### ROOM-001 Create and save a room
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser, fullstack, walkthrough
+- **Statement:** A room saves with a unique name and a screen; Save is disabled without both.
+
+**Acceptance:**
+
+- Given the room editor with name "Living Room" and no screen
+- Then Save is disabled. When a screen is picked and Save clicked
+- Then `GET …/Rooms` returns the room with that `deviceId`, and the Rooms column shows it
+
+#### ROOM-002 Screen picker lists Emby devices
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser, fullstack
+- **Statement:** The screen picker lists every device Emby has seen, newest first, and marks devices other rooms use.
+
+**Acceptance:**
+
+- Given Emby has seen devices A (1 h ago) and B (1 day ago, used by Bedroom)
+- When the screen picker opens
+- Then it lists A, then B, and B reads "In Bedroom"
+- When B is picked and confirmed
+- Then B is saved in this room and removed from Bedroom
+
+#### ROOM-003 Discover bulbs
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** fullstack, walkthrough
+- **Statement:** Find bulbs runs discovery and lists bulbs not already in a room.
+
+**Acceptance:**
+
+- Given the simulator emulating 4 bulbs, one already in Bedroom
+- When Find bulbs is clicked
+- Then within 10 s the list shows the other 3 with protocol, model, and IP, and a progress bar shows while it runs
+
+#### ROOM-004 Identify flashes the right bulb
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** fullstack, walkthrough
+- **Statement:** Identify flashes exactly the chosen bulb.
+
+**Acceptance:**
+
+- Given bulbs b1 and b2 in the simulator
+- When Identify is clicked on b1
+- Then simulator NDJSON shows red, green, blue commands to b1 only, and b1's row reads "Flashing…" until it finishes
+
+#### ROOM-005 Place bulbs by drag or menu
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser, fullstack, walkthrough
+- **Statement:** Dragging a bulb onto a zone or choosing a position from Place ▾ puts it at that position; × takes it out.
+
+**Acceptance:**
+
+- Given an unplaced bulb
+- When it is dragged to Left
+- Then its chip is in the Left zone;
+- When Place ▾ → Surround Right is used instead, the same result in that zone. After Save, `GET …/Rooms/{id}` lists the bulb with that position. When × is clicked and saved, it is unplaced again
+
+#### ROOM-006 Coverage line
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser
+- **Statement:** The coverage line states the suggested layout and what folds, and updates as bulbs move.
+
+**Acceptance:**
+
+- Given bulbs at L and R
+- Then it reads "This room plays 2.0 tracks natively…". When a bulb is added at Center, it reads 3.0 without a reload
+
+#### ROOM-007 A bulb is in one room
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** unit, fullstack
+- **Statement:** Placing a bulb that is in another room moves it, after confirmation.
+
+**Acceptance:**
+
+- Given b1 in Bedroom
+- When b1 is placed in Living Room and confirmed
+- Then after Save it is only in Living Room
+
+#### ROOM-008 Rename and Follows
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser, fullstack
+- **Statement:** Bulb names and Follows overrides save with the room.
+
+**Acceptance:**
+
+- Given b1 renamed "Desk lamp" and set to follow Ambient
+- When the room is saved and reloaded
+- Then the chip reads "Desk lamp → Ambient"
+
+#### ROOM-009 Delete a room
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser, fullstack
+- **Statement:** Deleting a room unplaces its bulbs and frees its screen.
+
+**Acceptance:**
+
+- Given Living Room with 2 bulbs
+- When Delete room is confirmed
+- Then the room is gone and both bulbs are listed as unplaced
+
+#### ROOM-010 Hue pairing
 
 - **Layer:** L1
 - **Status:** approved
 - **Tests:** fullstack
-- **Statement:** The plugin keeps the Studio list, track, bulb, and preview-frame routes the editor calls.
+- **Statement:** A discovered Hue bridge pairs from the Rooms screen and its lights join the list.
 
 **Acceptance:**
 
-- Given an admin token
-- When each call below is made
-- Then the response shape matches this table
+- Given the simulator's Hue bridge
+- When Pair is clicked after its link button is pressed
+- Then its lights appear as bulbs, and no response to the browser contains the bridge key
 
-| Call                                               | Result                                                                                |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| GET `/OpenLightFX/Studio/Bulbs`                    | array of `id`, `name`, `protocol`, `capabilities.rgb`, `capabilities.minTransitionMs` |
-| GET `/OpenLightFX/Studio/Items?search=`            | movies only, at most 200, each with `itemId`, `name`, `year`, `runtimeMs`             |
-| GET `/OpenLightFX/Studio/Tracks?itemId=`           | array of `trackId`, `title`, `itemId`, `updatedAt`                                    |
-| GET `/OpenLightFX/Studio/Tracks/{trackId}`         | protobuf bytes                                                                        |
-| PUT `/OpenLightFX/Studio/Tracks/{trackId}?itemId=` | stores `{movieDir}/lightfx/{trackId}.lightfx` after `TrackParser` accepts the bytes   |
-| POST `/OpenLightFX/Studio/Preview/Frame`           | accepts `states[]` of `bulbId`, `r`, `g`, `b`, `brightness`, `transitionMs`           |
-| POST `/OpenLightFX/Tracks/Select`                  | body `itemId` and `trackPath` selects the file for later playback                     |
-| GET `/OpenLightFX/Tracks/ByItem?itemId=`           | includes `trackPath` for the saved file                                               |
-| GET `/OpenLightFX/Settings`                        | includes `photosensitivityMode` and the active mapping profile                        |
+#### ROOM-012 Room errors are specific
 
-- Then track ids are safe file names of at most 120 characters
-- Then a new track id Studio generates matches `[a-z0-9][a-z0-9_-]{0,63}`
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser
+- **Statement:** Each Step 1 error state shows the text in [Step 1 errors](../journeys/J1-first-light.md#empty-and-error-states) and keeps what the person entered.
+
+**Acceptance:**
+
+- Given discovery that finds nothing
+- When Discover runs
+- Then the "No bulbs answered…" text and Try again show
+- Given a 409 on save
+- When Save is clicked
+- Then the conflict prompt shows and the edited name is still in the field
+
+### Step 2 — Library
+
+#### LIB-001 Poster grid of Emby movies
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser, fullstack, walkthrough
+- **Statement:** The Library shows every Emby movie as a poster card with title, year, and track badge; no TV episodes.
+
+**Acceptance:**
+
+- Given Emby with 3 movies and 1 series
+- When the Library loads
+- Then 3 cards show, each with title and year, and the one with a saved track says "1 track"
+
+#### LIB-002 Search
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser, fullstack
+- **Statement:** Typing filters by title through the plugin.
+
+**Acceptance:**
+
+- Given movies "Clip Short" and "Clip Long"
+- When "long" is typed
+- Then only "Clip Long" shows within 1 s. Given "zzz", the no-match text and Clear search show
+
+#### LIB-003 Open a movie
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser, walkthrough
+- **Statement:** Clicking a card or pressing Enter on it opens `#/movie/{itemId}`.
+
+**Acceptance:**
+
+- Given the grid
+- When the first card is clicked
+- Then the Movie screen for that item shows its title
+
+#### LIB-004 No-room strip
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser
+- **Statement:** With no rooms the Library shows the no-room strip with a working Set up a room link.
+
+**Acceptance:**
+
+- Given no rooms
+- When the Library loads
+- Then the strip shows, and clicking its link opens `#/rooms`
+- Given a room exists
+- When the Library loads
+- Then the strip is absent
+
+### Step 3 — Open or create
+
+#### TRACK-001 List a movie's tracks
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser, fullstack, walkthrough
+- **Statement:** The Movie screen lists every track the plugin finds for the movie with title, layout, author, last saved, and the Plays in Emby badge.
+
+**Acceptance:**
+
+- Given a movie with two tracks, one active
+- When the Movie screen opens
+- Then two rows show and only the active one has the badge
+
+#### TRACK-002 Create with a suggested layout
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser, fullstack, walkthrough
+- **Statement:** Create track makes an unsaved track with the selected layout, preselecting the room's suggestion.
+
+**Acceptance:**
+
+- Given one room with L, C, R bulbs
+- Then the 3.0 card is preselected and says "Suggested for Living Room". When Create track is clicked
+- Then the editor opens with lanes Left, Center, Right and the movie's duration, and the server has no new file until Save
+
+#### TRACK-003 Open from file
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser
+- **Statement:** Open a .lightfx file imports a valid track for this movie and warns on movie or duration mismatch.
+
+**Acceptance:**
+
+- Given a valid track for another IMDb id
+- When it is opened from file
+- Then a warning names both movies and Continue opens it
+- Given a PNG
+- When it is opened from file
+- Then "That file isn't a .lightfx track." shows and nothing opens
+
+#### TRACK-004 Marketplace is a note, not a control
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser
+- **Statement:** The marketplace is mentioned as plain text and has no button, link, or disabled control.
+
+**Acceptance:**
+
+- Given the Movie screen
+- When it renders
+- Then no element with role button or link contains "Marketplace"
+
+### Step 4 — Editor
+
+#### EDIT-001 One scrubber
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser, fullstack, walkthrough
+- **Statement:** The ruler is the only pointer seek control, with no overview bar, minimap, or video seek bar.
+
+**Acceptance:**
+
+- Given the editor
+- When it renders
+- Then exactly one element has role `slider` for time, and it is the ruler
+- When the ruler is clicked at 25 % of its width at Fit zoom
+- Then the playhead and `video.currentTime` are at 25 % of the duration within one frame
+
+#### EDIT-002 Drag to scrub
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser, fullstack
+- **Statement:** Dragging along the ruler scrubs the video continuously.
+
+**Acceptance:**
+
+- Given the editor paused
+- When the ruler is dragged from 10 % to 20 %
+- Then the shown frame changes during the drag and ends at 20 %
+
+#### EDIT-003 Click a lane to add a keyframe
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser, walkthrough
+- **Statement:** A single click on empty lane space adds and selects a keyframe at that time with the channel's current value.
+
+**Acceptance:**
+
+- Given an empty Left lane
+- When it is clicked at 0:10
+- Then one keyframe exists on `left` at 0:10 (frame-snapped), it is selected in the inspector, and the preview color at 0:10 is unchanged. Undo removes it
+
+#### EDIT-004 Lanes name their bulbs
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser, fullstack
+- **Statement:** Each lane header shows its position and the preview room's bulbs it reaches, including folded channels.
+
+**Acceptance:**
+
+- Given a 5.0 track and Living Room with L, C, R bulbs
+- When the lanes render
+- Then the Left lane reads "Left — Desk lamp (+ Surround Left)" and the Surround Left lane reads "Surround Left → folds into Left"
+- Given no room
+- When the lanes render
+- Then the Left lane reads "Left"
+
+#### EDIT-005 File menu
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser, walkthrough
+- **Statement:** The File menu has New track, Open, Open a .lightfx file, Save, Export .lightfx, and Close, each doing what [Menus](../journeys/J1-first-light.md#menus) says.
+
+**Acceptance:**
+
+- Given a changed track
+- When File → Close is chosen
+- Then the unsaved prompt shows; Don't save returns to `#/movie/{itemId}`. When File → Export is chosen
+- Then a `.lightfx` download starts that decodes to the current track
+
+#### EDIT-006 Edit menu
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser
+- **Statement:** Edit has Undo, Redo, Delete keyframe, and Track settings, with their shortcuts.
+
+**Acceptance:**
+
+- Given one added keyframe
+- When Edit → Undo is chosen
+- Then it is gone; Edit → Redo restores it; with nothing to undo, Undo is greyed and its tooltip says "Nothing to undo"
+
+#### EDIT-007 Transport
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser, fullstack
+- **Statement:** The transport under the video plays, pauses, frame-steps, and skips 5 s, and shows the time.
+
+**Acceptance:**
+
+- Given the editor for a movie
+- When Play, Pause, frame step, and skip 5 s are used
+- Then they behave as MEDIA-004 to MEDIA-009 do, in the editor layout
+
+#### EDIT-008 Inspector edits the keyframe
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser, unit
+- **Statement:** The inspector edits the selected keyframe's time, color, brightness, fade type, and fade length.
+
+**Acceptance:**
+
+- Given a selected keyframe
+- When brightness is set to 40 and fade to Linear 500 ms
+- Then the encoded track has those values and the lane's color strip changes from that time
+
+#### EDIT-009 Preview room and Lights
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** fullstack, walkthrough
+- **Statement:** Lights starts preview on the picked room; the bulbs follow the playhead using the plugin's routing.
+
+**Acceptance:**
+
+- Given Living Room in the simulator and a keyframe `left` red at 0:05
+- When Lights is switched on and the playhead moved to 0:06
+- Then NDJSON shows red at the Left bulbs and, per routing, the Surround Left bulbs;
+- When switched off, bulbs restore (PREV-007)
+
+#### EDIT-010 No-room editor
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser, fullstack, walkthrough
+- **Statement:** With no rooms the editor authors and saves normally, shows the banner, and disables Preview on and Lights with a reason.
+
+**Acceptance:**
+
+- Given no rooms
+- When the editor opens
+- Then the banner shows with a working Set up a room link, Lights is disabled with the tooltip "Set up a room first", and adding a keyframe and saving succeed
+
+#### EDIT-011 Save state is always visible
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser
+- **Statement:** The menu bar shows Saved, Unsaved changes, or Saving…, and leaving with unsaved changes asks first.
+
+**Acceptance:**
+
+- Given a saved track
+- When a keyframe is added
+- Then the bar reads "Unsaved changes"; after Ctrl/⌘ S it reads "Saved"
+
+#### EDIT-012 Effects are kept
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** unit, fullstack
+- **Statement:** Existing effect keyframes are drawn and kept on save, and their inspector says editing comes later.
+
+**Acceptance:**
+
+- Given the John Wick fixture with 8 effects
+- When it is opened and saved
+- Then the saved file has the same 8 effects byte-for-byte in their fields
+
+#### EDIT-013 Admin-only actions say so
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** fullstack
+- **Statement:** For a non-admin, Save, Lights, and Watch in Emby are disabled with a reason, and Export works.
+
+**Acceptance:**
+
+- Given a non-admin Emby token
+- When the editor opens
+- Then Save, Lights, and Watch in Emby are disabled with "Only an Emby administrator can…", and Export downloads the track
+
+#### EDIT-014 Change the layout
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser, unit
+- **Statement:** The layout chip changes the track's layout, adding new channels dark and removing channels only after confirmation if they have keyframes.
+
+**Acceptance:**
+
+- Given a 2.0 track
+- When 3.0 is chosen
+- Then a Center lane appears between Left and Right with no keyframes. Given a 3.0 track whose Center has 4 keyframes
+- When 2.0 is chosen
+- Then "Remove Center and its 4 keyframes?" shows; Cancel changes nothing
+
+### Step 5 — Watch in Emby
+
+#### WATCH-001 Watch in Emby makes the track active
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser, fullstack, walkthrough
+- **Statement:** Watch in Emby saves if needed, makes this track the movie's active track for every room, and opens the movie in Emby.
+
+**Acceptance:**
+
+- Given an unsaved track
+- When Watch in Emby is clicked
+- Then the track is saved, `GET /OpenLightFX/Tracks/ByItem` reports it selected with no device-scoped selection left for the movie, a new tab opens the Emby item page, and the confirmation names the room's screen
+
+#### WATCH-002 Emby playback uses the room
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** fullstack
+- **Statement:** When Emby plays the movie on a room's screen, that room's bulbs follow the active track through routing.
+
+**Acceptance:**
+
+- Given Living Room's screen is device D and a 5.0 track with `surround-left` blue at 0:03
+- When Emby playback on D reaches 0:04
+- Then NDJSON shows blue at the Left bulbs (fold-down). Given playback on a device in no room
+- Then no bulb receives a command and the Rooms screen lists that device as "not in a room"
+
+### Process
+
+#### DONE-001 No dead controls
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser
+- **Statement:** Every visible, enabled button, menu item, link, and switch on every J1 screen changes something observable.
+
+**Acceptance:**
+
+- Given each J1 screen in a fixed state
+- When the dead-control check clicks every enabled control
+- Then each one changes the URL, the DOM, a network request, or opens a dialog, or is on a reviewed allow-list with a reason. Any other control fails the test
+
+#### DONE-002 Walkthrough video
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** walkthrough
+- **Statement:** Each step has a Playwright walkthrough that performs it as a person would, records video, and is watched before the step is done.
+
+**Acceptance:**
+
+- Given the full stack
+- When `npm run test:walkthrough` (a new script, added with the first step) runs
+- Then a video per step is written under `test-results/walkthrough/` and the PR for that step links the video and records who watched it
 
 ---
 
@@ -2352,24 +2765,32 @@ These requirements are changes or guarantees the Emby plugin must provide. Studi
 
 | Area                       | Prefix |      L1 |     L2 |    L3 |   Total |
 | -------------------------- | ------ | ------: | -----: | ----: | ------: |
-| App shell and navigation   | SHELL  |       7 |      3 |     0 |      10 |
-| Media loading and playback | MEDIA  |      17 |      0 |     0 |      17 |
-| Timeline view              | TIME   |      11 |      2 |     0 |      13 |
+| App shell and navigation   | SHELL  |       6 |      3 |     0 |       9 |
+| Media loading and playback | MEDIA  |      14 |      0 |     0 |      14 |
+| Timeline view              | TIME   |      10 |      2 |     0 |      12 |
 | Keyframe editing           | KEY    |      14 |      1 |     0 |      15 |
 | Effects                    | FX     |       0 |      4 |     1 |       5 |
-| Channels and groups        | CHAN   |       6 |      1 |     0 |       7 |
+| Channels and groups        | CHAN   |       3 |      1 |     0 |       4 |
 | Properties                 | PROP   |       8 |      1 |     0 |       9 |
 | Undo and redo              | UNDO   |       4 |      0 |     0 |       4 |
 | Shortcuts                  | KEYB   |       3 |      1 |     0 |       4 |
-| Save, load, and autosave   | SAVE   |       9 |      0 |     0 |       9 |
+| Save, load, and autosave   | SAVE   |       8 |      0 |     0 |       8 |
 | Import and export          | IO     |       4 |      0 |     1 |       5 |
-| Live preview               | PREV   |      11 |      1 |     0 |      12 |
+| Live preview               | PREV   |       8 |      1 |     0 |       9 |
 | Safety                     | SAFE   |       2 |      1 |     0 |       3 |
 | Performance                | PERF   |       4 |      0 |     0 |       4 |
 | Accessibility and input    | A11Y   |       3 |      1 |     0 |       4 |
-| Error handling             | ERR    |       7 |      0 |     0 |       7 |
-| Plugin contract            | PLUG   |       6 |      0 |     0 |       6 |
-| **Total**                  |        | **116** | **16** | **2** | **134** |
+| Error handling             | ERR    |       6 |      0 |     0 |       6 |
+| Plugin contract            | PLUG   |       5 |      0 |     0 |       5 |
+| Model and routing          | MODEL  |       7 |      0 |     0 |       7 |
+| Navigation                 | FLOW   |       4 |      0 |     0 |       4 |
+| Step 1 — Rooms             | ROOM   |      11 |      0 |     0 |      11 |
+| Step 2 — Library           | LIB    |       4 |      0 |     0 |       4 |
+| Step 3 — Open or create    | TRACK  |       4 |      0 |     0 |       4 |
+| Step 4 — Editor            | EDIT   |      14 |      0 |     0 |      14 |
+| Step 5 — Watch in Emby     | WATCH  |       2 |      0 |     0 |       2 |
+| Process                    | DONE   |       2 |      0 |     0 |       2 |
+| **Total**                  |        | **150** | **16** | **2** | **168** |
 
 The checker recomputes this table from the headings. Do not keep a second list.
 

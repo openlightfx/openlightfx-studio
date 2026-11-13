@@ -35,5 +35,15 @@ export function libraryItemFromApi(raw: Record<string, unknown>): LibraryItem {
   const given = text(raw.posterUrl ?? raw.PosterUrl);
   const tag = primaryImageTag(raw);
   const posterUrl = given || (itemId && tag ? embyPrimaryUrl(itemId, tag) : '');
-  return { itemId, name, year, runtimeMs, posterUrl };
+  const dateAdded = text(raw.dateAdded ?? raw.DateAdded);
+  return {
+    itemId,
+    name,
+    year,
+    runtimeMs,
+    posterUrl,
+    dateAdded,
+    trackCount: Math.max(0, Math.round(number(raw.trackCount ?? raw.TrackCount))),
+    hasActiveTrack: Boolean(raw.hasActiveTrack ?? raw.HasActiveTrack),
+  };
 }
