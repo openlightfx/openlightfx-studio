@@ -22,6 +22,7 @@
         });
       } else if (!hashRoute.startsWith('#/edit/')) {
         bootedEditorRoute = '';
+        session.cancelBoot();
       }
     };
     updateRoute();

@@ -432,7 +432,25 @@
 <svelte:head
   ><title>{session.track?.metadata.title ?? 'Edit track'} · OpenLightFX Studio</title></svelte:head
 >
-<div class="editor">
+{#if session.editorLoading}
+  <main class="route-status" role="status">
+    <strong>Opening {session.item?.name ?? 'movie'}…</strong>
+    <p>Loading the movie and track.</p>
+  </main>
+{:else if session.editorLoadError}
+  <main class="route-status">
+    <h1>Could not open this track</h1>
+    <p role="alert">{session.editorLoadError}</p>
+    <a href={session.item ? `#/movie/${encodeURIComponent(session.item.itemId)}` : '#/library'}>
+      Return to {session.item?.name ?? 'the Library'}
+    </a>
+  </main>
+{/if}
+<div
+  class="editor"
+  class:editor-hidden={session.editorLoading || Boolean(session.editorLoadError)}
+  aria-hidden={session.editorLoading || Boolean(session.editorLoadError)}
+>
   <header class="menubar">
     <div class="menus">
       {#each ['File', 'Edit', 'Help'] as name}
@@ -1144,6 +1162,27 @@
       14px/1.4 system-ui,
       sans-serif;
   }
+  .route-status {
+    min-height: 100dvh;
+    box-sizing: border-box;
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    gap: 12px;
+    padding: 32px;
+    text-align: center;
+    background: #0b0b16;
+  }
+  .route-status p {
+    margin: 0;
+    color: #b7b7c8;
+  }
+  .route-status a {
+    color: #a9bcff;
+  }
+  .editor-hidden {
+    display: none;
+  }
   .editor {
     height: 100dvh;
     display: grid;
@@ -1249,6 +1288,7 @@
     margin-left: 6px;
   }
   .workspace {
+    grid-row: 3;
     min-height: 0;
     display: grid;
     grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr);

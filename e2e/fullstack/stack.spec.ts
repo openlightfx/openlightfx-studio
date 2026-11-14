@@ -1,6 +1,7 @@
 import { expect, type APIRequestContext } from '@playwright/test';
 import fs from 'node:fs';
-import { decodeTrack } from '../../src/lib/domain';
+import { decodeTrack, encodeTrack } from '../../src/lib/domain';
+import { roundTripTrack } from '../../tests/fixtures/sampling/roundtrip-track';
 import { requirement } from '../harness/requirement';
 
 function emby(): string {
@@ -875,6 +876,54 @@ requirement('SAVE-004 @fullstack an invalid track is rejected', async ({ request
   expect(put.status()).toBeGreaterThanOrEqual(400);
   expect(await put.text()).toMatch(/V-/);
 });
+
+requirement(
+  'TRACK-001 @fullstack opening a listed track loads it for the selected movie',
+  async ({ page, request }) => {
+    const previousMovieId = await itemId(request, 'long');
+    const selectedMovieId = await itemId(request, 'h264');
+    const previousTrackId = freshTrackId();
+    const selectedTrackId = freshTrackId();
+    const previousTitle = `Previous track ${previousTrackId}`;
+    const selectedTitle = `Selected track ${selectedTrackId}`;
+    const saveNamedTrack = async (item: string, id: string, title: string) => {
+      const track = roundTripTrack();
+      track.metadata.title = title;
+      return request.put(`${emby()}/OpenLightFX/Studio/Tracks/${id}?itemId=${item}`, {
+        headers: { ...headers(), 'content-type': 'application/octet-stream' },
+        data: encodeTrack(track),
+        timeout: 8000,
+      });
+    };
+    expect(
+      (await saveNamedTrack(previousMovieId, previousTrackId, previousTitle)).ok()
+    ).toBeTruthy();
+    expect(
+      (await saveNamedTrack(selectedMovieId, selectedTrackId, selectedTitle)).ok()
+    ).toBeTruthy();
+
+    await page.goto(
+      `${emby()}/emby/OpenLightFX/studio/?api_key=${token()}&itemId=${previousMovieId}#/edit/${previousMovieId}/${previousTrackId}`
+    );
+    await expect(page.locator('#track-title')).toHaveValue(previousTitle);
+
+    // Keep the Studio session alive while moving to a different movie, as happens
+    // when returning to the Library after editing another track.
+    await page.evaluate((id) => (location.hash = `#/movie/${id}`), selectedMovieId);
+    await expect(page.getByRole('heading', { name: 'clip-a', exact: true })).toBeVisible();
+    await page
+      .locator('.track-row')
+      .filter({ hasText: selectedTitle })
+      .getByRole('button', { name: 'Open' })
+      .click();
+
+    await expect(page.locator('#track-title')).toHaveValue(selectedTitle);
+    await expect(page.locator('.lane .diamond')).toHaveCount(2);
+    await expect(page.locator('.route-status')).toHaveCount(0);
+    expect(new URL(page.url()).searchParams.get('itemId')).toBe(selectedMovieId);
+    expect(page.url()).toContain(`#/edit/${selectedMovieId}/${selectedTrackId}`);
+  }
+);
 
 requirement(
   'EDIT-001 @fullstack the ruler is the only time scrubber',

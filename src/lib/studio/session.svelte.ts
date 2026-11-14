@@ -94,6 +94,8 @@ export class StudioSession {
   capped = $state(false);
   item = $state<LibraryItem | null>(null);
   media = $state<MediaInfo | null>(null);
+  editorLoading = $state(true);
+  editorLoadError = $state('');
   trackChoices = $state<TrackSummary[]>([]);
   track = $state<Track | null>(null);
   trackId = $state('track');
@@ -171,45 +173,69 @@ export class StudioSession {
   }
 
   async boot(): Promise<void> {
+    const token = ++this.bootToken;
     const params = new URLSearchParams(location.search);
     const path = location.pathname;
+    const routeParts = location.hash.split('/');
+    const routeItemId = decodeURIComponent(routeParts[2] ?? '');
+    const routeTrackId = decodeURIComponent(routeParts[3] ?? '');
+    const itemId = routeItemId || params.get('itemId') || '';
+
+    this.editorLoading = true;
+    this.editorLoadError = '';
+    this.item = null;
+    this.media = null;
+    this.trackChoices = [];
+    this.track = null;
+    this.trackId = '';
+    this.videoSrc = '';
+    this.videoError = '';
+    this.movieMs = null;
+    this.durationKnown = false;
+    this.pendingSeekMs = null;
+    this.dirty = false;
+    this.selection = [];
+    this.playheadMs = 0;
+    this.status = '';
+    this.resetHistory(null);
+
     this.hosted = /\/OpenLightFX\/studio\/?/.test(path);
     this.localDev = !this.hosted;
     this.pluginDown = params.get('plugin') === 'down';
     this.nonAdmin = params.get('api_key') === 'viewer' || params.get('api_key') === 'not-an-admin';
     this.playbackActive = params.get('playback') === 'active';
     if (this.nonAdmin) this.adminMessage = 'Admin is required';
-    // Never copy the access token into a script-readable cookie. The plugin sets
-    // HttpOnly ticket cookies for the page files and the edit proxy.
-    await this.openDb();
-    if (this.pluginDown) {
-      this.items = [];
-      this.status = 'The plugin is unreachable';
-      this.measureFrames();
-      return;
-    }
+
     try {
+      if (!itemId) throw new Error('No movie was selected for this track.');
+      // The hash route is authoritative; keep the compatibility query in sync so a
+      // stale itemId from an earlier editor session cannot mislead reloads or tools.
+      const url = new URL(location.href);
+      url.searchParams.set('itemId', itemId);
+      history.replaceState(null, '', url);
+
+      // Never copy the access token into a script-readable cookie. The plugin sets
+      // HttpOnly ticket cookies for the page files and the edit proxy.
+      await this.openDb();
+      if (token !== this.bootToken) return;
+      if (this.pluginDown) throw new Error('The plugin is unreachable.');
+
       const [settings, bulbs] = await Promise.all([fetchSettings(), fetchBulbs()]);
+      if (token !== this.bootToken) return;
       this.bulbs = bulbs;
       this.photosensitivity = photosensitivityNotice(settings.photosensitivityMode);
-    } catch {
-      this.pluginDown = true;
-      this.status = 'The plugin is unreachable';
-      this.items = [];
-      this.measureFrames();
-      return;
-    }
-    await this.loadItems(this.search);
-    const routeItemId = decodeURIComponent(location.hash.split('/')[2] ?? '');
-    const itemId = routeItemId || params.get('itemId') || '';
-    if (itemId) {
-      let request: { trackId?: string; title?: string; layout?: string } = {};
+
+      await this.loadItems(this.search);
+      if (token !== this.bootToken) return;
+      if (this.pluginDown) throw new Error('Movies could not be loaded from Emby.');
+
+      let request: { itemId?: string; title?: string; layout?: string } = {};
       try {
         request = JSON.parse(sessionStorage.getItem('olfx-editor-request') ?? '{}');
       } catch {
         // Ignore an invalid one-time navigation hint.
       }
-      const routeTrackId = location.hash.split('/')[3];
+      if (request.itemId !== itemId) request = {};
       const imported = routeTrackId === 'import' ? takePendingImport(itemId) : null;
       await this.selectItem(
         itemId,
@@ -217,10 +243,24 @@ export class StudioSession {
           ? routeTrackId
           : undefined,
         routeTrackId === 'new' ? request : undefined,
-        imported ?? undefined
+        imported ?? undefined,
+        token
       );
+      if (token === this.bootToken) this.measureFrames();
+    } catch (error) {
+      if (token === this.bootToken) {
+        this.editorLoadError =
+          (error as Error).message || 'The movie or track could not be opened.';
+        this.track = null;
+        this.measureFrames();
+      }
+    } finally {
+      if (token === this.bootToken) this.editorLoading = false;
     }
-    this.measureFrames();
+  }
+
+  cancelBoot(): void {
+    this.bootToken++;
   }
 
   bindVideo(video: HTMLVideoElement): void {
@@ -247,12 +287,12 @@ export class StudioSession {
   async selectItem(
     itemId: string,
     requestedTrackId?: string,
-    newTrack?: { title?: string; layout?: string },
-    imported?: { fileName: string; bytes: Uint8Array }
+    newTrack?: { itemId?: string; title?: string; layout?: string },
+    imported?: { fileName: string; bytes: Uint8Array },
+    token = this.bootToken
   ): Promise<void> {
-    const token = ++this.bootToken;
-    const known = this.items.find((item) => item.itemId === itemId);
-    const item = known ?? { itemId, name: `Item ${itemId}`, year: 0, runtimeMs: 0 };
+    const item = this.items.find((candidate) => candidate.itemId === itemId);
+    if (!item) throw new Error('This movie is no longer available in Emby.');
     this.item = item;
     this.videoError = '';
     this.pendingSeekMs = null;
@@ -261,14 +301,11 @@ export class StudioSession {
     this.alert = '';
     this.selection = [];
     this.menuChannel = null;
-    const url = new URL(location.href);
-    url.searchParams.set('itemId', itemId);
-    history.replaceState(null, '', url);
     let info: MediaInfo | null = null;
     try {
       info = await fetchMediaInfo(itemId);
     } catch {
-      info = null;
+      // Track editing remains available if the edit-proxy metadata is unavailable.
     }
     if (token !== this.bootToken) return;
     this.media = info;
@@ -277,17 +314,14 @@ export class StudioSession {
     this.durationKnown = resolved.durationMs !== null && resolved.durationMs > 0;
     this.applyProxy(info);
     if (info?.proxy.state === 'building') void this.watchProxy(itemId, token);
-    let tracks: TrackSummary[] = [];
-    try {
-      tracks = await fetchTracks(itemId);
-    } catch {
-      tracks = [];
-    }
+    const tracks = await fetchTracks(itemId);
     if (token !== this.bootToken) return;
     this.trackChoices = tracks;
     const requested = requestedTrackId
       ? tracks.find((track) => track.trackId === requestedTrackId)
       : null;
+    if (requestedTrackId && !requested)
+      throw new Error(`Track “${requestedTrackId}” was not found for ${item.name}.`);
     if (imported) {
       const base = this.fresh(item.name, resolved.durationMs ?? 0);
       const result = importTrack(base, imported.bytes, itemId);
@@ -317,18 +351,15 @@ export class StudioSession {
         },
         itemId,
         id,
-        false
+        false,
+        token
       );
-    } else if (requested) await this.openTrack(requested, resolved.durationMs);
+    } else if (requested) await this.openTrack(requested, resolved.durationMs, token);
     else if (newTrack)
-      this.openNewTrack(item, resolved.durationMs, newTrack.title, newTrack.layout);
-    else if (tracks.length === 1) await this.openTrack(tracks[0], resolved.durationMs);
-    else if (tracks.length === 0) this.openNewTrack(item, resolved.durationMs);
-    else {
-      this.track = null;
-      this.resetHistory(null);
-      this.dirty = false;
-    }
+      await this.openNewTrack(item, resolved.durationMs, newTrack.title, newTrack.layout);
+    else if (tracks.length === 1) await this.openTrack(tracks[0], resolved.durationMs, token);
+    else if (tracks.length === 0) await this.openNewTrack(item, resolved.durationMs);
+    else throw new Error('Choose a track from this movie before opening the editor.');
   }
 
   private applyProxy(info: MediaInfo | null): void {
@@ -389,7 +420,11 @@ export class StudioSession {
     }
   }
 
-  async openTrack(summary: TrackSummary, durationMs: number | null = this.movieMs): Promise<void> {
+  async openTrack(
+    summary: TrackSummary,
+    durationMs: number | null = this.movieMs,
+    token = this.bootToken
+  ): Promise<void> {
     this.trackId = summary.trackId;
     this.trackUpdatedAt = summary.updatedAt;
     const parsed = Date.parse(summary.updatedAt);
@@ -397,20 +432,23 @@ export class StudioSession {
     let track: Track;
     try {
       track = decodeTrack(await fetchTrackBytes(summary.trackId, summary.itemId));
-    } catch {
-      track = this.fresh(summary.title, durationMs ?? 0);
+    } catch (error) {
+      throw new Error(
+        `Could not load “${summary.title || summary.trackId}”: ${(error as Error).message}`
+      );
     }
+    if (token !== this.bootToken) return;
     if (durationMs && durationMs > 0)
       track = { ...track, metadata: { ...track.metadata, durationMs } };
-    await this.adopt(track, summary.itemId, summary.trackId, false);
+    await this.adopt(track, summary.itemId, summary.trackId, false, token);
   }
 
-  openNewTrack(
+  async openNewTrack(
     item: LibraryItem,
     durationMs: number | null,
     requestedTitle?: string,
     requestedLayout = 'LAYOUT_2_0'
-  ): void {
+  ): Promise<void> {
     this.trackId = slug(requestedTitle || item.name);
     this.serverUpdatedAt = 0;
     this.trackUpdatedAt = '';
@@ -422,13 +460,13 @@ export class StudioSession {
     );
     const { itemId: _item, ...track } = created;
     track.metadata = { ...track.metadata, movieTitle: item.name, year: item.year };
-    void this.adopt(track, item.itemId, this.trackId, false);
+    await this.adopt(track, item.itemId, this.trackId, false, this.bootToken);
   }
 
   chooseNewTrack(): void {
     if (!this.item) return;
     this.trackChoices = [];
-    this.openNewTrack(this.item, this.movieMs);
+    void this.openNewTrack(this.item, this.movieMs);
   }
 
   private fresh(title: string, durationMs: number): Track {
@@ -441,9 +479,11 @@ export class StudioSession {
     track: Track,
     itemId: string,
     trackId: string,
-    dirty: boolean
+    dirty: boolean,
+    token = this.bootToken
   ): Promise<void> {
     const crash = await this.readCrash(crashKey(itemId, trackId));
+    if (token !== this.bootToken) return;
     const source = chooseLoadSource(this.serverUpdatedAt, crash);
     const chosen = source === 'crash' && crash ? crash.track : track;
     this.track = chosen;
