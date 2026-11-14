@@ -1,5 +1,6 @@
 import { expect, type APIRequestContext } from '@playwright/test';
 import fs from 'node:fs';
+import { decodeTrack } from '../../src/lib/domain';
 import { requirement } from '../harness/requirement';
 
 function emby(): string {
@@ -54,6 +55,13 @@ function commanded(line: Record<string, any>): {
   };
 }
 
+function previewChannels2() {
+  return [
+    { id: 'left', spatialHint: 'SPATIAL_LEFT', displayName: 'Left' },
+    { id: 'right', spatialHint: 'SPATIAL_RIGHT', displayName: 'Right' },
+  ];
+}
+
 function freshTrackId(): string {
   return `t${Date.now().toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`;
 }
@@ -79,15 +87,49 @@ async function saveTrack(
   });
 }
 
+async function selectTrackForPlayback(
+  request: APIRequestContext,
+  item: string,
+  track: string
+): Promise<() => Promise<void>> {
+  const listed = await (
+    await request.get(`${emby()}/OpenLightFX/Tracks/ByItem?ItemId=${item}`, {
+      headers: headers(),
+      timeout: 5000,
+    })
+  ).json();
+  const trackPath = listed.tracks.find((entry: { trackPath: string }) =>
+    entry.trackPath.includes(track)
+  )?.trackPath;
+  expect(trackPath).toEqual(expect.any(String));
+  const selected = await request.post(`${emby()}/OpenLightFX/Tracks/Select`, {
+    headers: headers(),
+    data: { itemId: item, trackPath },
+    timeout: 5000,
+  });
+  expect(selected.ok()).toBeTruthy();
+  return async () => {
+    await request.post(`${emby()}/OpenLightFX/Tracks/Select`, {
+      headers: headers(),
+      data: { itemId: item },
+      timeout: 5000,
+    });
+  };
+}
+
 /** Verify the local Emby volume starts with a room seeded for the simulator. */
-async function ensureRoom(request: APIRequestContext): Promise<void> {
+async function ensureRoom(request: APIRequestContext): Promise<string> {
   const response = await request.get(`${emby()}/OpenLightFX/Studio/Rooms`, {
     headers: headers(),
     timeout: 5000,
   });
   expect(response.ok()).toBeTruthy();
   const rooms = await response.json();
-  expect(rooms.some((room: { name: string }) => room.name === 'Fullstack Room')).toBeTruthy();
+  const room = rooms.find(
+    (candidate: { id: string; name: string }) => candidate.name === 'Fullstack Room'
+  );
+  expect(room).toBeTruthy();
+  return room.id;
 }
 
 async function playbackToken(request: APIRequestContext): Promise<string> {
@@ -127,12 +169,13 @@ async function reportPlayback(
     timeout: 5000,
   });
   const mediaSourceId = (await info.json()).MediaSources?.[0]?.Id;
+  const playSessionId = `olfx-${item}-${Date.now()}`;
   const started = await request.post(`${emby()}/emby/Sessions/Playing`, {
     headers: auth,
     data: {
       ItemId: item,
       MediaSourceId: mediaSourceId,
-      PlaySessionId: `olfx-${item}`,
+      PlaySessionId: playSessionId,
       CanSeek: true,
       PlayMethod: 'DirectPlay',
       PositionTicks: 0,
@@ -145,7 +188,7 @@ async function reportPlayback(
     data: {
       ItemId: item,
       MediaSourceId: mediaSourceId,
-      PlaySessionId: `olfx-${item}`,
+      PlaySessionId: playSessionId,
       PositionTicks: 0,
       IsPaused: false,
     },
@@ -158,7 +201,7 @@ async function reportPlayback(
       data: {
         ItemId: item,
         MediaSourceId: mediaSourceId,
-        PlaySessionId: `olfx-${item}`,
+        PlaySessionId: playSessionId,
         PositionTicks: 0,
       },
       timeout: 5000,
@@ -315,11 +358,12 @@ requirement('MEDIA-004 @fullstack play uses the proxy URL', async ({ request }) 
       await request.post(`${emby()}/OpenLightFX/Studio/Items/${id}/Proxy`, { timeout: 5000 })
     ).status()
   ).toBe(401);
-  expect(
-    (
-      await request.get(`${emby()}/emby/OpenLightFX/studio/`, { timeout: 5000, maxRedirects: 0 })
-    ).status()
-  ).toBe(401);
+  const shell = await request.get(`${emby()}/emby/OpenLightFX/studio/`, {
+    timeout: 5000,
+    maxRedirects: 0,
+  });
+  expect(shell.status()).toBe(200);
+  expect(await shell.text()).not.toMatch(/X-Emby-Token|api_key/i);
 });
 
 requirement(
@@ -582,9 +626,13 @@ requirement(
 
 requirement(
   'MEDIA-011 @fullstack the first picture is ready within 10 seconds',
-  async ({ page }) => {
-    await page.goto(`${emby()}/emby/OpenLightFX/studio/?api_key=${token()}`);
-    await page.getByRole('option').first().click();
+  async ({ page, request }) => {
+    const id = await itemId(request);
+    const track = freshTrackId();
+    expect((await saveTrack(request, id, track)).ok()).toBeTruthy();
+    await page.goto(
+      `${emby()}/emby/OpenLightFX/studio/?api_key=${token()}&itemId=${id}#/edit/${id}/${track}`
+    );
     await expect
       .poll(
         async () => page.locator('video').evaluate((node) => (node as HTMLVideoElement).readyState),
@@ -596,12 +644,15 @@ requirement(
 
 requirement('MEDIA-013 @fullstack reload requests the same item', async ({ page }) => {
   const id = await itemId(page.request);
-  await page.goto(`${emby()}/emby/OpenLightFX/studio/?api_key=${token()}&itemId=${id}`);
+  const track = freshTrackId();
+  expect((await saveTrack(page.request, id, track)).ok()).toBeTruthy();
+  const url = `${emby()}/emby/OpenLightFX/studio/?api_key=${token()}&itemId=${id}#/edit/${id}/${track}`;
+  await page.goto(url);
   const refetch = page.waitForRequest(new RegExp(`/OpenLightFX/Studio/Items/${id}\\b`), {
     timeout: 5000,
   });
   await page.reload();
-  await expect(page).toHaveURL(new RegExp(`itemId=${id}`));
+  await expect(page).toHaveURL(new RegExp(`#\\/edit\\/${id}\\/${track}`));
   await refetch;
 });
 
@@ -628,9 +679,13 @@ requirement(
   'MEDIA-016 @fullstack playback starts while the proxy encodes and a late seek waits',
   async ({ page, request }) => {
     const id = await itemId(request, 'long');
+    const track = freshTrackId();
+    expect((await saveTrack(request, id, track)).ok()).toBeTruthy();
     const urls: string[] = [];
     page.on('request', (req) => urls.push(req.url()));
-    await page.goto(`${emby()}/emby/OpenLightFX/studio/?api_key=${token()}&itemId=${id}`);
+    await page.goto(
+      `${emby()}/emby/OpenLightFX/studio/?api_key=${token()}&itemId=${id}#/edit/${id}/${track}`
+    );
     await expect
       .poll(
         async () => page.locator('video').evaluate((node) => (node as HTMLVideoElement).readyState),
@@ -651,8 +706,21 @@ requirement(
         page.locator('video').evaluate((node) => (node as HTMLVideoElement).currentTime)
       )
       .toBeGreaterThan(0.2);
-    await page.getByRole('slider', { name: /scrub/i }).fill('300000');
-    await expect(page.locator('#transport-reason')).toContainText(/still encoding to \d{2}:\d{2}/i);
+    const ruler = page.getByRole('slider', { name: 'Timeline ruler' });
+    const durationMs = Number(await ruler.getAttribute('aria-valuemax'));
+    const targetMs = Math.min(300_000, durationMs * 0.75);
+    expect(targetMs).toBeGreaterThan(info.proxy.encodedThroughMs + 400);
+    const rulerWidth = Number.parseFloat(
+      await ruler.evaluate((node) => getComputedStyle(node).width)
+    );
+    const targetX = (targetMs / durationMs) * rulerWidth;
+    await page.locator('.timeline-scroll').evaluate((node, x) => {
+      (node as HTMLElement).scrollLeft = Math.max(0, x - 400);
+    }, targetX);
+    const rulerBox = await ruler.boundingBox();
+    expect(rulerBox).toBeTruthy();
+    await page.mouse.click(rulerBox!.x + targetX, rulerBox!.y + rulerBox!.height / 2);
+    await expect(page.locator('.play-reason')).toContainText(/still encoding to \d{2}:\d{2}/i);
     expect(urls.some((url) => /Transcode/i.test(url))).toBe(false);
     // The video plays from the HttpOnly ticket, not a token in the URL or a script-readable cookie.
     expect(urls.some((url) => /Proxy\/Media.*api_key/i.test(url))).toBe(false);
@@ -808,11 +876,468 @@ requirement('SAVE-004 @fullstack an invalid track is rejected', async ({ request
   expect(await put.text()).toMatch(/V-/);
 });
 
-requirement('PREV-004 @fullstack preview start sends the mapping', async ({ request }) => {
+requirement(
+  'EDIT-001 @fullstack the ruler is the only time scrubber',
+  async ({ page, request }) => {
+    const id = await itemId(request);
+    const track = freshTrackId();
+    expect((await saveTrack(request, id, track)).ok()).toBeTruthy();
+    await page.goto(
+      `${emby()}/emby/OpenLightFX/studio/?api_key=${token()}&itemId=${id}#/edit/${id}/${track}`
+    );
+    const ruler = page.getByRole('slider', { name: 'Timeline ruler' });
+    await expect(ruler).toBeVisible();
+    await expect(page.getByRole('slider', { name: 'Timeline ruler' })).toHaveCount(1);
+    await expect(page.locator('[data-minimap]')).toHaveCount(0);
+    await expect(page.locator('video')).not.toHaveAttribute('controls', '');
+    await page.getByRole('button', { name: 'Fit' }).click();
+    const box = await ruler.boundingBox();
+    expect(box).toBeTruthy();
+    await page.mouse.click(box!.x + box!.width * 0.25, box!.y + box!.height / 2);
+    await expect
+      .poll(() =>
+        page.locator('video').evaluate((video) => (video as HTMLVideoElement).currentTime)
+      )
+      .toBeCloseTo(2.5, 1);
+  }
+);
+
+requirement(
+  'EDIT-002 @fullstack dragging the ruler scrubs continuously',
+  async ({ page, request }) => {
+    const id = await itemId(request);
+    const track = freshTrackId();
+    expect((await saveTrack(request, id, track)).ok()).toBeTruthy();
+    await page.goto(
+      `${emby()}/emby/OpenLightFX/studio/?api_key=${token()}&itemId=${id}#/edit/${id}/${track}`
+    );
+    const ruler = page.getByRole('slider', { name: 'Timeline ruler' });
+    await page.getByRole('button', { name: 'Fit' }).click();
+    const box = await ruler.boundingBox();
+    expect(box).toBeTruthy();
+    const y = box!.y + box!.height / 2;
+    await page.mouse.move(box!.x + box!.width * 0.1, y);
+    await page.mouse.down();
+    await page.mouse.move(box!.x + box!.width * 0.15, y);
+    await expect
+      .poll(() => page.locator('video').evaluate((node) => (node as HTMLVideoElement).currentTime))
+      .toBeCloseTo(1.5, 1);
+    await page.mouse.move(box!.x + box!.width * 0.2, y);
+    await page.mouse.up();
+    await expect
+      .poll(() => page.locator('video').evaluate((node) => (node as HTMLVideoElement).currentTime))
+      .toBeCloseTo(2, 1);
+  }
+);
+
+requirement(
+  'EDIT-004 @fullstack editor lane labels use server routing names',
+  async ({ page, request }) => {
+    const id = await itemId(request);
+    const track = freshTrackId();
+    expect((await saveTrack(request, id, track)).ok()).toBeTruthy();
+    await page.goto(
+      `${emby()}/emby/OpenLightFX/studio/?api_key=${token()}&itemId=${id}#/edit/${id}/${track}`
+    );
+    await expect(page.getByRole('button', { name: /Left — Left/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Right — Right/ })).toBeVisible();
+  }
+);
+
+requirement(
+  'EDIT-003 @fullstack clicking empty lane adds a keyframe',
+  async ({ page, request }) => {
+    const id = await itemId(request);
+    const track = freshTrackId();
+    expect((await saveTrack(request, id, track)).ok()).toBeTruthy();
+    await page.goto(
+      `${emby()}/emby/OpenLightFX/studio/?api_key=${token()}&itemId=${id}#/edit/${id}/${track}`
+    );
+    const lane = page.locator('.lane').first();
+    await expect(lane).toBeVisible();
+    const box = await lane.boundingBox();
+    expect(box).toBeTruthy();
+    await page.mouse.click(box!.x + box!.width * 0.4, box!.y + box!.height / 2);
+    await expect(page.getByRole('button', { name: /Left keyframe at/ })).toHaveCount(2);
+    await expect(page.getByText('Unsaved changes')).toBeVisible();
+  }
+);
+
+requirement(
+  'EDIT-006 @fullstack undo and redo work from the Edit menu',
+  async ({ page, request }) => {
+    const id = await itemId(request);
+    const track = freshTrackId();
+    expect((await saveTrack(request, id, track)).ok()).toBeTruthy();
+    await page.goto(
+      `${emby()}/emby/OpenLightFX/studio/?api_key=${token()}&itemId=${id}#/edit/${id}/${track}`
+    );
+    const lane = page.locator('.lane').first();
+    const box = await lane.boundingBox();
+    expect(box).toBeTruthy();
+    await page.mouse.click(box!.x + box!.width * 0.4, box!.y + box!.height / 2);
+    await expect(page.getByRole('button', { name: /Left keyframe at/ })).toHaveCount(2);
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await page.getByRole('menuitem', { name: /Undo/ }).click();
+    await expect(page.getByRole('button', { name: /Left keyframe at/ })).toHaveCount(1);
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await page.getByRole('menuitem', { name: /Redo/ }).click();
+    await expect(page.getByRole('button', { name: /Left keyframe at/ })).toHaveCount(2);
+  }
+);
+
+requirement(
+  'EDIT-007 @fullstack editor transport plays, pauses, steps, and skips',
+  async ({ page, request }) => {
+    const id = await itemId(request);
+    const track = freshTrackId();
+    expect((await saveTrack(request, id, track)).ok()).toBeTruthy();
+    await page.goto(
+      `${emby()}/emby/OpenLightFX/studio/?api_key=${token()}&itemId=${id}#/edit/${id}/${track}`
+    );
+    const video = page.locator('video');
+    await expect
+      .poll(() => video.evaluate((node) => (node as HTMLVideoElement).readyState))
+      .toBeGreaterThanOrEqual(2);
+    await page.getByRole('button', { name: 'Play' }).click();
+    await expect
+      .poll(() => video.evaluate((node) => (node as HTMLVideoElement).currentTime))
+      .toBeGreaterThan(0.1);
+    await page.getByRole('button', { name: 'Pause' }).click();
+    const before = await video.evaluate((node) => (node as HTMLVideoElement).currentTime);
+    await page.getByRole('button', { name: 'Next frame' }).click();
+    await expect
+      .poll(() => video.evaluate((node) => (node as HTMLVideoElement).currentTime))
+      .toBeGreaterThan(before);
+    await page.getByRole('button', { name: 'Skip forward 5 seconds' }).click();
+    await expect
+      .poll(() => video.evaluate((node) => (node as HTMLVideoElement).currentTime))
+      .toBeGreaterThan(before + 4.9);
+  }
+);
+
+requirement(
+  'EDIT-008 @fullstack inspector edits are encoded into the saved track',
+  async ({ page, request }) => {
+    const id = await itemId(request);
+    const trackId = freshTrackId();
+    expect((await saveTrack(request, id, trackId)).ok()).toBeTruthy();
+    await page.goto(
+      `${emby()}/emby/OpenLightFX/studio/?api_key=${token()}&itemId=${id}#/edit/${id}/${trackId}`
+    );
+    await page
+      .getByRole('button', { name: /Right keyframe at/ })
+      .first()
+      .click();
+    await page.getByRole('spinbutton', { name: 'Brightness value' }).fill('40');
+    await page.getByRole('spinbutton', { name: 'Fade length' }).fill('500');
+    await page.getByRole('combobox', { name: 'Fade type' }).selectOption('LINEAR');
+    await page.getByRole('textbox', { name: 'Hex' }).fill('ff0000');
+    await page.getByRole('button', { name: 'File', exact: true }).click();
+    await page.getByRole('menuitem', { name: /Save/ }).click();
+    await expect(page.getByText('Saved', { exact: true })).toBeVisible();
+    const response = await request.get(
+      `${emby()}/OpenLightFX/Studio/Tracks/${trackId}?itemId=${id}`,
+      {
+        headers: headers(),
+        timeout: 5000,
+      }
+    );
+    expect(response.ok()).toBeTruthy();
+    const decoded = decodeTrack(new Uint8Array(await response.body()));
+    expect(decoded.keyframes.find((keyframe) => keyframe.channelId === 'right')).toMatchObject({
+      brightness: 40,
+      transitionMs: 500,
+      interpolation: 'LINEAR',
+      color: { r: 255, g: 0, b: 0 },
+    });
+  }
+);
+
+requirement(
+  'EDIT-005 @fullstack File export downloads and Close guards unsaved edits',
+  async ({ page, request }) => {
+    const id = await itemId(request);
+    const trackId = freshTrackId();
+    expect((await saveTrack(request, id, trackId)).ok()).toBeTruthy();
+    await page.goto(
+      `${emby()}/emby/OpenLightFX/studio/?api_key=${token()}&itemId=${id}#/edit/${id}/${trackId}`
+    );
+    const lane = page.locator('.lane').first();
+    const box = await lane.boundingBox();
+    expect(box).toBeTruthy();
+    await page.mouse.click(box!.x + box!.width * 0.4, box!.y + box!.height / 2);
+    await expect(page.getByText('Unsaved changes')).toBeVisible();
+    const downloaded = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'File', exact: true }).click();
+    await page.getByRole('menuitem', { name: /Export/ }).click();
+    expect((await downloaded).suggestedFilename()).toBe('Round Trip.lightfx');
+    await page.getByRole('button', { name: 'File', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Close', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: /Save changes to/ })).toBeVisible();
+    await page.getByRole('button', { name: "Don't save" }).click();
+    await expect(page).toHaveURL(new RegExp(`#\\/movie\\/${id}$`));
+  }
+);
+
+requirement(
+  'EDIT-011 @fullstack save state changes from unsaved to saved',
+  async ({ page, request }) => {
+    const id = await itemId(request);
+    const trackId = freshTrackId();
+    expect((await saveTrack(request, id, trackId)).ok()).toBeTruthy();
+    await page.goto(
+      `${emby()}/emby/OpenLightFX/studio/?api_key=${token()}&itemId=${id}#/edit/${id}/${trackId}`
+    );
+    const lane = page.locator('.lane').first();
+    const box = await lane.boundingBox();
+    expect(box).toBeTruthy();
+    await page.mouse.click(box!.x + box!.width * 0.4, box!.y + box!.height / 2);
+    await expect(page.getByText('Unsaved changes')).toBeVisible();
+    await page.getByRole('button', { name: 'File', exact: true }).click();
+    await page.getByRole('menuitem', { name: /Save/ }).click();
+    await expect(page.getByText('Saved', { exact: true })).toBeVisible();
+  }
+);
+
+requirement(
+  'EDIT-012 @fullstack saving a track keeps existing effect keyframes byte-for-byte',
+  async ({ request }) => {
+    const id = await itemId(request);
+    const trackId = freshTrackId();
+    const original = roundTripBytes();
+    expect((await saveTrack(request, id, trackId)).ok()).toBeTruthy();
+    const response = await request.get(
+      `${emby()}/OpenLightFX/Studio/Tracks/${trackId}?itemId=${id}`,
+      {
+        headers: headers(),
+        timeout: 5000,
+      }
+    );
+    expect(response.ok()).toBeTruthy();
+    expect(Buffer.compare(await response.body(), original)).toBe(0);
+  }
+);
+
+requirement(
+  'EDIT-013 @fullstack non-admin editor actions are disabled but Export remains available',
+  async ({ page, request }) => {
+    const id = await itemId(request);
+    const trackId = freshTrackId();
+    expect((await saveTrack(request, id, trackId)).ok()).toBeTruthy();
+    const viewer = process.env.OLFX_VIEWER_TOKEN;
+    expect(viewer).toBeTruthy();
+    await page.goto(
+      `${emby()}/emby/OpenLightFX/studio/?api_key=${viewer}&itemId=${id}#/edit/${id}/${trackId}`
+    );
+    await expect(page.getByRole('button', { name: 'File', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'File', exact: true }).click();
+    await expect(page.getByRole('menuitem', { name: /Save/ })).toBeDisabled();
+    await expect(page.getByRole('menuitem', { name: /Export/ })).toBeEnabled();
+    await expect(page.getByRole('switch', { name: 'Lights' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Watch in Emby' })).toBeDisabled();
+  }
+);
+
+requirement(
+  'EDIT-014 @fullstack layout changes add and confirm channel removal',
+  async ({ page, request }) => {
+    const id = await itemId(request);
+    const trackId = freshTrackId();
+    expect((await saveTrack(request, id, trackId)).ok()).toBeTruthy();
+    await page.goto(
+      `${emby()}/emby/OpenLightFX/studio/?api_key=${token()}&itemId=${id}#/edit/${id}/${trackId}`
+    );
+    const layout = page.getByRole('combobox', { name: 'Track layout' });
+    await expect(page.locator('.lane-row')).toHaveCount(2);
+    await layout.selectOption('LAYOUT_3_0');
+    await expect(page.locator('.lane-row')).toHaveCount(3);
+    const centerLane = page.locator('.lane').nth(1);
+    const box = await centerLane.boundingBox();
+    expect(box).toBeTruthy();
+    for (const fraction of [0.2, 0.4, 0.6, 0.8])
+      await page.mouse.click(box!.x + box!.width * fraction, box!.y + box!.height / 2);
+    await expect(page.getByRole('button', { name: /Center keyframe at/ })).toHaveCount(4);
+    page.once('dialog', (dialog) => dialog.dismiss());
+    await layout.selectOption('LAYOUT_2_0');
+    await expect(layout).toHaveValue('LAYOUT_3_0');
+    page.once('dialog', (dialog) => dialog.accept());
+    await layout.selectOption('LAYOUT_2_0');
+    await expect(page.locator('.lane-row')).toHaveCount(2);
+  }
+);
+
+requirement(
+  'EDIT-009 @fullstack Lights previews sampled channel states through room routing',
+  async ({ page, request }) => {
+    const id = await itemId(request);
+    const track = freshTrackId();
+    expect((await saveTrack(request, id, track)).ok()).toBeTruthy();
+    await page.goto(
+      `${emby()}/emby/OpenLightFX/studio/?api_key=${token()}&itemId=${id}#/edit/${id}/${track}`
+    );
+    const lights = page.getByRole('switch', { name: 'Lights' });
+    await expect(lights).toBeEnabled();
+    const sent = Date.now();
+    await lights.click();
+    await expect(lights).toHaveAttribute('aria-checked', 'true');
+    try {
+      await expect
+        .poll(
+          () =>
+            readNdjson().some(
+              (line) =>
+                line.event === 'command_received' &&
+                line.bulb_id === 'left' &&
+                Date.parse(line.ts) >= sent - 50 &&
+                commanded(line).r === 10 &&
+                commanded(line).g === 20 &&
+                commanded(line).b === 30 &&
+                commanded(line).brightness === 40
+            ),
+          { timeout: 3000 }
+        )
+        .toBe(true);
+    } finally {
+      if ((await lights.getAttribute('aria-checked')) === 'true') await lights.click();
+    }
+  }
+);
+
+requirement(
+  'WATCH-001 @fullstack active track is selected globally and device overrides clear',
+  async ({ request }) => {
+    const id = await itemId(request, 'zero');
+    const track = freshTrackId();
+    expect((await saveTrack(request, id, track)).ok()).toBeTruthy();
+    const listed = await (
+      await request.get(`${emby()}/OpenLightFX/Tracks/ByItem?ItemId=${id}`, {
+        headers: headers(),
+        timeout: 5000,
+      })
+    ).json();
+    const trackPath = listed.tracks.find((entry: { trackPath: string }) =>
+      entry.trackPath.includes(track)
+    )?.trackPath;
+    expect(trackPath).toEqual(expect.any(String));
+    const deviceSelection = await request.post(`${emby()}/OpenLightFX/Tracks/Select`, {
+      headers: headers(),
+      data: { itemId: id, trackPath, deviceId: 'legacy-device' },
+      timeout: 5000,
+    });
+    expect(deviceSelection.ok()).toBeTruthy();
+    const activated = await request.post(`${emby()}/OpenLightFX/Studio/Items/${id}/ActiveTrack`, {
+      headers: headers(),
+      data: { trackId: track, serverId: 'emby-server-id' },
+      timeout: 5000,
+    });
+    expect(activated.ok()).toBeTruthy();
+    const result = await activated.json();
+    expect(result).toEqual({
+      trackId: track,
+      embyUrl: `/web/index.html#!/item?id=${id}&serverId=emby-server-id`,
+    });
+    const selections = await (
+      await request.get(`${emby()}/OpenLightFX/Tracks/ByItem?ItemId=${id}&DeviceId=legacy-device`, {
+        headers: headers(),
+        timeout: 5000,
+      })
+    ).json();
+    expect(selections.globalSelectedTrack).toContain(`${track}.lightfx`);
+    expect(selections.deviceSelectedTrack ?? null).toBeNull();
+    await request.post(`${emby()}/OpenLightFX/Tracks/Select`, {
+      headers: headers(),
+      data: { itemId: id, deviceId: 'legacy-device' },
+      timeout: 5000,
+    });
+    await request.post(`${emby()}/OpenLightFX/Tracks/Select`, {
+      headers: headers(),
+      data: { itemId: id },
+      timeout: 5000,
+    });
+  }
+);
+
+requirement(
+  'WATCH-001 @fullstack Watch in Emby saves, activates, and opens the edited track',
+  async ({ page, request }) => {
+    const id = await itemId(request, 'hdr');
+    const track = freshTrackId();
+    expect((await saveTrack(request, id, track)).ok()).toBeTruthy();
+    await page.goto(
+      `${emby()}/emby/OpenLightFX/studio/?api_key=${token()}&itemId=${id}#/edit/${id}/${track}`
+    );
+    const lane = page.locator('.lane').first();
+    const laneBox = await lane.boundingBox();
+    expect(laneBox).toBeTruthy();
+    await page.mouse.click(laneBox!.x + laneBox!.width * 0.8, laneBox!.y + laneBox!.height / 2);
+    await expect(page.getByText('Unsaved changes')).toBeVisible();
+    const popupPromise = page.waitForEvent('popup');
+    await page.getByRole('button', { name: 'Watch in Emby' }).click();
+    const popup = await popupPromise;
+    await expect(popup).toHaveURL(new RegExp(`/web/index\\.html#!/item\\?id=${id}`));
+    const rooms = await (
+      await request.get(`${emby()}/OpenLightFX/Studio/Rooms`, {
+        headers: headers(),
+        timeout: 5000,
+      })
+    ).json();
+    const room = rooms.find((candidate: { name: string }) => candidate.name === 'Fullstack Room');
+    await expect(page.getByRole('status')).toContainText(
+      `Plays in Emby. Start clip-b on ${room.screen.deviceName}`
+    );
+    const selected = await (
+      await request.get(`${emby()}/OpenLightFX/Tracks/ByItem?ItemId=${id}`, {
+        headers: headers(),
+        timeout: 5000,
+      })
+    ).json();
+    expect(selected.globalSelectedTrack).toContain(`${track}.lightfx`);
+    await request.post(`${emby()}/OpenLightFX/Tracks/Select`, {
+      headers: headers(),
+      data: { itemId: id },
+      timeout: 5000,
+    });
+    await popup.close();
+  }
+);
+
+requirement(
+  'MODEL-004 @fullstack server routing labels every channel and bulb',
+  async ({ request }) => {
+    const room = await ensureRoom(request);
+    const response = await request.get(
+      `${emby()}/OpenLightFX/Studio/Rooms/${room}/Routing?layout=LAYOUT_5_0`,
+      { headers: headers(), timeout: 5000 }
+    );
+    expect(response.ok()).toBeTruthy();
+    const routing = await response.json();
+    expect(
+      routing.channels.find(
+        (channel: { channelId: string }) => channel.channelId === 'surround-left'
+      )
+    ).toMatchObject({
+      position: 'surround-left',
+      bulbIds: ['left'],
+      foldedInto: ['left'],
+    });
+    expect(
+      routing.bulbs.find((bulb: { bulbId: string }) => bulb.bulbId === 'left').sources
+    ).toEqual(
+      expect.arrayContaining([
+        { channelId: 'left', kind: 'native' },
+        { channelId: 'center', kind: 'fold' },
+        { channelId: 'surround-left', kind: 'fold' },
+      ])
+    );
+  }
+);
+
+requirement('PREV-004 @fullstack preview start uses selected room routing', async ({ request }) => {
   const started = await request.post(`${emby()}/OpenLightFX/Studio/Preview/Start`, {
     headers: headers(),
-    // Bulb ids must exist in the plugin config; run.sh seeds the simulator bulbs left and right.
-    data: { mapping: { left: ['left'], right: ['right'] }, takeover: true },
+    // The test room and its two bulbs are seeded in the disposable Emby data volume.
+    data: { roomId: await ensureRoom(request), channels: previewChannels2(), takeover: true },
     timeout: 5000,
   });
   expect(started.ok()).toBeTruthy();
@@ -824,7 +1349,7 @@ requirement(
     // Preview mappings are request-local; the plugin has no persisted mapping-profile settings.
     const started = await request.post(`${emby()}/OpenLightFX/Studio/Preview/Start`, {
       headers: headers(),
-      data: { mapping: { left: ['left'], right: ['right'] }, takeover: true },
+      data: { roomId: await ensureRoom(request), channels: previewChannels2(), takeover: true },
       timeout: 5000,
     });
     expect(started.ok()).toBeTruthy();
@@ -845,7 +1370,7 @@ requirement(
   async ({ request }) => {
     const started = await request.post(`${emby()}/OpenLightFX/Studio/Preview/Start`, {
       headers: headers(),
-      data: { mapping: { left: ['left'] }, takeover: true },
+      data: { roomId: await ensureRoom(request), channels: previewChannels2(), takeover: true },
       timeout: 5000,
     });
     expect(started.ok()).toBeTruthy();
@@ -854,7 +1379,10 @@ requirement(
       const frame = await request.post(`${emby()}/OpenLightFX/Studio/Preview/Frame`, {
         headers: { ...headers(), 'content-type': 'application/json' },
         data: {
-          states: [{ bulbId: 'left', r: 255, g: 0, b: 0, brightness: 100, transitionMs: 0 }],
+          states: [
+            { channelId: 'left', r: 255, g: 0, b: 0, brightness: 100, transitionMs: 0 },
+            { channelId: 'right', r: 0, g: 0, b: 0, brightness: 0, transitionMs: 0 },
+          ],
         },
         timeout: 5000,
       });
@@ -891,13 +1419,18 @@ requirement(
 requirement('PREV-007 @fullstack stop restores the bulb snapshot', async ({ request }) => {
   const started = await request.post(`${emby()}/OpenLightFX/Studio/Preview/Start`, {
     headers: headers(),
-    data: { mapping: { left: ['left'] }, takeover: true },
+    data: { roomId: await ensureRoom(request), channels: previewChannels2(), takeover: true },
     timeout: 5000,
   });
   expect(started.ok()).toBeTruthy();
   const frame = await request.post(`${emby()}/OpenLightFX/Studio/Preview/Frame`, {
     headers: { ...headers(), 'content-type': 'application/json' },
-    data: { states: [{ bulbId: 'left', r: 9, g: 8, b: 7, brightness: 11, transitionMs: 0 }] },
+    data: {
+      states: [
+        { channelId: 'left', r: 9, g: 8, b: 7, brightness: 11, transitionMs: 0 },
+        { channelId: 'right', r: 0, g: 0, b: 0, brightness: 0, transitionMs: 0 },
+      ],
+    },
     timeout: 5000,
   });
   expect(frame.ok()).toBeTruthy();
@@ -942,7 +1475,9 @@ requirement(
   async ({ request }) => {
     const id = await itemId(request);
     await ensureRoom(request);
-    expect((await saveTrack(request, id, freshTrackId())).ok()).toBeTruthy();
+    const track = freshTrackId();
+    expect((await saveTrack(request, id, track)).ok()).toBeTruthy();
+    const clearSelection = await selectTrackForPlayback(request, id, track);
     const stopPlayback = await reportPlayback(request, id);
     try {
       await expect
@@ -950,7 +1485,7 @@ requirement(
           async () => {
             const response = await request.post(`${emby()}/OpenLightFX/Studio/Preview/Start`, {
               headers: headers(),
-              data: { mapping: { left: ['left'] } },
+              data: { roomId: await ensureRoom(request), channels: previewChannels2() },
               timeout: 5000,
             });
             return `${response.status()} ${await response.text()}`;
@@ -960,6 +1495,7 @@ requirement(
         .toMatch(/^409\b[\s\S]*playback_active/);
     } finally {
       await stopPlayback();
+      await clearSelection();
     }
   }
 );
@@ -980,7 +1516,7 @@ requirement('PREV-010 @fullstack a non-admin save is forbidden', async ({ reques
 requirement('PERF-001 @fullstack the shell is ready within 2 seconds', async ({ page }) => {
   const started = Date.now();
   await page.goto(`${emby()}/emby/OpenLightFX/studio/?api_key=${token()}`);
-  await expect(page.getByRole('button', { name: /play/i })).toBeVisible();
+  await expect(page.getByRole('searchbox', { name: 'Search', exact: true })).toBeVisible();
   expect(Date.now() - started).toBeLessThan(2000);
 });
 
@@ -988,7 +1524,11 @@ requirement('PERF-004 @fullstack studio does not fetch the source MKV', async ({
   const urls: string[] = [];
   page.on('response', (response) => urls.push(response.url()));
   const hdr = await itemId(page.request, 'hdr');
-  await page.goto(`${emby()}/emby/OpenLightFX/studio/?api_key=${token()}&itemId=${hdr}`);
+  const track = freshTrackId();
+  expect((await saveTrack(page.request, hdr, track)).ok()).toBeTruthy();
+  await page.goto(
+    `${emby()}/emby/OpenLightFX/studio/?api_key=${token()}&itemId=${hdr}#/edit/${hdr}/${track}`
+  );
   // Vacuous unless the editor actually loaded a picture for the HEVC clip.
   await expect
     .poll(
@@ -1101,25 +1641,79 @@ requirement(
   async ({ request }) => {
     const id = await itemId(request);
     await ensureRoom(request);
-    expect((await saveTrack(request, id, freshTrackId())).ok()).toBeTruthy();
+    const track = freshTrackId();
+    expect((await saveTrack(request, id, track)).ok()).toBeTruthy();
+    const clearSelection = await selectTrackForPlayback(request, id, track);
     const stopPlayback = await reportPlayback(request, id);
     try {
       const refused = await request.post(`${emby()}/OpenLightFX/Studio/Preview/Start`, {
         headers: headers(),
-        data: { mapping: { left: ['left'] } },
+        data: { roomId: await ensureRoom(request), channels: previewChannels2() },
         timeout: 5000,
       });
       expect(refused.status()).toBe(409);
       expect(await refused.text()).toContain('playback_active');
       const taken = await request.post(`${emby()}/OpenLightFX/Studio/Preview/Start`, {
         headers: headers(),
-        data: { mapping: { left: ['left'] }, takeover: true },
+        data: { roomId: await ensureRoom(request), channels: previewChannels2(), takeover: true },
         timeout: 5000,
       });
       expect(taken.ok()).toBeTruthy();
       expect((await taken.json()).status).toBe('started');
     } finally {
+      await request.post(`${emby()}/OpenLightFX/Studio/Preview/Stop`, {
+        headers: headers(),
+        timeout: 5000,
+      });
       await stopPlayback();
+      await clearSelection();
+    }
+  }
+);
+requirement(
+  'EDIT-010 @fullstack no-room editor still authors and saves tracks',
+  async ({ page, request }) => {
+    const id = await itemId(request);
+    const trackId = freshTrackId();
+    expect((await saveTrack(request, id, trackId)).ok()).toBeTruthy();
+    const rooms = await (
+      await request.get(`${emby()}/OpenLightFX/Studio/Rooms`, { headers: headers(), timeout: 5000 })
+    ).json();
+    const original = rooms.find((room: { name: string }) => room.name === 'Fullstack Room');
+    expect(original).toBeTruthy();
+    const deleted = await request.delete(`${emby()}/OpenLightFX/Studio/Rooms/${original.id}`, {
+      headers: headers(),
+      timeout: 5000,
+    });
+    expect(deleted.ok()).toBeTruthy();
+    try {
+      await page.goto(
+        `${emby()}/emby/OpenLightFX/studio/?api_key=${token()}&itemId=${id}#/edit/${id}/${trackId}`
+      );
+      await expect(page.getByText(/Set up a room to preview on your lights/)).toBeVisible();
+      const lights = page.getByRole('switch', { name: 'Lights' });
+      await expect(lights).toBeDisabled();
+      await expect(lights).toHaveAttribute('title', 'Set up a room first');
+      const lane = page.locator('.lane').first();
+      const box = await lane.boundingBox();
+      expect(box).toBeTruthy();
+      await page.mouse.click(box!.x + box!.width * 0.4, box!.y + box!.height / 2);
+      await page.getByRole('button', { name: 'File', exact: true }).click();
+      await page.getByRole('menuitem', { name: /Save/ }).click();
+      await expect(page.getByText('Saved', { exact: true })).toBeVisible();
+    } finally {
+      const restored = await request.post(`${emby()}/OpenLightFX/Studio/Rooms`, {
+        headers: headers(),
+        data: {
+          name: original.name,
+          screenDeviceId: original.screen.deviceId,
+          deviceName: original.screen.deviceName,
+          appName: original.screen.appName,
+          bulbs: original.bulbs,
+        },
+        timeout: 5000,
+      });
+      expect(restored.ok()).toBeTruthy();
     }
   }
 );

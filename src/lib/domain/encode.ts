@@ -96,6 +96,28 @@ export function trackToPayload(track: Track): Record<string, unknown> {
         year: normalized.metadata.year,
       },
       channelLayout: normalized.metadata.channelLayout || undefined,
+      ...(normalized.metadata.startBehavior &&
+      normalized.metadata.startBehavior !== 'BOUNDARY_UNSPECIFIED'
+        ? { startBehavior: normalized.metadata.startBehavior }
+        : {}),
+      ...(normalized.metadata.endBehavior &&
+      normalized.metadata.endBehavior !== 'BOUNDARY_UNSPECIFIED'
+        ? { endBehavior: normalized.metadata.endBehavior }
+        : {}),
+      ...(normalized.metadata.preshowDurationMs
+        ? { preshowDurationMs: normalized.metadata.preshowDurationMs }
+        : {}),
+      ...(normalized.metadata.preshowState &&
+      normalized.metadata.preshowState !== 'PRESHOW_UNSPECIFIED'
+        ? { preshowState: normalized.metadata.preshowState }
+        : {}),
+      ...(normalized.metadata.creditsStartMs
+        ? { creditsStartMs: normalized.metadata.creditsStartMs }
+        : {}),
+      ...(normalized.metadata.creditsBehavior &&
+      normalized.metadata.creditsBehavior !== 'CREDITS_UNSPECIFIED'
+        ? { creditsBehavior: normalized.metadata.creditsBehavior }
+        : {}),
     },
     channels: normalized.channels.map((channel) => ({
       id: channel.id,
@@ -214,6 +236,20 @@ export function decodeTrack(bytes: Uint8Array): Track {
       year: asNumber(movie.year),
       durationMs: asNumber(metadata.durationMs),
       channelLayout: String(metadata.channelLayout ?? ''),
+      startBehavior: String(
+        metadata.startBehavior ?? 'BOUNDARY_UNSPECIFIED'
+      ) as Track['metadata']['startBehavior'],
+      endBehavior: String(
+        metadata.endBehavior ?? 'BOUNDARY_UNSPECIFIED'
+      ) as Track['metadata']['endBehavior'],
+      preshowDurationMs: asNumber(metadata.preshowDurationMs),
+      preshowState: String(
+        metadata.preshowState ?? 'PRESHOW_UNSPECIFIED'
+      ) as Track['metadata']['preshowState'],
+      creditsStartMs: asNumber(metadata.creditsStartMs),
+      creditsBehavior: String(
+        metadata.creditsBehavior ?? 'CREDITS_UNSPECIFIED'
+      ) as Track['metadata']['creditsBehavior'],
     },
     channels: ((object.channels as Record<string, unknown>[]) ?? []).map((channel) => ({
       id: String(channel.id ?? ''),

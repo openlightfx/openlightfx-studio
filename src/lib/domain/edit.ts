@@ -428,6 +428,53 @@ export const CHANNEL_LAYOUTS: Record<string, TemplateChannel[]> = {
   ],
 };
 
+export function patchKeyframes(
+  track: Track,
+  keyframeIds: readonly string[],
+  patch: Partial<Keyframe>
+): Track {
+  const ids = new Set(keyframeIds);
+  return {
+    ...track,
+    keyframes: track.keyframes.map((keyframe) =>
+      ids.has(keyframe.id) ? { ...keyframe, ...patch } : keyframe
+    ),
+  };
+}
+
+export interface LayoutChangePlan {
+  track: Track;
+  removedChannels: Channel[];
+  removedKeyframeCount: number;
+  removedEffectCount: number;
+}
+
+/** Prepare a fixed-layout change without deciding whether destructive removal is confirmed. */
+export function changeTrackLayout(track: Track, layout: string): LayoutChangePlan {
+  const templates = CHANNEL_LAYOUTS[layout];
+  if (!templates) throw new Error(`Unknown channel layout ${layout}`);
+  const ids = new Set(templates.map((channel) => channel.id));
+  const removedChannels = track.channels.filter((channel) => !ids.has(channel.id));
+  const removedIds = new Set(removedChannels.map((channel) => channel.id));
+  const channels = templates.map(
+    (template) =>
+      track.channels.find((channel) => channel.id === template.id) ?? channelFromTemplate(template)
+  );
+  return {
+    track: {
+      ...track,
+      metadata: { ...track.metadata, channelLayout: layout },
+      channels,
+      keyframes: track.keyframes.filter((keyframe) => ids.has(keyframe.channelId)),
+      effects: track.effects.filter((effect) => ids.has(effect.channelId)),
+    },
+    removedChannels,
+    removedKeyframeCount: track.keyframes.filter((keyframe) => removedIds.has(keyframe.channelId))
+      .length,
+    removedEffectCount: track.effects.filter((effect) => removedIds.has(effect.channelId)).length,
+  };
+}
+
 export function inferChannelLayout(channels: Channel[]): string {
   const positions = new Set(
     channels

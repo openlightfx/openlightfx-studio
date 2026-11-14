@@ -22,6 +22,8 @@ interface EmbyStoredUser {
 
 interface EmbyStoredServer {
   UserId?: string;
+  Id?: string;
+  ServerId?: string;
   ManualAddress?: string;
   LocalAddress?: string;
   RemoteAddress?: string;
@@ -174,6 +176,51 @@ export async function fetchMediaInfo(itemId: string): Promise<MediaInfo> {
 export async function fetchTracks(itemId: string): Promise<TrackSummary[]> {
   const response = await send(`/OpenLightFX/Studio/Tracks?itemId=${encodeURIComponent(itemId)}`);
   if (!response.ok) throw new Error(`Tracks ${response.status}`);
+  return response.json();
+}
+
+export async function setActiveTrack(
+  itemId: string,
+  trackId: string
+): Promise<{ trackId: string; embyUrl: string }> {
+  const apiClient = (
+    window as Window & {
+      ApiClient?: { serverId?: () => string; getServerId?: () => string };
+    }
+  ).ApiClient;
+  let serverId = apiClient?.serverId?.() ?? apiClient?.getServerId?.() ?? '';
+  if (!serverId) {
+    try {
+      const stored = JSON.parse(localStorage.getItem('servercredentials3') ?? '{}') as {
+        Servers?: EmbyStoredServer[];
+      };
+      const origin = new URL(location.href).origin;
+      const server = stored.Servers?.find((candidate) =>
+        [candidate.ManualAddress, candidate.LocalAddress, candidate.RemoteAddress].some(
+          (address) => {
+            if (!address) return false;
+            try {
+              return new URL(address).origin === origin;
+            } catch {
+              return false;
+            }
+          }
+        )
+      );
+      serverId = server?.ServerId ?? server?.Id ?? '';
+    } catch {
+      // A server id is optional when Studio runs on the Emby origin.
+    }
+  }
+  const response = await send(
+    `/OpenLightFX/Studio/Items/${encodeURIComponent(itemId)}/ActiveTrack`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ trackId, ...(serverId ? { serverId } : {}) }),
+    }
+  );
+  if (!response.ok) throw new Error((await response.text()) || `Active track ${response.status}`);
   return response.json();
 }
 

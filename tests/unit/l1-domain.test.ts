@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { expect } from 'vitest';
+import { roundTripTrack } from '../fixtures/sampling/roundtrip-track';
 import {
   AUTOSAVE_INTERVAL_MS,
   CHANNEL_SLUG,
@@ -14,6 +15,7 @@ import {
   applySpread,
   applyTemplate,
   applyZoomChord,
+  changeTrackLayout,
   assignBulb,
   authoredBrightness,
   blackKeyframe,
@@ -42,6 +44,7 @@ import {
   moduleGraphProblems,
   newKeyframe,
   newTrackFromMovie,
+  patchKeyframes,
   upgradeLegacyTrackLayout,
   overlaySample,
   photosensitivityNotice,
@@ -495,10 +498,10 @@ requirement('SAVE-001 @unit hosted save PUTs the track for the item', () => {
     durationKnown: true,
   });
   expect(plan.blocked).toBe(false);
-  expect(plan.requests[0]).toEqual({
-    method: 'PUT',
-    path: '/OpenLightFX/Studio/Tracks/proxy-fixture?itemId=42',
-  });
+  expect(plan.requests).toEqual([
+    { method: 'PUT', path: '/OpenLightFX/Studio/Tracks/proxy-fixture?itemId=42' },
+    { method: 'PUT', path: '/OpenLightFX/Studio/Projects/proxy-fixture?itemId=42' },
+  ]);
 });
 
 requirement('SAVE-003 @unit the sidecar is version 1 and has no undo stack or duration', () => {
@@ -893,6 +896,84 @@ requirement('ERR-006 @unit unknown duration blocks plugin save and does not ask 
   expect(plan.blocked).toBe(true);
   expect(plan.requests).toEqual([]);
   expect(plan.message).toMatch(/duration is unknown/i);
+});
+
+requirement('PROP-008 @unit track settings round-trip through the existing metadata fields', () => {
+  const source = track();
+  source.metadata = {
+    ...source.metadata,
+    author: 'Lighting artist',
+    description: 'Warm opening and gentle credits',
+    startBehavior: 'OFF',
+    endBehavior: 'ON',
+    preshowDurationMs: 2500,
+    preshowState: 'PRESHOW_WARM',
+    creditsStartMs: 9000,
+    creditsBehavior: 'CREDITS_DIM_UP',
+  };
+  const decoded = decodeTrack(encodeTrack(source));
+  expect(decoded.metadata).toMatchObject({
+    author: 'Lighting artist',
+    description: 'Warm opening and gentle credits',
+    startBehavior: 'OFF',
+    endBehavior: 'ON',
+    preshowDurationMs: 2500,
+    preshowState: 'PRESHOW_WARM',
+    creditsStartMs: 9000,
+    creditsBehavior: 'CREDITS_DIM_UP',
+  });
+});
+
+requirement('EDIT-012 @unit encoding preserves every effect field', () => {
+  const source = roundTripTrack();
+  source.effects = Array.from({ length: 8 }, (_, index) => ({
+    ...source.effects[0],
+    id: `effect-${index}`,
+    timestampMs: index * 1000,
+    params: { flicker_rate_hz: index + 1 },
+  }));
+  expect(decodeTrack(encodeTrack(source)).effects).toEqual(source.effects);
+});
+
+requirement('EDIT-008 @unit keyframe inspector patches brightness fade and interpolation', () => {
+  const source = track({
+    keyframes: [blackKeyframe('left', 'selected'), blackKeyframe('right', 'other')],
+  });
+  const updated = patchKeyframes(source, ['selected'], {
+    brightness: 40,
+    transitionMs: 500,
+    interpolation: 'LINEAR',
+  });
+  expect(updated.keyframes[0]).toMatchObject({
+    brightness: 40,
+    transitionMs: 500,
+    interpolation: 'LINEAR',
+  });
+  expect(updated.keyframes[1]).toEqual(source.keyframes[1]);
+});
+
+requirement('EDIT-014 @unit changing to a larger layout adds dark position channels', () => {
+  const source = newTrackFromMovie('movie', 'Movie lighting', 10_000, 'LAYOUT_2_0');
+  const plan = changeTrackLayout(source, 'LAYOUT_3_0');
+  expect(plan.track.metadata.channelLayout).toBe('LAYOUT_3_0');
+  expect(plan.track.channels.map((channel) => channel.id)).toEqual(['left', 'center', 'right']);
+  expect(plan.track.channels[1].defaultColor).toEqual({ r: 0, g: 0, b: 0 });
+  expect(plan.track.channels[1].defaultBrightness).toBe(0);
+  expect(plan.track.keyframes).toHaveLength(0);
+});
+
+requirement('EDIT-014 @unit shrinking a layout reports removed keyframes for confirmation', () => {
+  const source = newTrackFromMovie('movie', 'Movie lighting', 10_000, 'LAYOUT_3_0');
+  source.keyframes = [
+    blackKeyframe('center', 'center-1'),
+    blackKeyframe('center', 'center-2'),
+    blackKeyframe('center', 'center-3'),
+    blackKeyframe('center', 'center-4'),
+  ];
+  const plan = changeTrackLayout(source, 'LAYOUT_2_0');
+  expect(plan.removedChannels.map((channel) => channel.id)).toEqual(['center']);
+  expect(plan.removedKeyframeCount).toBe(4);
+  expect(plan.track.keyframes).toHaveLength(0);
 });
 
 requirement('FX-001 @unit the catalog is the 13 proto effect types', () => {

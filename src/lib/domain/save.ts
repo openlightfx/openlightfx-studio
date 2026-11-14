@@ -100,7 +100,6 @@ export function planHostedSave(input: {
     ruleIds: [],
     requests: [
       { method: 'PUT', path: `/OpenLightFX/Studio/Tracks/${input.trackId}?itemId=${item}` },
-      { method: 'POST', path: '/OpenLightFX/Tracks/Select' },
       { method: 'PUT', path: `/OpenLightFX/Studio/Projects/${input.trackId}?itemId=${item}` },
     ],
   };

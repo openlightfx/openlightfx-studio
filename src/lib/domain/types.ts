@@ -73,6 +73,17 @@ export interface TrackMetadata {
   year: number;
   durationMs: number;
   channelLayout?: string;
+  startBehavior?: 'BOUNDARY_UNSPECIFIED' | 'LEAVE' | 'OFF' | 'ON';
+  endBehavior?: 'BOUNDARY_UNSPECIFIED' | 'LEAVE' | 'OFF' | 'ON';
+  preshowDurationMs?: number;
+  preshowState?: 'PRESHOW_UNSPECIFIED' | 'PRESHOW_DIM' | 'PRESHOW_OFF' | 'PRESHOW_WARM';
+  creditsStartMs?: number;
+  creditsBehavior?:
+    | 'CREDITS_UNSPECIFIED'
+    | 'CREDITS_CONTINUE'
+    | 'CREDITS_DIM_UP'
+    | 'CREDITS_RAISE'
+    | 'CREDITS_OFF';
 }
 
 export interface SafetyInfo {

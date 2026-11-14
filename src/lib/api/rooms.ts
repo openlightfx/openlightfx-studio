@@ -41,6 +41,27 @@ export interface Setup {
   roomCount: number;
   isAdmin: boolean;
 }
+export interface RoomRouting {
+  layout?: string | null;
+  channels: {
+    channelId: string;
+    position: Position | null;
+    bulbIds: string[];
+    foldedInto: string[];
+  }[];
+  bulbs: {
+    bulbId: string;
+    sources: { channelId: string; kind: 'native' | 'fold' | 'fill' }[];
+  }[];
+}
+export interface PreviewChannelState {
+  channelId: string;
+  r: number;
+  g: number;
+  b: number;
+  brightness: number;
+  transitionMs: number;
+}
 export async function roomApi<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`/OpenLightFX/Studio/${path}`, {
     ...init,
@@ -58,8 +79,17 @@ export async function roomApi<T>(path: string, init: RequestInit = {}): Promise<
     } catch {
       // Emby error responses are not always JSON.
     }
+    const record = typeof body === 'string' ? null : body;
+    const responseStatus = record?.ResponseStatus as Record<string, unknown> | undefined;
     const message =
-      typeof body === 'string' ? body : (body.message ?? body.Message ?? body.error ?? body.Error);
+      typeof body === 'string'
+        ? body
+        : (record?.message ??
+          record?.Message ??
+          record?.error ??
+          record?.Error ??
+          responseStatus?.Message ??
+          responseStatus?.ErrorCode);
     throw new Error(typeof message === 'string' ? message : `Request failed (${response.status})`);
   }
   if (response.status === 204) return undefined as T;
@@ -77,6 +107,30 @@ export async function loadSetup(): Promise<Setup> {
   return { ...setup, isAdmin: true };
 }
 export const loadRooms = () => roomApi<Room[]>('Rooms');
+export const loadRoomRouting = (
+  roomId: string,
+  channels: { id: string; spatialHint: string; displayName: string }[]
+) =>
+  roomApi<RoomRouting>(`Rooms/${encodeURIComponent(roomId)}/Routing`, {
+    method: 'POST',
+    body: JSON.stringify({ channels }),
+  });
+export const startRoomPreview = (
+  roomId: string,
+  channels: { id: string; spatialHint: string; displayName: string }[],
+  takeover = false
+) =>
+  roomApi<{ status: string; active: boolean }>('Preview/Start', {
+    method: 'POST',
+    body: JSON.stringify({ roomId, channels, takeover }),
+  });
+export const sendRoomPreviewFrame = (states: PreviewChannelState[]) =>
+  roomApi<{ status: string; active: boolean }>('Preview/Frame', {
+    method: 'POST',
+    body: JSON.stringify({ states }),
+  });
+export const stopRoomPreview = () =>
+  roomApi<{ status: string; active: boolean }>('Preview/Stop', { method: 'POST', body: '{}' });
 export const loadDevices = () => roomApi<EmbyDevice[]>('Devices');
 export const loadBulbs = () => roomApi<RoomBulb[]>('Bulbs');
 export const discoverBulbs = () =>

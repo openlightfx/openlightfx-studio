@@ -19,6 +19,7 @@ import {
   newTrackFromMovie,
   overlaySample,
   parseHex,
+  patchKeyframes,
   photosensitivityNotice,
   planHostedSave,
   resolveDuration,
@@ -28,6 +29,9 @@ import {
   type Keyframe,
   type ProjectSidecar,
   type Track,
+  type TrackMetadata,
+  type LayoutChangePlan,
+  changeTrackLayout,
   upgradeLegacyTrackLayout,
 } from '$lib/domain';
 import {
@@ -196,7 +200,8 @@ export class StudioSession {
       return;
     }
     await this.loadItems(this.search);
-    const itemId = params.get('itemId') ?? decodeURIComponent(location.hash.split('/')[2] ?? '');
+    const routeItemId = decodeURIComponent(location.hash.split('/')[2] ?? '');
+    const itemId = routeItemId || params.get('itemId') || '';
     if (itemId) {
       let request: { trackId?: string; title?: string; layout?: string } = {};
       try {
@@ -627,13 +632,24 @@ export class StudioSession {
       return;
     }
     const duration = this.durationMs() || timeMs;
-    const time = Math.min(Math.max(0, Math.round(timeMs)), duration);
+    const frameMs = frameStepMs(FPS);
+    const snappedTime = Math.round(timeMs / frameMs) * frameMs;
+    const time = Math.min(Math.max(0, Math.round(snappedTime)), duration);
     const own = this.track.keyframes.filter((kf) => kf.channelId === channel);
     if (!canInsert(own, time, this.spacingLimit())) {
       this.status = 'No keyframe: that time is too close on this channel';
       return;
     }
-    const created = { ...newKeyframe(own, time), channelId: channel };
+    const sampled = overlaySample(own, time);
+    const created = {
+      ...newKeyframe(own, time),
+      channelId: channel,
+      colorMode: sampled.mode,
+      color: { r: sampled.r, g: sampled.g, b: sampled.b },
+      colorTemperature: sampled.kelvin,
+      brightness: sampled.brightness,
+      powerOn: sampled.powerOn,
+    };
     this.edit(
       { ...this.track, keyframes: [...this.track.keyframes, created] },
       `Keyframe at ${time} ms on channel ${channel}`
@@ -754,6 +770,33 @@ export class StudioSession {
     return this.snapToSpacing ? this.minSpacingMs : 0;
   }
 
+  setDefaultColor(channelId: string, raw: string): void {
+    if (!this.track) return;
+    const parsed = parseHex({ r: 0, g: 0, b: 0 }, raw.trim());
+    if (parsed.error) {
+      this.hexError = parsed.error;
+      return;
+    }
+    this.hexError = '';
+    this.edit({
+      ...this.track,
+      channels: this.track.channels.map((channel) =>
+        channel.id === channelId ? { ...channel, defaultColor: parsed.color } : channel
+      ),
+    });
+  }
+
+  setDefaultBrightness(channelId: string, raw: string): void {
+    const brightness = Number(raw);
+    if (!this.track || !Number.isInteger(brightness) || brightness < 0 || brightness > 100) return;
+    this.edit({
+      ...this.track,
+      channels: this.track.channels.map((channel) =>
+        channel.id === channelId ? { ...channel, defaultBrightness: brightness } : channel
+      ),
+    });
+  }
+
   setHex(raw: string): void {
     const current = this.selectedColor();
     const parsed = parseHex(current, raw.trim());
@@ -782,19 +825,128 @@ export class StudioSession {
     if (!this.track) return;
     const ids = new Set(this.selection);
     if (ids.size === 0) return;
+    this.edit(
+      patchKeyframes(this.track, [...ids], {
+        colorMode: 'COLOR_TEMPERATURE',
+        colorTemperature: parsed.kelvin,
+      })
+    );
+  }
+
+  setTitle(title: string): void {
+    this.setMetadata({ title });
+  }
+
+  setMetadata(patch: Partial<TrackMetadata>): void {
+    if (!this.track) return;
+    this.edit({ ...this.track, metadata: { ...this.track.metadata, ...patch } });
+  }
+
+  setBrightness(raw: string): void {
+    const brightness = Number(raw);
+    if (!this.track || !Number.isFinite(brightness) || brightness < 0 || brightness > 100) return;
+    const ids = new Set(this.selection);
+    if (!ids.size) return;
+    this.edit(patchKeyframes(this.track, [...ids], { brightness }));
+  }
+
+  setTransition(raw: string): void {
+    const transitionMs = Number(raw);
+    if (!this.track || !Number.isInteger(transitionMs) || transitionMs < 0) return;
+    const ids = new Set(this.selection);
+    if (!ids.size) return;
+    this.edit(patchKeyframes(this.track, [...ids], { transitionMs }));
+  }
+
+  setInterpolation(interpolation: 'STEP' | 'LINEAR'): void {
+    if (!this.track || !this.selection.length) return;
+    const ids = new Set(this.selection);
+    this.edit(patchKeyframes(this.track, this.selection, { interpolation }));
+  }
+
+  moveKeyframe(id: string, requestedTimeMs: number): void {
+    if (!this.track || !Number.isFinite(requestedTimeMs)) return;
+    const current = this.track.keyframes.find((keyframe) => keyframe.id === id);
+    if (!current) return;
+    const frameMs = frameStepMs(FPS);
+    let timestampMs = Math.round(requestedTimeMs / frameMs) * frameMs;
+    if (Math.abs(timestampMs - this.playheadMs) <= 100)
+      timestampMs = Math.round(this.playheadMs / frameMs) * frameMs;
+    timestampMs = Math.min(Math.max(0, Math.round(timestampMs)), this.durationMs());
+    const sameChannel = this.track.keyframes.filter(
+      (keyframe) => keyframe.channelId === current.channelId && keyframe.id !== id
+    );
+    if (!canInsert(sameChannel, timestampMs, this.spacingLimit())) {
+      this.status = 'Keyframes cannot cross or overlap on the same lane';
+      return;
+    }
     this.edit({
       ...this.track,
-      keyframes: this.track.keyframes.map((kf) =>
-        ids.has(kf.id)
-          ? { ...kf, colorMode: 'COLOR_TEMPERATURE', colorTemperature: parsed.kelvin }
-          : kf
+      keyframes: this.track.keyframes.map((keyframe) =>
+        keyframe.id === id ? { ...keyframe, timestampMs } : keyframe
+      ),
+    });
+    this.selection = [id];
+    this.activeChannelId = current.channelId;
+  }
+
+  setKeyframeTime(raw: string): void {
+    if (!this.track || this.selection.length !== 1) return;
+    const match = /^(?:(\d+):)?([0-5]?\d):([0-5]?\d)(?:\.(\d{1,3}))?$/.exec(raw.trim());
+    if (!match) {
+      this.status = 'Enter time as h:mm:ss.mmm';
+      return;
+    }
+    const hours = Number(match[1] ?? 0);
+    const minutes = Number(match[2]);
+    const seconds = Number(match[3]);
+    const millis = Number((match[4] ?? '').padEnd(3, '0'));
+    const frameMs = frameStepMs(FPS);
+    const requestedMs = ((hours * 60 + minutes) * 60 + seconds) * 1000 + millis;
+    const timestampMs = Math.round(requestedMs / frameMs) * frameMs;
+    const id = this.selection[0];
+    const current = this.track.keyframes.find((keyframe) => keyframe.id === id);
+    if (!current || timestampMs > this.durationMs()) {
+      this.status = 'Keyframe time must be inside the movie';
+      return;
+    }
+    const sameChannel = this.track.keyframes.filter(
+      (keyframe) => keyframe.channelId === current.channelId && keyframe.id !== id
+    );
+    if (!canInsert(sameChannel, timestampMs, this.spacingLimit())) {
+      this.status = 'That time is too close to another keyframe on this channel';
+      return;
+    }
+    this.edit({
+      ...this.track,
+      keyframes: this.track.keyframes.map((keyframe) =>
+        keyframe.id === id ? { ...keyframe, timestampMs } : keyframe
       ),
     });
   }
 
-  setTitle(title: string): void {
+  setLayout(layout: string): void {
     if (!this.track) return;
-    this.edit({ ...this.track, metadata: { ...this.track.metadata, title } });
+    let plan: LayoutChangePlan;
+    try {
+      plan = changeTrackLayout(this.track, layout);
+    } catch {
+      return;
+    }
+    const removedNames = plan.removedChannels.map((channel) => channel.displayName).join(', ');
+    const removalParts = [
+      plan.removedKeyframeCount > 0 ? `${plan.removedKeyframeCount} keyframes` : '',
+      plan.removedEffectCount > 0 ? `${plan.removedEffectCount} effects` : '',
+    ].filter(Boolean);
+    if (
+      removalParts.length > 0 &&
+      !window.confirm(`Remove ${removedNames} and its ${removalParts.join(' and ')}?`)
+    )
+      return;
+    this.edit(plan.track);
+    this.selection = this.selection.filter((id) =>
+      this.track!.keyframes.some((keyframe) => keyframe.id === id)
+    );
   }
 
   addChannelById(id: string): void {
@@ -885,6 +1037,7 @@ export class StudioSession {
   }
 
   async save(): Promise<void> {
+    this.status = 'Saving…';
     if (!this.track) {
       this.status = 'The movie duration is unknown';
       return;
@@ -953,7 +1106,10 @@ export class StudioSession {
     const blob = new Blob([bytesAsBuffer(bytes)], { type: 'application/octet-stream' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `${this.trackId || 'track'}.lightfx`;
+    const safeTitle = (track.metadata.title || this.trackId || 'track')
+      .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-')
+      .trim();
+    link.download = `${safeTitle || 'track'}.lightfx`;
     link.click();
     URL.revokeObjectURL(link.href);
   }
@@ -1026,10 +1182,13 @@ export class StudioSession {
     const selected = this.selectedKeyframes();
     if (selected.length !== 1) {
       this.brightnessText = '—';
+      this.kelvinOn = false;
       return;
     }
     const kf = selected[0];
     this.brightnessText = String(kf.brightness);
+    this.kelvinOn = kf.colorMode === 'COLOR_TEMPERATURE';
+    this.kelvin = String(kf.colorTemperature || 2700);
     this.green = String(kf.color.g);
     this.hex = [kf.color.r, kf.color.g, kf.color.b]
       .map((v) => v.toString(16).padStart(2, '0'))
