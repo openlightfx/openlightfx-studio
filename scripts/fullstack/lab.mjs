@@ -5,6 +5,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
+import { loadScenario, simulatorConfig, sameInventory } from './scenario.mjs';
+import { cleanupScenarioFiles } from './scenario-cleanup.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const [action = 'help', ...args] = process.argv.slice(2);
@@ -79,6 +81,15 @@ function initialize() {
   if (!fs.existsSync(path.join(simulator, 'src/openlightfx_simulator/control.py')))
     throw new Error('Simulator checkout with the observation API is required');
   fs.mkdirSync(work, { recursive: true, mode: 0o700 });
+  const scenario = env.OLFX_LAB_SCENARIO ? loadScenario(path.resolve(env.OLFX_LAB_SCENARIO)) : null;
+  if (scenario) {
+    // Stage input only until results are collected; never include it in durable evidence.
+    fs.copyFileSync(path.resolve(env.OLFX_LAB_SCENARIO), path.join(work, 'scenario.json'));
+    env.OLFX_LAB_SCENARIO_FILE = path.join(work, 'scenario.json');
+  } else {
+    fs.rmSync(path.join(work, 'scenario.json'), { force: true });
+    delete env.OLFX_LAB_SCENARIO_FILE;
+  }
   const sources = {
     studio: identity(root),
     plugin: identity(plugin),
@@ -94,6 +105,11 @@ function initialize() {
         embyImage: 'emby/embyserver:4.9.3.0',
         embyUrl: env.OLFX_EMBY_URL,
         controlUrl: env.OLFX_SIMULATOR_CONTROL_URL,
+        bulbIds: scenario ? scenario.room.bulbs.map((bulb) => bulb.id) : ['left', 'right'],
+        scenario: scenario ? 'scenario.json' : null,
+        inventory: scenario
+          ? scenario.room.bulbs.map(({ id, name, port }) => ({ id, name, port }))
+          : null,
         sources,
       },
       null,
@@ -104,7 +120,10 @@ function initialize() {
   const config = fs
     .readFileSync(path.join(root, 'docker/simulator.toml'), 'utf8')
     .replace('[simulator]', '[simulator]\ncontrol_host = "0.0.0.0"\ncontrol_port = 9202');
-  fs.writeFileSync(path.join(work, 'simulator.toml'), config);
+  fs.writeFileSync(
+    path.join(work, 'simulator.toml'),
+    scenario ? simulatorConfig(scenario) : config
+  );
   fs.writeFileSync(
     composeFile,
     JSON.stringify(
@@ -143,6 +162,37 @@ function requireLab() {
   const manifest = JSON.parse(fs.readFileSync(path.join(work, 'manifest.json')));
   env.OLFX_EMBY_URL = manifest.embyUrl;
   env.OLFX_SIMULATOR_CONTROL_URL = manifest.controlUrl;
+  if (manifest.scenario) {
+    env.OLFX_LAB_SCENARIO_FILE = path.join(work, manifest.scenario);
+    if (action === 'run') {
+      const configured = manifest.inventory
+        ? { room: { bulbs: manifest.inventory } }
+        : fs.existsSync(env.OLFX_LAB_SCENARIO_FILE)
+          ? loadScenario(env.OLFX_LAB_SCENARIO_FILE)
+          : null;
+      if (env.OLFX_LAB_SCENARIO) {
+        const requestedFile = path.resolve(env.OLFX_LAB_SCENARIO);
+        const requested = loadScenario(requestedFile);
+        if (!configured || !sameInventory(requested, configured))
+          throw new Error(
+            'Bulb inventory differs from the provisioned lab; use a new lab or explicit reset'
+          );
+        const runtimeFile = path.join(work, 'run-scenario.json');
+        if (requestedFile !== runtimeFile) fs.copyFileSync(requestedFile, runtimeFile);
+        env.OLFX_LAB_SCENARIO_FILE = runtimeFile;
+      } else {
+        if (!fs.existsSync(env.OLFX_LAB_SCENARIO_FILE))
+          throw new Error(
+            'Previous scenario input was cleaned up; supply OLFX_LAB_SCENARIO for this run'
+          );
+        fs.rmSync(path.join(work, 'run-scenario.json'), { force: true });
+      }
+    }
+  } else {
+    delete env.OLFX_LAB_SCENARIO_FILE;
+    if (action === 'run' && env.OLFX_LAB_SCENARIO)
+      throw new Error('Lab was not provisioned for this scenario; use start/reset');
+  }
 }
 async function ready() {
   const deadline = Date.now() + 30000;
@@ -151,7 +201,12 @@ async function ready() {
       const r = await fetch(`${env.OLFX_SIMULATOR_CONTROL_URL}/health`, {
         signal: AbortSignal.timeout(1000),
       });
-      if (r.ok && Object.keys((await r.json()).bulbs).length === 2) {
+      const expected = JSON.parse(fs.readFileSync(path.join(work, 'manifest.json'))).bulbIds ?? [
+        'left',
+        'right',
+      ];
+      const actual = r.ok ? Object.keys((await r.json()).bulbs).sort() : [];
+      if (JSON.stringify(actual) === JSON.stringify([...expected].sort())) {
         const session = JSON.parse(fs.readFileSync(path.join(work, 'session.json')));
         const setup = await fetch(`${env.OLFX_EMBY_URL}/OpenLightFX/Studio/Setup`, {
           headers: { 'X-Emby-Token': session.apiKey },
@@ -247,6 +302,12 @@ if (action === 'help') {
         const session = JSON.parse(fs.readFileSync(path.join(work, 'session.json')));
         env.OLFX_API_KEY = session.apiKey;
         env.OLFX_VIEWER_TOKEN = session.viewerToken;
+        if (env.OLFX_LAB_TEST_FILE) {
+          fs.copyFileSync(path.resolve(env.OLFX_LAB_TEST_FILE), path.join(work, 'custom.spec.ts'));
+          env.OLFX_LAB_TEST_DIR = work;
+        } else {
+          fs.rmSync(path.join(work, 'custom.spec.ts'), { force: true });
+        }
         env.OLFX_NDJSON = path.join(work, 'simulator.ndjson');
         env.OLFX_LAB = '1';
         const started = new Date().toISOString();
@@ -260,9 +321,13 @@ if (action === 'help') {
           command('npx', [
             'playwright',
             'test',
-            '--project=fullstack-lab',
+            env.OLFX_LAB_TEST_FILE
+              ? '--project=fullstack-lab-custom'
+              : env.OLFX_LAB_SCENARIO_FILE
+                ? '--project=fullstack-lab-scenario'
+                : '--project=fullstack-lab',
             '--workers=1',
-            ...(args.length ? args : ['--grep', 'LAB-']),
+            ...(args.length ? args : env.OLFX_LAB_TEST_FILE ? [] : ['--grep', 'LAB-']),
           ]);
         } catch (error) {
           failed = error;
@@ -290,7 +355,8 @@ if (action === 'help') {
               ended: new Date().toISOString(),
               status: failed ? 'failed' : 'passed',
               arguments: args,
-              playbackMode: env.OLFX_LAB_PLAYBACK ?? 'controlled',
+              playbackMode:
+                env.OLFX_LAB_PLAYBACK ?? (env.OLFX_LAB_SCENARIO_FILE ? 'web' : 'controlled'),
               runnerSources: identity(root),
               error: failed?.message,
             },
@@ -303,7 +369,11 @@ if (action === 'help') {
       } else throw new Error(`Unknown action: ${action}`);
     }
   } finally {
-    fs.closeSync(fd);
-    fs.unlinkSync(lock);
+    try {
+      if (action === 'run' || action === 'stop') cleanupScenarioFiles(work);
+    } finally {
+      fs.closeSync(fd);
+      fs.unlinkSync(lock);
+    }
   }
 }

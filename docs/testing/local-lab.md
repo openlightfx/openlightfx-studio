@@ -42,6 +42,100 @@ Host ports bind to `127.0.0.1`. The project is always `olfx-lab-<id>`, not Studi
 
 `run` uses the dedicated serial `fullstack-lab` Playwright project. It accepts additional Playwright arguments, such as `run --grep 'LAB-'`. The legacy Chromium/Firefox full-stack suite remains separate. The lab collects a build identity manifest (revisions, dirty status, tracked diffs and hashes including untracked source files), build log when available, room configuration, saved tracks/sidecars, simulator NDJSON, bounded recent container logs plus Emby's runtime/plugin logs, result JSON with current runner identity, and Playwright screenshots/traces/attachments. Failed labs remain available for inspection. Artifacts record build-time sources: changing code afterward does not update the embedded DLL until reset.
 
+## Source-free scenario variations
+
+Agents must not edit repository source merely to encode a new test case. Supply a
+temporary local JSON file instead, following the schema below. Do not add an
+agent's one-off scenario to the repository. For example, after creating the input:
+
+```bash
+export OLFX_LAB_ID=three OLFX_LAB_PORT=18098 OLFX_LAB_CONTROL_PORT=19204
+export OLFX_LAB_SCENARIO=/tmp/my-scenario.json
+node scripts/fullstack/lab.mjs start
+node scripts/fullstack/lab.mjs run
+OLFX_LAB_PLAYBACK=controlled node scripts/fullstack/lab.mjs run
+node scripts/fullstack/lab.mjs stop
+```
+
+The configured room inventory is provisioned with independent REST bulbs.
+Scenario labs automatically select `fullstack-lab-scenario`; playback defaults to
+actual Emby Web video.
+
+The strict schema in `scripts/fullstack/scenario.mjs` accepts:
+
+- `name`, `movie` (exact name of a generated lab movie).
+- `room`: `name` and 1–32 `bulbs`, each with a unique `id`, unique `name`,
+  `position`, and optional `follows`. Positions/Follows are canonical position IDs.
+  REST ports are allocated automatically, reserving 9202 for observation. No
+  pasted plugin settings or legacy channel-to-bulb mappings are used.
+- `track`: `title`, `layout` (`Ambient`, `2.0`, `3.0`, `5.0`), and `keyframes` with
+  `channel`, integer `timeMs`, `color` (`#RRGGBB`), `brightness` (0–100), optional
+  `interpolation` (`STEP`/`LINEAR`) and `transitionMs`. Cues must fit the movie and
+  respect Studio's current 200 ms minimum spacing on the same channel.
+- `expectations`: ordered phases with `name`, bounded `withinMs`, and independent
+  `bulbs` states for **every bulb**, including unchanged lights. Each state has
+  `color`, `brightness`, and boolean `power`. Optional `holdMs` checks sustained
+  state. Optional `minElapsedMs`/`maxElapsedMs` constrain observed video-relative
+  timing (controlled mode uses the session-start clock). Do not invent timing
+  allowances just to pass a failure.
+- Each phase may include `commands`: expected `bulbId`, `color`, `brightness`,
+  `power`, and optional elapsed bounds. These require fresh receipts after the
+  previous phase, not a stale match from earlier playback. Command receipt alone
+  never substitutes for the rendered-state check.
+
+Unknown fields, missing bulbs, invalid colors/times/layouts, duplicate/too-close
+cues, and malformed expectations fail rather than being silently ignored. The
+runner temporarily stages the scenario, validates exact saved protobuf values,
+records per-phase measurements, performs a negative oracle check, and waits for
+all bulbs off after Stop. Expectations never call production routing/sampling.
+
+With the same bulb inventory, vary layouts, cue values, timing, positions,
+Follows, or expectations at **run time, without rebuilding or editing source**:
+
+```bash
+OLFX_LAB_SCENARIO=/tmp/my-scenario.json node scripts/fullstack/lab.mjs run
+```
+
+A changed bulb inventory requires a new lab or explicit `reset` with the new
+scenario. That reprovisions isolated fixtures; it does not require source edits.
+Results retain expected cues/states, observations, and built-source/current-runner
+identity, **not scenario/script input files**. Runner-owned staging copies are
+deleted in the run's final cleanup on success, failure, or collection errors, and
+on Stop. Resupply `OLFX_LAB_SCENARIO` for each subsequent run after cleanup. The
+manifest retains only fixture inventory needed to check compatibility.
+
+Agents must delete their own temporary input files/scripts once results are
+collected, including on failure; never delete caller-owned files without permission.
+Durable fixtures belong only to deliberately maintained regression tests, not
+one-off agent scenarios.
+
+### Arbitrary test behavior without repository edits
+
+For actions beyond declarative author/play/observe phases, provide an external
+Playwright TypeScript file via `OLFX_LAB_TEST_FILE=/tmp/my-test.spec.ts`. The runner
+temporarily copies it into the restricted lab directory, selects
+`fullstack-lab-custom`, runs it serially, and deletes that copy after collecting
+results. Custom traces do not embed test source files. It can use the normal Playwright APIs,
+the lab environment, and reusable `runLabScenario` from `e2e/lab/scenario.ts`.
+Imports resolve from `.emby-stack/labs/<id>/custom.spec.ts`; for example:
+
+```ts
+import { test, expect } from '@playwright/test';
+import { runLabScenario } from '../../../e2e/lab/scenario';
+
+test('external variation', async ({ page, request }, testInfo) => {
+  await runLabScenario(page, request, testInfo);
+  const response = await request.get(`${process.env.OLFX_SIMULATOR_CONTROL_URL}/state`);
+  expect(response.ok()).toBeTruthy();
+});
+```
+
+This escape hatch supports new pause/seek/ownership/other workflows without
+patching the test framework for each variation. It does not automatically make
+those workflows covered: the external test must explicitly exercise and assert
+them. Framework/product bug fixes are separate from test-case data changes.
+Neither this interface nor its passes establish hardware accuracy or acceptance.
+
 ## Observation contract
 
 With simulator `control_port` enabled:

@@ -120,7 +120,11 @@ mv "$DLL.merged" "$DLL"
 # is stopped. movie.nfo locks the item so a later refresh does not probe it again.
 "${COMPOSE[@]}" stop emby
 EMBY_CONFIG_VOLUME="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/config"}}{{.Name}}{{end}}{{end}}' "$("${COMPOSE[@]}" ps -aq emby)")"
-docker run --rm -e OLFX_UID="${OLFX_UID:-1000}" -e OLFX_GID="${OLFX_GID:-1000}" -v "$EMBY_CONFIG_VOLUME:/config" python:3.12-slim python -c '
+SEED_ARGS=()
+if [[ -n "${OLFX_LAB_SCENARIO_FILE:-}" ]]; then
+  SEED_ARGS=(-v "$OLFX_LAB_SCENARIO_FILE:/lab-scenario.json:ro" -e OLFX_LAB_SCENARIO_FILE=/lab-scenario.json)
+fi
+docker run --rm "${SEED_ARGS[@]}" -e OLFX_UID="${OLFX_UID:-1000}" -e OLFX_GID="${OLFX_GID:-1000}" -v "$EMBY_CONFIG_VOLUME:/config" python:3.12-slim python -c '
 import json, os, sqlite3
 db = sqlite3.connect("/config/data/library.db")
 n = db.execute("update MediaItems set RunTimeTicks = NULL where Path = ?", ("/media/clip-zero/clip-zero.mp4",)).rowcount
@@ -148,6 +152,20 @@ doc = {
     }],
     "Bulbs": [bulb("left", "Left", "left", 9200), bulb("right", "Right", "right", 9201)]
 }
+if os.environ.get("OLFX_LAB_SCENARIO_FILE"):
+    with open(os.environ["OLFX_LAB_SCENARIO_FILE"], encoding="utf-8") as source:
+        scenario = json.load(source)
+    doc["Bulbs"] = []
+    doc["Rooms"][0]["Bulbs"] = []
+    for index, fixture in enumerate(scenario["room"]["bulbs"]):
+        port = 9200 + index + (1 if index >= 2 else 0)
+        entry = bulb(fixture["id"], fixture["name"], fixture["position"], port)
+        assignment = {"Id": fixture["id"], "Position": fixture["position"]}
+        if fixture.get("follows"):
+            entry["Follows"] = fixture["follows"]
+            assignment["Follows"] = fixture["follows"]
+        doc["Bulbs"].append(entry)
+        doc["Rooms"][0]["Bulbs"].append(assignment)
 path = "/config/data/OpenLightFX/rooms.json"
 os.makedirs(os.path.dirname(path), exist_ok=True)
 with open(path, "w", encoding="utf-8") as out: json.dump(doc, out)

@@ -49,9 +49,29 @@ export default defineConfig({
     {
       name: 'fullstack-lab',
       testDir: 'e2e/fullstack',
-      testMatch: '**/lab*.spec.ts',
+      testMatch: ['**/lab.spec.ts', '**/lab-five.spec.ts'],
       fullyParallel: false,
       use: { ...browserUse, browserName: 'chromium', trace: 'on', screenshot: 'only-on-failure' },
+    },
+    {
+      name: 'fullstack-lab-scenario',
+      testDir: 'e2e/fullstack',
+      testMatch: '**/lab-scenario.spec.ts',
+      fullyParallel: false,
+      use: { ...browserUse, browserName: 'chromium', trace: 'on', screenshot: 'only-on-failure' },
+    },
+    {
+      name: 'fullstack-lab-custom',
+      testDir: process.env.OLFX_LAB_TEST_DIR ?? '.emby-stack/custom-tests',
+      testMatch: '**/custom.spec.ts',
+      testIgnore: '**/artifacts/**',
+      fullyParallel: false,
+      use: {
+        ...browserUse,
+        browserName: 'chromium',
+        trace: { mode: 'on', sources: false },
+        screenshot: 'only-on-failure',
+      },
     },
     {
       name: 'realmedia',
