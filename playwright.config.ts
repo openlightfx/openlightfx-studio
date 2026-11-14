@@ -33,6 +33,7 @@ export default defineConfig({
     {
       name: 'fullstack',
       testDir: 'e2e/fullstack',
+      testIgnore: '**/lab.spec.ts',
       // One Emby, one preview session, one set of bulbs: run in file order so tests do not
       // stop or take over each other's preview or playback.
       fullyParallel: false,
@@ -41,8 +42,16 @@ export default defineConfig({
     {
       name: 'fullstack-firefox',
       testDir: 'e2e/fullstack',
+      testIgnore: '**/lab.spec.ts',
       fullyParallel: false,
       use: { ...browserUse, browserName: 'firefox' },
+    },
+    {
+      name: 'fullstack-lab',
+      testDir: 'e2e/fullstack',
+      testMatch: '**/lab.spec.ts',
+      fullyParallel: false,
+      use: { ...browserUse, browserName: 'chromium', trace: 'on', screenshot: 'only-on-failure' },
     },
     {
       name: 'realmedia',

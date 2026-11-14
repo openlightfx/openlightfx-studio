@@ -6,15 +6,17 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
-COMPOSE=(docker compose -f docker-compose.fullstack.yml)
+COMPOSE=(docker compose -f "${OLFX_COMPOSE_FILE:-docker-compose.fullstack.yml}")
+if [[ -n "${OLFX_COMPOSE_PROJECT:-}" ]]; then COMPOSE+=(-p "$OLFX_COMPOSE_PROJECT"); fi
+MEDIA="${OLFX_MEDIA_DIR:-$ROOT/media/generated}"
+PLUGIN="${OLFX_EMBY_REPO:-${OLFX_STACK_DIR:-$ROOT/.emby-stack}/emby/src}"
 EMBY_BRANCH="${OLFX_EMBY_BRANCH:-main}"
 SIM_URL="${OLFX_SIMULATOR_URL:-https://github.com/openlightfx/openlightfx-simulator.git}"
 WORK="${OLFX_STACK_DIR:-$ROOT/.emby-stack}"
 
 if ! command -v docker >/dev/null; then
-  echo "Docker is not installed. The full stack is scripts/fullstack/run.sh on a machine with Docker."
-  if [[ "${OLFX_FULLSTACK_REQUIRE:-}" == "1" ]]; then exit 1; fi
-  exit 0
+  echo "Docker is not installed. The full stack requires Docker." >&2
+  exit 1
 fi
 
 echo "Validating compose file"
@@ -26,9 +28,8 @@ if [[ "${OLFX_FULLSTACK_CONFIG_ONLY:-}" == "1" ]]; then
 fi
 
 if ! command -v dotnet >/dev/null; then
-  echo "The .NET 8 SDK is required to build the plugin. See docs/testing.md."
-  if [[ "${OLFX_FULLSTACK_REQUIRE:-}" == "1" ]]; then exit 1; fi
-  exit 0
+  echo "The .NET 8 SDK is required to build the plugin. See docs/testing.md." >&2
+  exit 1
 fi
 
 mkdir -p "$WORK" docker/simulator-src
@@ -37,17 +38,16 @@ if [[ ! -f docker/simulator-src/src/openlightfx_simulator/__main__.py ]]; then
   if ! git clone --depth 1 "$SIM_URL" docker/simulator-src; then
     echo "Could not clone $SIM_URL. The simulator repository is private."
     echo "Clone it into docker/simulator-src and rerun, or export a credential that can read it."
-    if [[ "${OLFX_FULLSTACK_REQUIRE:-}" == "1" ]]; then exit 1; fi
-    exit 0
+    exit 1
   fi
 fi
 
 bash scripts/media/generate-clips.sh
 # Tracks and sidecars saved by an earlier run live in the bind-mounted media, not in
 # the Emby volume, so `down -v` keeps them and the next SAVE-001 hits a stale conflict.
-find "$ROOT/media/generated" -type d -name lightfx -prune -exec rm -rf {} +
+find "$MEDIA" -type d -name lightfx -prune -exec rm -rf {} +
 # MEDIA-015: Emby is told this movie's runtime is 0. ffprobe still sees 120s.
-ZERO_DIR="$ROOT/media/generated/clip-zero"
+ZERO_DIR="$MEDIA/clip-zero"
 mkdir -p "$ZERO_DIR"
 if [[ ! -f "$ZERO_DIR/clip-zero.mp4" ]]; then
   echo "Clip zero: 120s H.264 with no Emby runtime"
@@ -57,7 +57,7 @@ if [[ ! -f "$ZERO_DIR/clip-zero.mp4" ]]; then
     -t 120 -c:v libx264 -pix_fmt yuv420p -g 48 -sc_threshold 0 -c:a aac -shortest \
     "$ZERO_DIR/clip-zero.mp4"
 fi
-LONG_DIR="$ROOT/media/generated/clip-long"
+LONG_DIR="$MEDIA/clip-long"
 mkdir -p "$LONG_DIR"
 if [[ ! -f "$LONG_DIR/clip-long.mp4" ]]; then
   echo "Clip long: 10 min H.264 so the edit proxy is still encoding when playback starts"
@@ -94,32 +94,33 @@ echo "Emby API key acquired"
 mkdir -p "$WORK/emby/lib"
 for dll in MediaBrowser.Common.dll MediaBrowser.Controller.dll MediaBrowser.Model.dll Emby.Web.GenericEdit.dll; do
   if [[ ! -f "$WORK/emby/lib/$dll" ]]; then
-    docker compose -f docker-compose.fullstack.yml cp "emby:/system/$dll" "$WORK/emby/lib/$dll"
+    "${COMPOSE[@]}" cp "emby:/system/$dll" "$WORK/emby/lib/$dll"
   fi
 done
 
-if [[ ! -d "$WORK/emby/src" ]]; then
-  git clone --depth 1 --branch "$EMBY_BRANCH" https://github.com/openlightfx/openlightfx-emby.git "$WORK/emby/src"
+if [[ ! -d "$PLUGIN" ]]; then
+  if [[ -n "${OLFX_EMBY_REPO:-}" ]]; then echo "Plugin checkout not found: $PLUGIN"; exit 1; fi
+  git clone --depth 1 --branch "$EMBY_BRANCH" https://github.com/openlightfx/openlightfx-emby.git "$PLUGIN"
 fi
-cp -a "$WORK/emby/lib/." "$WORK/emby/src/lib/"
-mkdir -p "$WORK/emby/src/src/OpenLightFX.Emby/obj/studio-dist"
-cp "$WORK/studio.zip" "$WORK/emby/src/src/OpenLightFX.Emby/obj/studio-dist/openlightfx-studio-dist.zip"
-printf 'phase1' > "$WORK/emby/src/src/OpenLightFX.Emby/obj/studio-dist/openlightfx-studio-dist.zip.version"
-( cd "$WORK/emby/src/src/OpenLightFX.Emby" && dotnet build -c Release -p:StudioVersion=phase1 )
-DLL="$WORK/emby/src/src/OpenLightFX.Emby/bin/Release/net8.0/OpenLightFX.Emby.dll"
-( cd "$WORK/emby/src" && dotnet tool restore && dotnet ilrepack \
-  /lib:"$WORK/emby/src/lib" \
+cp -a "$WORK/emby/lib/." "$PLUGIN/lib/"
+mkdir -p "$PLUGIN/src/OpenLightFX.Emby/obj/studio-dist"
+cp "$WORK/studio.zip" "$PLUGIN/src/OpenLightFX.Emby/obj/studio-dist/openlightfx-studio-dist.zip"
+printf 'phase1' > "$PLUGIN/src/OpenLightFX.Emby/obj/studio-dist/openlightfx-studio-dist.zip.version"
+( cd "$PLUGIN/src/OpenLightFX.Emby" && dotnet build -c Release -p:StudioVersion=phase1 )
+DLL="$PLUGIN/src/OpenLightFX.Emby/bin/Release/net8.0/OpenLightFX.Emby.dll"
+( cd "$PLUGIN" && dotnet tool restore && dotnet ilrepack \
+  /lib:"$PLUGIN/lib" \
   /out:"$DLL.merged" \
   "$DLL" \
-  "$WORK/emby/src/src/OpenLightFX.Emby/bin/Release/net8.0/Google.Protobuf.dll" )
+  "$PLUGIN/src/OpenLightFX.Emby/bin/Release/net8.0/Google.Protobuf.dll" )
 mv "$DLL.merged" "$DLL"
-docker compose -f docker-compose.fullstack.yml cp "$DLL" emby:/config/plugins/OpenLightFX.Emby.dll
+"${COMPOSE[@]}" cp "$DLL" emby:/config/plugins/OpenLightFX.Emby.dll
 # MEDIA-015 needs an item whose Emby runtime is unknown. Emby always probes on scan
 # and its update API ignores RunTimeTicks, so clear it in the database while Emby
 # is stopped. movie.nfo locks the item so a later refresh does not probe it again.
 "${COMPOSE[@]}" stop emby
 EMBY_CONFIG_VOLUME="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/config"}}{{.Name}}{{end}}{{end}}' "$("${COMPOSE[@]}" ps -aq emby)")"
-docker run --rm -v "$EMBY_CONFIG_VOLUME:/config" python:3.12-slim python -c '
+docker run --rm -e OLFX_UID="${OLFX_UID:-1000}" -e OLFX_GID="${OLFX_GID:-1000}" -v "$EMBY_CONFIG_VOLUME:/config" python:3.12-slim python -c '
 import json, os, sqlite3
 db = sqlite3.connect("/config/data/library.db")
 n = db.execute("update MediaItems set RunTimeTicks = NULL where Path = ?", ("/media/clip-zero/clip-zero.mp4",)).rowcount
@@ -152,8 +153,9 @@ os.makedirs(os.path.dirname(path), exist_ok=True)
 with open(path, "w", encoding="utf-8") as out: json.dump(doc, out)
 # Emby runs as uid 1000 in the official image. The test setup above runs as root;
 # give the plugin data directory back to Emby so room saves can atomically replace rooms.json.
-os.chown(os.path.dirname(path), 1000, 1000)
-os.chown(path, 1000, 1000)
+uid, gid = int(os.environ["OLFX_UID"]), int(os.environ["OLFX_GID"])
+os.chown(os.path.dirname(path), uid, gid)
+os.chown(path, uid, gid)
 '
 "${COMPOSE[@]}" start emby
 # Second pass: the plugin is loaded now, so this also seeds the simulator bulbs.
@@ -165,6 +167,12 @@ echo "Plugin loaded and simulator bulbs configured"
 
 echo "Starting the simulator"
 "${COMPOSE[@]}" up -d --build simulator
+if [[ "${OLFX_LAB_START_ONLY:-}" == "1" ]]; then
+  umask 077
+  printf '%s' "$SETUP_JSON" > "$WORK/session.json"
+  echo "Local lab started. Credentials are restricted to $WORK/session.json"
+  exit 0
+fi
 sleep 2
 # Follow the simulator for the whole test run so commands sent during tests land in the file.
 # docker logs keeps the container's stdout (NDJSON) apart from its stderr (Python log lines),
@@ -191,7 +199,7 @@ npx playwright test --project=fullstack
 export OLFX_OUTCOMES="$FIREFOX_OUTCOMES"
 # Each project expects a fresh library, as the first run does: SAVE-001 writes the
 # new track proxy-fixture, which would otherwise already exist from the Chromium pass.
-find "$ROOT/media/generated" -type d -name lightfx -prune -exec rm -rf {} +
+find "$MEDIA" -type d -name lightfx -prune -exec rm -rf {} +
 npx playwright test --project=fullstack-firefox
 cat "$CHROMIUM_OUTCOMES" "$FIREFOX_OUTCOMES" > "$ROOT/test-results/outcomes-fullstack.jsonl"
 echo "Full stack finished. Simulator NDJSON is $WORK/simulator.ndjson"

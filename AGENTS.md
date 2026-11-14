@@ -17,7 +17,7 @@ The previous rebuild had 158 green browser tests and was unusable: no way to add
 1. Screens were built before the journey through them was written down.
 2. Agents worked from one-paragraph briefs, without this context, and treated "tests pass" as "done".
 
-So: **the journey spec is the source of truth, screens follow it, and a step is done only when a person has watched it work.** See [§ 7](#7-definition-of-done).
+So: **the journey spec is the source of truth and screens follow it. The owner will manually verify and decide when a step is accepted.**
 
 ## 3. The journey (J1 — First light)
 
@@ -83,19 +83,9 @@ There is no free-form "Add channel". Changing the layout adds or removes channel
 
 `electron:*` scripts and `docker-compose.{dev,prod,ci}.yml` are leftovers from an earlier design and are not used.
 
-## 7. Definition of done
+## 7. Verification and acceptance
 
-A journey step (or any user-visible change) is done only when **all** of these hold:
-
-1. **Spec first.** The requirement IDs it implements are in the approved spec, and the PR names them. If the spec is unclear, ask; do not invent behavior.
-2. **Traceability.** Every approved L1 requirement has a test whose title starts with its ID and tier tag (`ROOM-005 @fullstack …`), and `npm run test:traceability` passes.
-3. **No expected failures for real bugs.** Do not add entries to `tests/expected-failures.json` to get green. That file is only for a requirement that is approved but deliberately not built yet, and the PR says so.
-4. **No test-gaming.** Do not loosen screenshot thresholds, add `test.skip`/`fixme`, widen timeouts to hide slowness, assert on mocks in the browser or full-stack tiers, or make a test check that an element _exists_ when the requirement is that it _works_.
-5. **No dead controls.** Every visible, enabled button, menu item, link, and switch does something observable. The DONE-001 check clicks them all. A control that cannot work yet is not rendered, or is disabled with a tooltip saying why.
-6. **Real, Emby-shaped data.** Browser and full-stack tests use real Emby item ids, poster URLs, device ids and plugin responses from the full stack. Mock data only in unit tests.
-7. **All tiers green** in Firefox and Chromium: unit, browser, full stack.
-
-**"All tests pass" is necessary, not sufficient.** If the screen would confuse a person, it is not done.
+The owner will manually verify and decide whether each journey step or user-visible change is accepted. Automated tests and traceability checks remain useful engineering tools, but passing them is not a step exit criterion or a substitute for the owner's manual verification. Do not mark a step accepted on the owner's behalf.
 
 ## 8. Running things
 
@@ -114,11 +104,11 @@ OLFX_FULLSTACK_REQUIRE=1 npm run test:fullstack   # real Emby + plugin + simulat
 node docs/journeys/wireframes/render.mjs           # re-render wireframe PNGs
 ```
 
-**Full stack** (`scripts/fullstack/run.sh`) needs Docker, the .NET 8 SDK, ffmpeg, and the private `openlightfx-simulator` repo cloned into `docker/simulator-src` (a local clone of `openlightfx/openlightfx-simulator` can be copied there). It boots `emby/embyserver:4.9.3.0` on `localhost:8096`, builds the plugin from `openlightfx-emby` `main` (override with `OLFX_EMBY_BRANCH`, or put a checkout at `.emby-stack/emby/src`) with this Studio build embedded, ILRepacks it, installs it, runs Emby first-run setup, starts the simulator headless (`--no-gui`, NDJSON on stdout, `command_received` events), and runs `e2e/fullstack` in Chromium and Firefox. The Emby SDK DLLs come out of the container; the plugin repo's `scripts/fetch-sdk.sh` does the same for a standalone plugin build. Without `OLFX_FULLSTACK_REQUIRE=1` the script exits 0 when a prerequisite is missing, so always set it when you mean to run it. The full-stack harness seeds its simulator room into the disposable Docker room store; it must never use pasted bulb or mapping settings.
+**Full stack** (`scripts/fullstack/run.sh`) needs Docker, the .NET 8 SDK, ffmpeg, and the private `openlightfx-simulator` repo cloned into `docker/simulator-src` (a local clone of `openlightfx/openlightfx-simulator` can be copied there). It boots `emby/embyserver:4.9.3.0` on `localhost:8096`, builds the plugin from `openlightfx-emby` `main` (override with `OLFX_EMBY_BRANCH`, or put a checkout at `.emby-stack/emby/src`) with this Studio build embedded, ILRepacks it, installs it, runs Emby first-run setup, starts the simulator headless (`--no-gui`, NDJSON on stdout, `command_received` events), and runs `e2e/fullstack` in Chromium and Firefox. The Emby SDK DLLs come out of the container; the plugin repo's `scripts/fetch-sdk.sh` does the same for a standalone plugin build. Missing prerequisites now fail the runner rather than silently passing. For isolated agent-driven testing with explicit local checkouts, use `node scripts/fullstack/lab.mjs start|status|reset|run|collect|stop` and read `docs/testing/local-lab.md` and `.agents/skills/test-openlightfx-local/SKILL.md`. The default lab uses loopback ports 18096/19202 and never changes the existing default Compose stack or hands-on server. The full-stack harness seeds its simulator room into the disposable Docker room store; it must never use pasted bulb or mapping settings.
 
 **Real media** (`npm run test:realmedia`, J5 of the old spec) runs only locally on the maintainer's machine with the real movie files, and only when the owner asks.
 
-CI (`.github/workflows/requirements-traceability.yml`) runs traceability, `npm run check`, prettier, unit, browser (both browsers), media generation, and `docker compose config`. It does not boot Emby.
+CI (`.github/workflows/requirements-traceability.yml`) runs traceability, `npm run check`, prettier, unit, browser (both browsers), media generation, and `docker compose config`. When `SIMULATOR_TOKEN` is available, a separate job provisions and runs the isolated Emby lab's controlled-session and actual Emby Web golden paths; otherwise live coverage is explicitly unavailable.
 
 ## 9. Workflow
 

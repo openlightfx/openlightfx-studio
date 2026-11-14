@@ -84,20 +84,46 @@ jobs:
 
   fullstack:
     runs-on: ubuntu-latest
+    env:
+      SIMULATOR_TOKEN: ${{ secrets.SIMULATOR_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - name: Validate the compose file
         run: docker compose -f docker-compose.fullstack.yml config
-      - name: Boot the stack when the simulator can be cloned
+      - name: Explain unavailable private simulator coverage
+        if: env.SIMULATOR_TOKEN == ''
+        run: echo 'Live lab coverage is unavailable without SIMULATOR_TOKEN; compose validation is not an integration test.'
+      - uses: actions/setup-node@v4
+        if: env.SIMULATOR_TOKEN != ''
+        with:
+          node-version: 22
+      - uses: actions/setup-dotnet@v4
+        if: env.SIMULATOR_TOKEN != ''
+        with:
+          dotnet-version: '8.0.x'
+      - name: Provision live lab prerequisites
+        if: env.SIMULATOR_TOKEN != ''
         env:
-          SIMULATOR_TOKEN: ${{ secrets.SIMULATOR_TOKEN }}
+          GH_TOKEN: ${{ secrets.SIMULATOR_TOKEN }}
         run: |
-          if [ -z "$SIMULATOR_TOKEN" ]; then
-            echo "SIMULATOR_TOKEN is not set. The live stack is npm run test:fullstack on a machine that can clone openlightfx-simulator."
-            echo "See docs/testing.md."
-            exit 0
-          fi
-          OLFX_FULLSTACK_REQUIRE=1 npm run test:fullstack
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core zip
+          npm ci
+          npx playwright install --with-deps chromium
+          gh repo clone openlightfx/openlightfx-simulator docker/simulator-src
+          git clone https://github.com/openlightfx/openlightfx-emby.git ../openlightfx-emby
+          python3 -m venv /tmp/olfx-simulator-tests
+          /tmp/olfx-simulator-tests/bin/pip install aiohttp
+          PYTHONPATH=docker/simulator-src/src /tmp/olfx-simulator-tests/bin/python -m unittest discover -s docker/simulator-src/tests
+      - name: Build and test isolated Emby lab
+        if: env.SIMULATOR_TOKEN != ''
+        run: |
+          node scripts/fullstack/lab.mjs start
+          node scripts/fullstack/lab.mjs run
+          OLFX_LAB_PLAYBACK=web node scripts/fullstack/lab.mjs run
+      - name: Stop isolated lab
+        if: always() && env.SIMULATOR_TOKEN != ''
+        run: node scripts/fullstack/lab.mjs stop
 
   report:
     needs: [check, prettier, unit, browser]

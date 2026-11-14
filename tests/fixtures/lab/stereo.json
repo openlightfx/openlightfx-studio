@@ -1,0 +1,17 @@
+{
+  "name": "Stereo authored colors",
+  "layout": "LAYOUT_2_0",
+  "keyframes": [
+    { "channel": "left", "timeMs": 0, "hex": "#ff0000", "brightness": 100 },
+    { "channel": "right", "timeMs": 0, "hex": "#0000ff", "brightness": 60 },
+    { "channel": "left", "timeMs": 2000, "hex": "#00ff00", "brightness": 80 }
+  ],
+  "expectedAtStart": {
+    "left": { "r": 255, "g": 0, "b": 0, "brightness": 100, "power": true },
+    "right": { "r": 0, "g": 0, "b": 255, "brightness": 60, "power": true }
+  },
+  "expectedAfterChange": {
+    "left": { "r": 0, "g": 255, "b": 0, "brightness": 80, "power": true },
+    "right": { "r": 0, "g": 0, "b": 255, "brightness": 60, "power": true }
+  }
+}

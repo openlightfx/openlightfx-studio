@@ -4,6 +4,8 @@ The requirements in [requirements/studio-requirements.md](requirements/studio-re
 
 Shared fixtures for the plugin live in [../tests/fixtures/README.md](../tests/fixtures/README.md).
 
+For agent-driven local testing, use the [isolated Emby lab](testing/local-lab.md) and `.agents/skills/test-openlightfx-local/SKILL.md`. It builds local checkouts, exercises Studio authoring and actual Emby Web playback, and validates rendered simulated light states with collected evidence.
+
 ## Commands
 
 From the repository root:
@@ -24,9 +26,9 @@ npx playwright install chromium firefox
 | Requirement report            | `npm run test:report`                                                                                                                 |
 | Report gate                   | `node docs/requirements/check-traceability.mjs --report test-results/traceability.json --allow-expected tests/expected-failures.json` |
 
-`npm run test:browser` runs every `@browser` test in Firefox and in Chromium. `npm run test:fullstack` is the local Docker stack. It validates `docker-compose.fullstack.yml` and, when Docker, the .NET 8 SDK, and a clone of `openlightfx-simulator` are available, boots Emby, builds the plugin from `openlightfx-emby` `main` (override with `OLFX_EMBY_BRANCH`, or put a checkout at `.emby-stack/emby/src`) with this Studio build embedded, starts `openlightfx-simulator --no-gui`, and runs the `@fullstack` tests against simulator NDJSON.
+`npm run test:browser` runs every `@browser` test in Firefox and in Chromium. `npm run test:fullstack` is the local Docker stack. It validates `docker-compose.fullstack.yml` and, when Docker, the .NET 8 SDK, and a clone of `openlightfx-simulator` are available, boots Emby, builds the plugin from `openlightfx-emby` `main` (override with `OLFX_EMBY_BRANCH`, use `OLFX_EMBY_REPO` for an explicit local checkout, or put a checkout at `.emby-stack/emby/src`) with this Studio build embedded, starts `openlightfx-simulator --no-gui`, and runs the `@fullstack` tests against simulator NDJSON.
 
-CI runs the traceability checker, the unit tests, the browser tests, media generation, and `docker compose config`. It does not boot Emby unless `SIMULATOR_TOKEN` is set, because the simulator repository is private and the plugin build needs the Emby SDK DLLs from the running server. The script still does that work locally.
+CI runs the traceability checker, unit tests, browser tests, media generation, and Compose validation. When `SIMULATOR_TOKEN` is set it also provisions the live lab prerequisites, clones the private simulator, and runs both controlled and actual Emby Web playback golden paths. Without that credential, live coverage is explicitly unavailable; Compose validation is not evidence of integration success. The simulator observation changes must be published before this live job can use them. Local lab and full-stack runners fail on missing prerequisites.
 
 J5 reads `OLFX_REAL_MEDIA` (default `~/Videos/John_Wick.mkv`) and `OLFX_REAL_TRACK` (default `~/Videos/John_Wick.lightfx`). The Playwright `realmedia` project is not part of CI. A `CI` environment skips those tests if the project is selected by mistake.
 
