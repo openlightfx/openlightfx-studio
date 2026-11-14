@@ -12,6 +12,7 @@
     "format": "prettier --write .",
     "test": "svelte-kit sync && OLFX_OUTCOMES=test-results/outcomes-unit.jsonl vitest run",
     "test:unit": "svelte-kit sync && OLFX_OUTCOMES=test-results/outcomes-unit.jsonl vitest run",
+    "test:lab-network": "python3 -m unittest discover -s tests/python",
     "test:browser": "OLFX_OUTCOMES=test-results/outcomes-browser.jsonl playwright test --project=chromium --project=firefox",
     "test:fullstack": "bash scripts/fullstack/run.sh",
     "test:realmedia": "playwright test --project=realmedia",

@@ -57,7 +57,7 @@ OLFX_LAB_PLAYBACK=controlled node scripts/fullstack/lab.mjs run
 node scripts/fullstack/lab.mjs stop
 ```
 
-The configured room inventory is provisioned with independent REST bulbs.
+The configured room inventory is provisioned with independent REST or UDP bulbs.
 Scenario labs automatically select `fullstack-lab-scenario`; playback defaults to
 actual Emby Web video.
 
@@ -65,8 +65,9 @@ The strict schema in `scripts/fullstack/scenario.mjs` accepts:
 
 - `name`, `movie` (exact name of a generated lab movie).
 - `room`: `name` and 1–32 `bulbs`, each with a unique `id`, unique `name`,
-  `position`, and optional `follows`. Positions/Follows are canonical position IDs.
-  REST ports are allocated automatically, reserving 9202 for observation. No
+  `position`, optional `follows`, and optional `protocol` (`rest`, the default;
+  `wiz`, `lifx`, or `govee`). Positions/Follows are canonical position IDs.
+  Listener ports are allocated automatically, reserving 9202 for observation. No
   pasted plugin settings or legacy channel-to-bulb mappings are used.
 - `track`: `title`, `layout` (`Ambient`, `2.0`, `3.0`, `5.0`), and `keyframes` with
   `channel`, integer `timeMs`, `color` (`#RRGGBB`), `brightness` (0–100), optional
@@ -96,7 +97,7 @@ Follows, or expectations at **run time, without rebuilding or editing source**:
 OLFX_LAB_SCENARIO=/tmp/my-scenario.json node scripts/fullstack/lab.mjs run
 ```
 
-A changed bulb inventory requires a new lab or explicit `reset` with the new
+A changed bulb inventory **or protocol** requires a new lab or explicit `reset` with the new
 scenario. That reprovisions isolated fixtures; it does not require source edits.
 Results retain expected cues/states, observations, and built-source/current-runner
 identity, **not scenario/script input files**. Runner-owned staging copies are
@@ -108,6 +109,46 @@ Agents must delete their own temporary input files/scripts once results are
 collected, including on failure; never delete caller-owned files without permission.
 Durable fixtures belong only to deliberately maintained regression tests, not
 one-off agent scenarios.
+
+### UDP fixture isolation and assertions
+
+WiZ, LIFX, and Govee use the real plugin UDP drivers. Each UDP bulb gets a
+separate Docker-only endpoint IP on the lab's **internal** `bulbs` network. A
+byte-preserving relay listens on the protocol's standard port and forwards to a
+unique, bulb-scoped simulator listener. This avoids the old shared-listener
+fallback that could send one unicast command to every same-protocol bulb.
+Emby and simulator also use the lab's normal bridge for UI/control access.
+**No UDP ports are published, no host networking is used, and scenarios cannot
+supply LAN addresses or ports.** Endpoint readiness is checked and logs collected.
+No additional simulator checkout or pasted plugin configuration is needed.
+
+The room seed stores protocol-specific configs using only these dynamically
+resolved isolated IPs. Studio still places bulbs by positions/Follows; neither the
+seed nor the scenario contains channel-to-bulb mappings. UDP state-read replies
+(`getPilot`, `GetColor`, `devStatus`) traverse the same endpoint back to the driver.
+
+Command assertions inspect actual protocol fields, not REST-shaped assumptions:
+
+- WiZ: fresh `setPilot`, RGB, mapped dimming and power; brightness allows only
+  quantization error from integer dimming.
+- LIFX: fresh standard `SetColor` HSBK packet plus current-playback `SetPower`
+  evidence. Compare emitted RGB/intensity; brightness is applied once, not twice.
+  Simulator state separates chroma from HSBK intensity: for example, gray may be
+  represented as white at reduced brightness. Specify bulb expectations in that
+  representation; exact authored RGB/brightness remain checked in the saved track.
+- Govee: fresh color plus latest current-playback brightness/turn receipts. Split
+  packets and unchanged brightness/power are retained as proof, not assumed.
+
+Every phase still asserts all bulbs' rendered state, including unchanged
+neighbors, and Stop/off restoration. Receipts are bounded by the observed sample;
+wrong protocol, bulb, brightness, power, or stale playback evidence fails. Raw
+packet-intent evidence is attached for diagnosis. The simulator's Python UDP
+regression sends actual datagrams to two bulbs of each protocol, checks untouched
+neighbors, state replies, LIFX layout/intensity, and malformed-packet rejection.
+
+This is **known-bulb unicast playback coverage**, not broadcast/multicast discovery
+or hardware certification. Do not use Find bulbs as a substitute for an explicitly
+isolated discovery test. REST latency measurements in the skill do not apply to UDP.
 
 ### Arbitrary test behavior without repository edits
 
@@ -174,15 +215,19 @@ Headless mode advances transitions at 30 Hz even when this API is disabled. `sta
 
 ## Boundaries and next coverage
 
-This first implementation verifies room setup, UI authoring/save/activation, controlled playback and actual Emby Web playback with observed REST lights. It does **not** claim:
+The lab verifies room setup, UI authoring/save/activation, controlled playback and actual Emby Web playback with observed REST, WiZ, LIFX and Govee lights. It does **not** claim:
 
-- UDP discovery or Identify coverage: REST bulbs are seeded into the disposable room store. Real discovery needs a separately isolated UDP/multicast profile and per-bulb endpoints; do not use host networking that could discover or flash the owner's bulbs.
+- UDP discovery or Identify coverage: known bulbs are seeded into the disposable room store. Broadcast/multicast discovery and Identify need separate focused tests within isolated networks; never use host networking that could discover or flash the owner's bulbs.
 - exhaustive routing/fade/pause/seek/ownership coverage: use reviewed routing fixtures and add focused scenarios; the existing full-stack suite already exercises subsets, mostly at command level.
 - physical hardware accuracy or TV clients.
 
 Simulator protocol fidelity remains a separate concern. For example, brightness scales differ across WiZ/LIFX/Hue, so protocol tests should validate normalized rendered state with justified tolerances rather than copying REST expectations.
 
-The [implementation verification record](local-lab-verification.md) lists the observed passes, failed broader checks, local evidence paths, and remaining scope.
+The [implementation verification record](local-lab-verification.md) lists the initial
+passes, failed broader checks and remaining scope. The [UDP verification record](udp-lab-verification.md)
+covers mixed protocols and companion driver fixes. `npm run test:lab-network`
+checks relay byte preservation/order and independent replies; simulator regressions
+below exercise actual protocol datagrams.
 
 ## Simulator regression tests
 

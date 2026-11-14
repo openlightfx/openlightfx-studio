@@ -120,9 +120,14 @@ mv "$DLL.merged" "$DLL"
 # is stopped. movie.nfo locks the item so a later refresh does not probe it again.
 "${COMPOSE[@]}" stop emby
 EMBY_CONFIG_VOLUME="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/config"}}{{.Name}}{{end}}{{end}}' "$("${COMPOSE[@]}" ps -aq emby)")"
+# Start fixture endpoints before resolving their isolated addresses for the room seed.
+echo "Starting simulator and isolated UDP endpoints"
+mapfile -t UDP_SERVICES < <("${COMPOSE[@]}" config --services | grep "^udp-" || true)
+"${COMPOSE[@]}" up -d --build simulator "${UDP_SERVICES[@]}"
 SEED_ARGS=()
 if [[ -n "${OLFX_LAB_SCENARIO_FILE:-}" ]]; then
-  SEED_ARGS=(-v "$OLFX_LAB_SCENARIO_FILE:/lab-scenario.json:ro" -e OLFX_LAB_SCENARIO_FILE=/lab-scenario.json)
+  UDP_ADDRESSES=$(node scripts/fullstack/udp-addresses.mjs "$OLFX_LAB_SCENARIO_FILE" "$OLFX_COMPOSE_FILE" "$OLFX_COMPOSE_PROJECT")
+  SEED_ARGS=(-v "$OLFX_LAB_SCENARIO_FILE:/lab-scenario.json:ro" -e OLFX_LAB_SCENARIO_FILE=/lab-scenario.json -e OLFX_LAB_UDP_ADDRESSES="$UDP_ADDRESSES")
 fi
 docker run --rm "${SEED_ARGS[@]}" -e OLFX_UID="${OLFX_UID:-1000}" -e OLFX_GID="${OLFX_GID:-1000}" -v "$EMBY_CONFIG_VOLUME:/config" python:3.12-slim python -c '
 import json, os, sqlite3
@@ -160,6 +165,12 @@ if os.environ.get("OLFX_LAB_SCENARIO_FILE"):
     for index, fixture in enumerate(scenario["room"]["bulbs"]):
         port = 9200 + index + (1 if index >= 2 else 0)
         entry = bulb(fixture["id"], fixture["name"], fixture["position"], port)
+        protocol = fixture.get("protocol", "rest")
+        if protocol != "rest":
+            address = json.loads(os.environ["OLFX_LAB_UDP_ADDRESSES"])[fixture["id"]]
+            ports = {"wiz": 38899, "lifx": 56700, "govee": 4003}
+            entry["Config"] = {"protocol": {"wiz": "Wiz", "lifx": "Lifx", "govee": "Govee"}[protocol],
+                "id": fixture["id"], "name": fixture["name"], "ipAddress": address, "port": ports[protocol]}
         assignment = {"Id": fixture["id"], "Position": fixture["position"]}
         if fixture.get("follows"):
             entry["Follows"] = fixture["follows"]
@@ -183,8 +194,6 @@ if [[ "$PLUGIN_LOADED" != "True" ]]; then echo "The plugin did not load or rejec
 if [[ "$ZERO_TICKS" != "0" ]]; then echo "clip-zero still has an Emby runtime ($ZERO_TICKS ticks)"; exit 1; fi
 echo "Plugin loaded and simulator bulbs configured"
 
-echo "Starting the simulator"
-"${COMPOSE[@]}" up -d --build simulator
 if [[ "${OLFX_LAB_START_ONLY:-}" == "1" ]]; then
   umask 077
   printf '%s' "$SETUP_JSON" > "$WORK/session.json"

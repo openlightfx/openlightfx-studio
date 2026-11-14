@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { loadScenario, simulatorConfig, sameInventory } from './scenario.mjs';
 import { cleanupScenarioFiles } from './scenario-cleanup.mjs';
+import { udpServices } from './udp-services.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const [action = 'help', ...args] = process.argv.slice(2);
@@ -90,6 +91,8 @@ function initialize() {
     fs.rmSync(path.join(work, 'scenario.json'), { force: true });
     delete env.OLFX_LAB_SCENARIO_FILE;
   }
+  const udp = scenario ? udpServices(scenario, root) : {};
+  const hasUdp = Object.keys(udp).length > 0;
   const sources = {
     studio: identity(root),
     plugin: identity(plugin),
@@ -108,7 +111,12 @@ function initialize() {
         bulbIds: scenario ? scenario.room.bulbs.map((bulb) => bulb.id) : ['left', 'right'],
         scenario: scenario ? 'scenario.json' : null,
         inventory: scenario
-          ? scenario.room.bulbs.map(({ id, name, port }) => ({ id, name, port }))
+          ? scenario.room.bulbs.map(({ id, name, port, protocol }) => ({
+              id,
+              name,
+              port,
+              protocol,
+            }))
           : null,
         sources,
       },
@@ -128,8 +136,11 @@ function initialize() {
     composeFile,
     JSON.stringify(
       {
+        ...(hasUdp ? { networks: { default: {}, bulbs: { internal: true } } } : {}),
         services: {
+          ...udp,
           emby: {
+            ...(hasUdp ? { networks: ['default', 'bulbs'] } : {}),
             image: 'emby/embyserver:4.9.3.0',
             ports: [`127.0.0.1:${port}:8096`],
             environment: {
@@ -145,6 +156,7 @@ function initialize() {
             ],
           },
           simulator: {
+            ...(hasUdp ? { networks: ['default', 'bulbs'] } : {}),
             build: { context: root, dockerfile: 'docker/simulator.Dockerfile' },
             ports: [`127.0.0.1:${controlPort}:9202`],
             volumes: [`${work}/simulator.toml:/config/simulator.toml:ro`],
@@ -207,6 +219,18 @@ async function ready() {
       ];
       const actual = r.ok ? Object.keys((await r.json()).bulbs).sort() : [];
       if (JSON.stringify(actual) === JSON.stringify([...expected].sort())) {
+        const services = Object.keys(JSON.parse(fs.readFileSync(composeFile)).services).filter(
+          (name) => name.startsWith('udp-')
+        );
+        for (const service of services) {
+          const container = composeCapture('ps', '-q', service).trim();
+          const status = command(
+            'docker',
+            ['inspect', '--format', '{{.State.Health.Status}}', container],
+            { stdio: 'pipe' }
+          ).trim();
+          if (status !== 'healthy') throw new Error(`UDP endpoint ${service} not ready`);
+        }
         const session = JSON.parse(fs.readFileSync(path.join(work, 'session.json')));
         const setup = await fetch(`${env.OLFX_EMBY_URL}/OpenLightFX/Studio/Setup`, {
           headers: { 'X-Emby-Token': session.apiKey },
@@ -226,7 +250,10 @@ function collect() {
     const source = path.join(work, name);
     if (fs.existsSync(source)) fs.copyFileSync(source, path.join(out, name));
   }
-  for (const service of ['emby', 'simulator']) {
+  const udp = Object.keys(JSON.parse(fs.readFileSync(composeFile)).services).filter((name) =>
+    name.startsWith('udp-')
+  );
+  for (const service of ['emby', 'simulator', ...udp]) {
     try {
       const logs = composeCapture('logs', '--no-color', '--tail', '10000', service);
       fs.writeFileSync(path.join(out, `${service}.log`), logs, { mode: 0o600 });

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { expect, type Page, type APIRequestContext, type TestInfo } from '@playwright/test';
 import { decodeTrack } from '../../src/lib/domain/encode';
 import { layouts, loadScenario } from '../../scripts/fullstack/scenario.mjs';
+import { findCommandReceipt } from '../../scripts/fullstack/command-receipts.mjs';
 import { assertObservation, waitForObservation } from '../../scripts/fullstack/observations.mjs';
 
 const labels: Record<string, string> = {
@@ -257,17 +258,14 @@ export async function runLabScenario(
         commands,
       });
       for (const command of phase.commands) {
-        const hex = command.color.slice(1);
-        const rgb = [0, 2, 4].map((offset) => parseInt(hex.slice(offset, offset + 2), 16));
+        const protocol = scenario.room.bulbs.find((bulb) => bulb.id === command.bulbId)!.protocol;
         const match = () =>
-          received().find(
-            (event) =>
-              Date.parse(event.ts) >= commandAfter &&
-              event.bulb_id === command.bulbId &&
-              ['r', 'g', 'b'].every((key, index) => Number(event.params[key]) === rgb[index]) &&
-              Number(event.params.brightness) === command.brightness &&
-              String(event.params.power) === String(command.power)
-          );
+          findCommandReceipt(received(), command, {
+            since: commandAfter,
+            playbackSince: startedAt,
+            through: Date.parse(sample.ts),
+            protocol,
+          });
         await expect
           .poll(match, { timeout: 3000, message: `Fresh receipt: ${phase.name}/${command.bulbId}` })
           .toBeTruthy();

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-/** @typedef {{id: string, name: string, position: string, follows?: string}} RoomBulb */
+/** @typedef {{id: string, name: string, position: string, follows?: string, protocol?: string}} RoomBulb */
 /** @typedef {{color: string, brightness: number, power: boolean}} State */
 /** @typedef {{channel: string, timeMs: number, color: string, brightness: number, interpolation?: string, transitionMs?: number}} Cue */
 /** @typedef {{bulbId: string, color: string, brightness: number, power: boolean, minElapsedMs?: number, maxElapsedMs?: number}} Command */
@@ -78,7 +78,9 @@ export function normalizeScenario(input) {
   const ids = new Set(),
     names = new Set();
   const bulbs = input.room.bulbs.map((bulb, index) => {
-    object(bulb, ['id', 'name', 'position', 'follows'], 'room bulb');
+    object(bulb, ['id', 'name', 'position', 'follows', 'protocol'], 'room bulb');
+    const protocol = bulb.protocol ?? 'rest';
+    if (!['rest', 'wiz', 'lifx', 'govee'].includes(protocol)) fail('unsupported bulb protocol');
     if (typeof bulb.id !== 'string' || !/^[a-z][a-z0-9-]{0,39}$/.test(bulb.id) || ids.has(bulb.id))
       fail('bulb IDs must be unique simple lowercase IDs');
     text(bulb.name, 'bulb name', 40);
@@ -90,7 +92,7 @@ export function normalizeScenario(input) {
       (bulb.follows !== undefined && !positions.includes(bulb.follows))
     )
       fail('invalid room position/Follows');
-    return { ...bulb, port: 9200 + index + (index >= 2 ? 1 : 0) };
+    return { ...bulb, protocol, port: 9200 + index + (index >= 2 ? 1 : 0) };
   });
   object(input.track, ['layout', 'title', 'keyframes'], 'track');
   if (!Object.hasOwn(layouts, input.track.layout)) fail('unsupported track layout');
@@ -179,7 +181,12 @@ export function normalizeScenario(input) {
 export function sameInventory(a, b) {
   /** @param {Scenario} scenario */
   const inventory = (scenario) =>
-    scenario.room.bulbs.map(({ id, name, port }) => ({ id, name, port }));
+    scenario.room.bulbs.map(({ id, name, port, protocol = 'rest' }) => ({
+      id,
+      name,
+      port,
+      protocol,
+    }));
   return JSON.stringify(inventory(a)) === JSON.stringify(inventory(b));
 }
 /** @param {string} file */
@@ -196,18 +203,22 @@ export function simulatorConfig(scenario) {
 [[bulbs]]
 id = ${JSON.stringify(bulb.id)}
 name = ${JSON.stringify(bulb.name)}
-protocol = "rest"
+protocol = ${JSON.stringify(bulb.protocol)}
 port = ${bulb.port}
-method = "GET"
-path = "/api/light"
 min_transition_ms = 0
+${
+  bulb.protocol !== 'rest'
+    ? 'ip = "0.0.0.0"'
+    : `method = "GET"
+path = "/api/light"
 [bulbs.param_map]
 r = "r"
 g = "g"
 b = "b"
 brightness = "brightness"
 transition_ms = "transition_ms"
-power = "power"
+power = "power"`
+}
 `
       )
       .join('')
