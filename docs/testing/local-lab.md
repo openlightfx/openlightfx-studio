@@ -192,9 +192,7 @@ It requires no bulb scenario and does not play a movie or send lighting commands
 
 Run with `OLFX_LAB_TEST_FILE="$PWD/e2e/fullstack/lab-j1-step2.spec.ts"` and
 `OLFX_LAB_PLAYBACK=library`; `OLFX_LAB_BROWSER=firefox` selects its Firefox run.
-Use a fresh lab or reset before each final run. See the [Step 2 verification
-record](j1-step2-verification.md) for exact commands, source identity, collected
-evidence and the scope-specific outcome gate.
+Use a fresh lab or reset before each final run.
 
 ### Arbitrary test behavior without repository edits
 
