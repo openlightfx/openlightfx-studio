@@ -238,3 +238,60 @@ requirement(
     await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
   }
 );
+
+requirement(
+  'ROOM-012 @browser save conflict keeps the edited room name and offers resolution',
+  async ({ page }) => {
+    await openRooms(page);
+    await page.route('**/OpenLightFX/Studio/Rooms/room-1', (route) =>
+      route.fulfill({ status: 409, body: 'This room changed in another tab.' })
+    );
+    await page.getByLabel('Room name').fill('My edited room');
+    await page.getByRole('button', { name: 'Save room', exact: true }).click();
+    await expect(
+      page.getByRole('dialog', { name: 'This room changed in another tab' })
+    ).toBeVisible();
+    await expect(page.getByLabel('Room name')).toHaveValue('My edited room');
+    await expect(page.getByRole('button', { name: 'Reload', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Keep mine', exact: true })).toBeVisible();
+  }
+);
+
+requirement(
+  'ROOM-012 @browser discovery failure keeps known bulbs and offers Try again',
+  async ({ page }) => {
+    await openRooms(page);
+    await page.route('**/OpenLightFX/Studio/Discover', (route) =>
+      route.fulfill({ status: 500, body: 'Discovery is temporarily unavailable.' })
+    );
+    await page.getByRole('button', { name: 'Find bulbs', exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText('Discovery is temporarily unavailable.');
+    await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+    await expect(page.getByRole('listitem').filter({ hasText: 'Center lamp' })).toBeVisible();
+    await expect(
+      page.getByRole('region', { name: 'Left bulb position', exact: true })
+    ).toContainText('Left lamp');
+  }
+);
+
+requirement(
+  'ROOM-003 @browser Cancel stops waiting for discovery without losing known bulbs',
+  async ({ page }) => {
+    await openRooms(page);
+    let release: (() => void) | undefined;
+    await page.route('**/OpenLightFX/Studio/Discover', async (route) => {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      await route.fulfill({ json: { foundCount: 4, bulbs: [] } }).catch(() => {});
+    });
+    await page.getByRole('button', { name: 'Find bulbs', exact: true }).click();
+    await expect(page.getByRole('progressbar', { name: 'Finding bulbs' })).toBeVisible();
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(page.getByRole('progressbar')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Find bulbs', exact: true })).toBeEnabled();
+    await expect(page.getByText('Discovery cancelled. Known bulbs have been kept.')).toBeVisible();
+    release?.();
+    await expect(page.getByRole('listitem').filter({ hasText: 'Center lamp' })).toBeVisible();
+  }
+);

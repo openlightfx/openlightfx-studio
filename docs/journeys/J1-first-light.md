@@ -137,7 +137,7 @@ Studio is one page at `/emby/OpenLightFX/studio/`. Its static shell contains no 
 
 ## Step 1 — Set up a room
 
-**Implementation status:** A Rooms screen is implemented in `src/lib/components/rooms/RoomsScreen.svelte`, with full-stack coverage for room creation, screen selection, and bulb placement. Step exit depends on required automated coverage passing; remaining coverage is tracked by traceability.
+**Implementation status:** **Complete — J1 Step 1.** The required room and first-run checks pass, including real WiZ discovery and Identify in the isolated Emby lab. The maintained `lab-j1-step1.spec.ts` regression covers discovery metadata and occupied-room protection, selected-bulb Identify, first-run/session authentication, save, screen selection, placement, rename/Follows, deletion and screen reuse. Browser coverage includes discovery cancellation and error/conflict handling. See the [Step 1 verification record](../testing/j1-step1-verification.md) for commands, requirement-scoped outcome traceability, and the separate outstanding project-wide gate gaps. This does not mark other J1 steps complete.
 
 **Goal:** tell OpenLightFX which screen the room has and where its bulbs are, in a few minutes, without JSON, and with confidence that "Lamp 2" really is the lamp on the left.
 

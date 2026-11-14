@@ -139,6 +139,17 @@ function initialize() {
         ...(hasUdp ? { networks: { default: {}, bulbs: { internal: true } } } : {}),
         services: {
           ...udp,
+          ...(hasUdp
+            ? {
+                'discovery-network': {
+                  build: { context: root, dockerfile: 'docker/discovery-network.Dockerfile' },
+                  network_mode: 'service:emby',
+                  cap_add: ['NET_ADMIN'],
+                  profiles: ['tools'],
+                  command: [Object.keys(udp)[0]],
+                },
+              }
+            : {}),
           emby: {
             ...(hasUdp ? { networks: ['default', 'bulbs'] } : {}),
             image: 'emby/embyserver:4.9.3.0',
@@ -314,6 +325,10 @@ if (action === 'help') {
         command('bash', ['scripts/fullstack/run.sh'], { stdio: ['ignore', buildLog, buildLog] });
       } finally {
         fs.closeSync(buildLog);
+      }
+      if (JSON.parse(fs.readFileSync(composeFile)).services['discovery-network']) {
+        compose('build', 'discovery-network');
+        compose('run', '--rm', '--no-deps', 'discovery-network');
       }
       await ready();
       console.log(`Studio: ${env.OLFX_EMBY_URL}/emby/OpenLightFX/studio/`);

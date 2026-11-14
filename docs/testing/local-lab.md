@@ -146,9 +146,41 @@ packet-intent evidence is attached for diagnosis. The simulator's Python UDP
 regression sends actual datagrams to two bulbs of each protocol, checks untouched
 neighbors, state replies, LIFX layout/intensity, and malformed-packet rejection.
 
-This is **known-bulb unicast playback coverage**, not broadcast/multicast discovery
-or hardware certification. Do not use Find bulbs as a substitute for an explicitly
-isolated discovery test. REST latency measurements in the skill do not apply to UDP.
+The generic playback scenarios provide **known-bulb unicast playback coverage**,
+not discovery or hardware certification. The focused J1 Step 1 regression below
+separately exercises Find bulbs. REST latency measurements do not apply to UDP.
+
+For UDP labs, a short-lived `discovery-network` helper runs with `NET_ADMIN` in
+only the disposable Emby container's network namespace after its final startup.
+Docker's internal bridge drops limited broadcasts outside its subnet. The helper
+routes `255.255.255.255` through the bulb interface and translates WiZ/LIFX discovery
+destinations to that interface's directed broadcast. The private source address
+and broadcast must both belong to the internal bulb subnet. It does not change
+host routes/firewall rules, publish UDP, use host networking, or grant privileges
+to the Emby process. Protocol bytes and simulator responses remain unchanged.
+
+### J1 Step 1 regression
+
+The maintained four-WiZ fixture and serial suite test actual discovery probes and
+responses, metadata shown in Studio, one bulb already in Bedroom, Identify to only
+the selected bulb, and the room lifecycle. It does not play a movie.
+
+```bash
+export OLFX_LAB_ID=j1-rooms OLFX_LAB_PORT=18110 OLFX_LAB_CONTROL_PORT=19214
+export OLFX_LAB_SCENARIO="$PWD/tests/fixtures/lab/room-identify.json"
+export OLFX_LAB_TEST_FILE="$PWD/e2e/fullstack/lab-j1-step1.spec.ts"
+export OLFX_LAB_PLAYBACK=room-setup
+node scripts/fullstack/lab.mjs start
+node scripts/fullstack/lab.mjs run
+# A fresh inventory/room seed is required before repeating the ordered suite.
+node scripts/fullstack/lab.mjs reset
+OLFX_LAB_BROWSER=firefox node scripts/fullstack/lab.mjs run
+node scripts/fullstack/lab.mjs collect
+node scripts/fullstack/lab.mjs stop
+```
+
+`OLFX_LAB_BROWSER` selects Chromium (default) or Firefox for this maintained suite.
+See [Step 1 verification](j1-step1-verification.md) for its outcome-based gate.
 
 ### Arbitrary test behavior without repository edits
 
@@ -217,7 +249,7 @@ Headless mode advances transitions at 30 Hz even when this API is disabled. `sta
 
 The lab verifies room setup, UI authoring/save/activation, controlled playback and actual Emby Web playback with observed REST, WiZ, LIFX and Govee lights. It does **not** claim:
 
-- UDP discovery or Identify coverage: known bulbs are seeded into the disposable room store. Broadcast/multicast discovery and Identify need separate focused tests within isolated networks; never use host networking that could discover or flash the owner's bulbs.
+- discovery for every protocol: the focused Step 1 suite verifies WiZ broadcast discovery and selected-bulb Identify. Generic playback scenarios still use known seeded bulbs; LIFX/Govee discovery and physical hardware are not certified. Never use host networking that could discover or flash the owner's bulbs.
 - exhaustive routing/fade/pause/seek/ownership coverage: use reviewed routing fixtures and add focused scenarios; the existing full-stack suite already exercises subsets, mostly at command level.
 - physical hardware accuracy or TV clients.
 

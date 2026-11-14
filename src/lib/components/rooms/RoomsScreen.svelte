@@ -27,6 +27,8 @@
   let screenId = $state('');
   let placed = $state<{ id: string; position: Position | null; follows: Position | null }[]>([]);
   let busy = $state(false);
+  let discoveryController: AbortController | null = null;
+  let discoveryRetry = $state(false);
   let identifying = $state('');
   let identifyFailure = $state<{ id: string; message: string } | null>(null);
   let notice = $state('');
@@ -152,13 +154,18 @@
     notice = 'Unsaved changes';
   }
   async function discover() {
+    const controller = new AbortController();
+    discoveryController = controller;
     busy = true;
+    discoveryRetry = false;
     noBulbs = false;
     error = '';
     notice = 'Searching for bulbs…';
     try {
-      const result = await discoverBulbs();
-      bulbs = await loadBulbs();
+      const result = await discoverBulbs(controller.signal);
+      const knownBulbs = await loadBulbs();
+      if (controller.signal.aborted) return;
+      bulbs = knownBulbs;
       const foundCount = result.foundCount ?? result.bulbs.length;
       if (foundCount === 0) {
         noBulbs = true;
@@ -169,11 +176,23 @@
         notice = `Found ${foundCount} bulbs.`;
       }
     } catch (e) {
-      error = (e as Error).message;
-      notice = '';
+      if (!controller.signal.aborted) {
+        error = (e as Error).message;
+        discoveryRetry = true;
+        notice = '';
+      }
     } finally {
-      busy = false;
+      if (discoveryController === controller) {
+        discoveryController = null;
+        busy = false;
+      }
     }
+  }
+  function cancelDiscovery() {
+    discoveryController?.abort();
+    discoveryController = null;
+    busy = false;
+    notice = 'Discovery cancelled. Known bulbs have been kept.';
   }
   function place(id: string, pos: Position | null) {
     const bulb = bulbs.find((b) => b.id === id);
@@ -381,7 +400,9 @@
       </div>{/if}
     {#if error}<p class="error" role="alert">
         {error}{#if connectionFailed}<button onclick={() => void refresh()}>Retry</button
-          >{/if}{#if noBulbs}<button onclick={() => void discover()}>Try again</button>{/if}
+          >{/if}{#if noBulbs || discoveryRetry}<button onclick={() => void discover()}
+            >Try again</button
+          >{/if}
       </p>{/if}
     {#if placed.length === 0}<p class="notice" role="status">
         No bulbs yet. Tracks will not light this room until you add bulbs.
@@ -510,7 +531,9 @@
             >{busy ? 'Searching…' : 'Find bulbs'}</button
           >
         </div>
-        {#if busy}<progress></progress>{/if}
+        {#if busy}<progress aria-label="Finding bulbs"></progress><button onclick={cancelDiscovery}
+            >Cancel</button
+          >{/if}
         <p>
           Found {unplaced.length} · Known bulbs stay listed after discovery. Bulbs assigned to other rooms
           remain visible but cannot be placed here.

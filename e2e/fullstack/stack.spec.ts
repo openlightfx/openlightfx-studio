@@ -1,4 +1,4 @@
-import { expect, type APIRequestContext } from '@playwright/test';
+import { expect, test, type APIRequestContext } from '@playwright/test';
 import fs from 'node:fs';
 import { decodeTrack, encodeTrack } from '../../src/lib/domain';
 import { roundTripTrack } from '../../tests/fixtures/sampling/roundtrip-track';
@@ -496,22 +496,18 @@ requirement(
   }
 );
 
-requirement(
-  'ROOM-003 @fullstack bulbs assigned to another room remain visible but cannot be placed',
-  async ({ page }) => {
-    await page.goto(`${emby()}/emby/OpenLightFX/studio/?api_key=${token()}#/rooms`);
-    await page.getByRole('button', { name: '+ New room' }).click();
-    const assignedBulb = page
-      .getByRole('listitem')
-      .filter({ hasText: 'In Fullstack Room' })
-      .first();
-    await expect(assignedBulb).toBeVisible();
-    await assignedBulb.locator('summary').click();
-    await expect(
-      assignedBulb.locator('.place-menu').getByRole('button', { name: 'Left', exact: true })
-    ).toBeDisabled();
-  }
-);
+test('bulbs assigned to another room remain visible but cannot be placed @fullstack', async ({
+  page,
+}) => {
+  await page.goto(`${emby()}/emby/OpenLightFX/studio/?api_key=${token()}#/rooms`);
+  await page.getByRole('button', { name: '+ New room' }).click();
+  const assignedBulb = page.getByRole('listitem').filter({ hasText: 'In Fullstack Room' }).first();
+  await expect(assignedBulb).toBeVisible();
+  await assignedBulb.locator('summary').click();
+  await expect(
+    assignedBulb.locator('.place-menu').getByRole('button', { name: 'Left', exact: true })
+  ).toBeDisabled();
+});
 
 requirement(
   'ROOM-002 @fullstack screen picker lists all devices and disables occupied screens',

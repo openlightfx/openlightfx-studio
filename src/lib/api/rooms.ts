@@ -133,11 +133,11 @@ export const stopRoomPreview = () =>
   roomApi<{ status: string; active: boolean }>('Preview/Stop', { method: 'POST', body: '{}' });
 export const loadDevices = () => roomApi<EmbyDevice[]>('Devices');
 export const loadBulbs = () => roomApi<RoomBulb[]>('Bulbs');
-export const discoverBulbs = () =>
+export const discoverBulbs = (signal?: AbortSignal) =>
   roomApi<{
     bulbs: RoomBulb[];
     foundCount: number;
-  }>('Discover', { method: 'POST', body: '{}' });
+  }>('Discover', { method: 'POST', body: '{}', signal });
 export const identifyBulb = (id: string) =>
   roomApi(`Bulbs/${encodeURIComponent(id)}/Identify`, { method: 'POST', body: '{}' });
 export const renameBulb = (id: string, name: string) =>

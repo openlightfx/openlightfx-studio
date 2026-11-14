@@ -67,12 +67,17 @@ function fail(message) {
 }
 
 function parseArgs(argv) {
-  const args = { report: null, printCounts: false, allowExpected: null };
+  const args = { report: null, printCounts: false, allowExpected: null, requirements: null };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--report') args.report = argv[++i];
     else if (argv[i] === '--print-counts') args.printCounts = true;
     else if (argv[i] === '--allow-expected') args.allowExpected = argv[++i];
-    else fail(`Unknown argument: ${argv[i]}`);
+    else if (argv[i] === '--requirements') {
+      const value = argv[++i];
+      if (!value || value.startsWith('--'))
+        fail('--requirements needs comma-separated requirement IDs');
+      else args.requirements = value.split(',');
+    } else fail(`Unknown argument: ${argv[i]}`);
   }
   return args;
 }
@@ -368,11 +373,21 @@ checkCounts(markdown, reqs);
 if (args.printCounts) printCounts(reqs);
 
 const titles = args.report ? testTitlesFromReport(args.report) : testTitlesFromSource();
-checkApproved(reqs, titles, Boolean(args.report), loadAllow(args.allowExpected));
+let gated = reqs;
+if (args.requirements) {
+  for (const id of args.requirements) {
+    if (!reqs.some((req) => req.id === id && req.status === 'approved' && req.layer === 'L1'))
+      fail(`Unknown or non-approved L1 requirement selected: ${id}`);
+  }
+  gated = reqs.filter((req) => args.requirements.includes(req.id));
+}
+checkApproved(gated, titles, Boolean(args.report), loadAllow(args.allowExpected));
 
 if (problems.length > 0) {
   for (const problem of problems) console.error(problem);
   process.exit(1);
 }
 
-console.log(`traceability ok: ${reqs.length} requirements, approved L1 gated`);
+console.log(
+  `traceability ok: ${reqs.length} requirements validated, ${args.requirements ? `selected approved L1 gated (${args.requirements.join(',')})` : 'all approved L1 gated'}`
+);

@@ -1,0 +1,47 @@
+{
+  "name": "ROOM-003 discovery and ROOM-004 identify",
+  "movie": "clip-a",
+  "room": {
+    "name": "Room setup discovery fixture",
+    "bulbs": [
+      { "id": "red-target", "name": "Red target", "position": "left", "protocol": "wiz" },
+      { "id": "blue-neighbor", "name": "Blue neighbor", "position": "right", "protocol": "wiz" },
+      { "id": "green-third", "name": "Green third", "position": "center", "protocol": "wiz" },
+      { "id": "white-fourth", "name": "White fourth", "position": "ambient", "protocol": "wiz" }
+    ]
+  },
+  "track": {
+    "title": "Room setup discovery fixture track",
+    "layout": "2.0",
+    "keyframes": [
+      {
+        "channel": "left",
+        "timeMs": 1200,
+        "color": "#ff0000",
+        "brightness": 100,
+        "interpolation": "STEP",
+        "transitionMs": 0
+      },
+      {
+        "channel": "right",
+        "timeMs": 1200,
+        "color": "#0000ff",
+        "brightness": 100,
+        "interpolation": "STEP",
+        "transitionMs": 0
+      }
+    ]
+  },
+  "expectations": [
+    {
+      "name": "All four fixture bulbs are independently visible",
+      "withinMs": 6000,
+      "bulbs": {
+        "red-target": { "color": "#ff0000", "brightness": 100, "power": true },
+        "blue-neighbor": { "color": "#0000ff", "brightness": 100, "power": true },
+        "green-third": { "color": "#800080", "brightness": 100, "power": true },
+        "white-fourth": { "color": "#800080", "brightness": 100, "power": true }
+      }
+    }
+  ]
+}
