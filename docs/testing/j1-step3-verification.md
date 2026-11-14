@@ -124,9 +124,10 @@ The project-wide gate's seven mappings remain open:
 `MODEL-003@unit`, `MODEL-005@unit`, `MODEL-006@unit`, `MODEL-007@fixture`,
 `MODEL-007@fullstack`, `WATCH-002@fullstack`, `DONE-001@browser`.
 No failures are skipped, retagged or waived. The previously baseline-confirmed
-legacy browser failures are separate from the modern J1 regression coverage; see
-[Step 2's baseline comparison](j1-step2-verification.md#broader-gates-and-baseline-comparison).
+legacy browser failures are separate from the modern J1 regression coverage.
+The comparison uses retained local outcome reports from the earlier Step 2 run;
+its verification document was removed from main and is not restored here.
 
-Source baselines: Studio `9cde1d4` plus recorded worktree changes; plugin `8088ad5`
+Source baselines: Studio `154b9b6` plus recorded worktree changes; plugin `8088ad5`
 and simulator `6137252` (clean). Restricted manifests retain source/build identity
 and evidence; never publish raw traces or logs containing disposable credentials.
