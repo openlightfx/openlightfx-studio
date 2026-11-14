@@ -195,7 +195,7 @@ Reads `GET /OpenLightFX/Studio/Setup`, `GET …/Rooms`, `GET …/Devices`, `POST
 
 ## Step 2 — Pick a movie
 
-**Implementation status:** A Library screen is implemented in `src/lib/components/LibraryScreen.svelte`, with full-stack coverage for movie cards, search, movie navigation, and the no-room link. Step exit depends on required automated coverage passing; remaining coverage is tracked by traceability.
+**Implementation status:** **Complete — J1 Step 2.** `LIB-001` through `LIB-004` have passing browser and isolated Emby lab coverage in Chromium and Firefox. The Library verifies movies-only cards, real posters and track badges, search, all sort orders and persistence, mouse/keyboard navigation, and the no-room link. Browser regressions also cover loading/reduced motion, empty/error states, Retry, missing posters and obsolete search responses. See the [Step 2 verification record](../testing/j1-step2-verification.md) for commands, outcomes, evidence and the unchanged broader gate failures. This does not mark other J1 steps complete.
 
 **Goal:** find the movie to light in a few seconds, by poster and title, from the Emby library. Movies only.
 

@@ -137,7 +137,7 @@ async function send(path: string, init: RequestInit = {}): Promise<Response> {
   });
 }
 
-export async function fetchItems(search = ''): Promise<LibraryItem[]> {
+export async function fetchItems(search = '', signal?: AbortSignal): Promise<LibraryItem[]> {
   const pageSize = 200;
   const items: LibraryItem[] = [];
   const seen = new Set<string>();
@@ -147,7 +147,7 @@ export async function fetchItems(search = ''): Promise<LibraryItem[]> {
       startIndex: String(startIndex),
       limit: String(pageSize),
     });
-    const response = await send(`/OpenLightFX/Studio/Items?${query}`);
+    const response = await send(`/OpenLightFX/Studio/Items?${query}`, { signal });
     if (!response.ok) throw new Error(`Items ${response.status}`);
     const body = await response.json();
     const rows = Array.isArray(body) ? body : (body?.Items ?? []);

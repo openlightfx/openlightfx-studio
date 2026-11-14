@@ -182,6 +182,20 @@ node scripts/fullstack/lab.mjs stop
 `OLFX_LAB_BROWSER` selects Chromium (default) or Firefox for this maintained suite.
 See [Step 1 verification](j1-step1-verification.md) for its outcome-based gate.
 
+### J1 Step 2 regression
+
+`e2e/fullstack/lab-j1-step2.spec.ts` maintains a movie-picking regression with three
+movies and one series/episode in separate disposable Emby libraries. It verifies
+movies-only results, pagination, real poster delivery, saved/active track badges,
+search, mouse/keyboard navigation, sorting persistence and the no-room link.
+It requires no bulb scenario and does not play a movie or send lighting commands.
+
+Run with `OLFX_LAB_TEST_FILE="$PWD/e2e/fullstack/lab-j1-step2.spec.ts"` and
+`OLFX_LAB_PLAYBACK=library`; `OLFX_LAB_BROWSER=firefox` selects its Firefox run.
+Use a fresh lab or reset before each final run. See the [Step 2 verification
+record](j1-step2-verification.md) for exact commands, source identity, collected
+evidence and the scope-specific outcome gate.
+
 ### Arbitrary test behavior without repository edits
 
 For actions beyond declarative author/play/observe phases, provide an external

@@ -14,6 +14,7 @@
   let missingPosters = $state<Record<string, boolean>>({});
   let timer: ReturnType<typeof setTimeout>;
   let requestGeneration = 0;
+  let searchController: AbortController | undefined;
 
   const sortedItems = $derived.by(() => {
     const rows = [...items];
@@ -37,15 +38,21 @@
         .catch(() => (roomCount = null)),
       searchItems(''),
     ]);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      requestGeneration++;
+      searchController?.abort();
+    };
   });
 
   async function searchItems(query: string) {
     const generation = ++requestGeneration;
+    searchController?.abort();
+    searchController = new AbortController();
     loading = true;
     error = '';
     try {
-      const results = await fetchItems(query);
+      const results = await fetchItems(query, searchController.signal);
       if (generation !== requestGeneration) return;
       items = results;
     } catch (e) {
@@ -58,6 +65,10 @@
   function updateSearch(value: string) {
     search = value;
     clearTimeout(timer);
+    requestGeneration++;
+    searchController?.abort();
+    loading = true;
+    error = '';
     timer = setTimeout(() => void searchItems(value.trim()), 250);
   }
   function updateSort(value: string) {
@@ -68,7 +79,9 @@
     const count = item.trackCount ?? 0;
     if (count === 0) return 'No track';
     const label = `${count} ${count === 1 ? 'track' : 'tracks'}`;
-    return item.hasActiveTrack ? `${label} · Plays in Emby` : label;
+    return item.hasActiveTrack
+      ? `${label} · ${count > 1 ? '1 plays in Emby' : 'Plays in Emby'}`
+      : label;
   }
 </script>
 
@@ -98,7 +111,11 @@
         /></label
       >
       <label
-        >Sort <select value={sort} onchange={(e) => updateSort(e.currentTarget.value)}>
+        >Sort <select
+          aria-label="Sort"
+          value={sort}
+          onchange={(e) => updateSort(e.currentTarget.value)}
+        >
           <option value="title">Title A–Z</option><option value="recent">Recently added</option
           ><option value="tracked">Has a track first</option>
         </select></label
@@ -106,7 +123,7 @@
     </div>
     {#if error}<p role="alert" class="error">
         Studio can't reach the OpenLightFX plugin. {error}
-        <button onclick={() => void searchItems(search)}>Retry</button>
+        <button onclick={() => void searchItems(search.trim())}>Retry</button>
       </p>
     {:else if loading}
       <div class="loading-state" role="status" aria-label="Loading movies">
@@ -116,7 +133,7 @@
         </div>
       </div>
     {:else if items.length === 0}
-      {#if search}<p class="empty">
+      {#if search.trim()}<p class="empty">
           No movies match "{search}". Check the spelling or clear the search.
           <button onclick={() => updateSearch('')}>Clear search</button>
         </p>
