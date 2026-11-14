@@ -1,6 +1,6 @@
 # J1 — First light
 
-**Status:** approved by the owner. Code currently contains screens and primary flows for Steps 1–5. This describes implementation presence, not completeness against every requirement or owner acceptance. The owner will manually verify and decide acceptance; automated test and traceability status is tracked separately.
+**Status:** approved specification. Code contains screens and primary flows for Steps 1–5; this describes implementation presence, not completeness. Each step exits when its required automated tests and traceability checks pass, including isolated-lab coverage for integrated behavior. See [Testing Studio](../testing.md) and the [isolated local Emby lab](../testing/local-lab.md).
 
 **Wireframes:** [docs/journeys/wireframes/](wireframes/). **Plugin API:** [openlightfx-emby `docs/design/rooms-api.md`](https://github.com/openlightfx/openlightfx-emby/blob/main/docs/design/rooms-api.md). **Agent guide:** [AGENTS.md](../../AGENTS.md).
 
@@ -137,7 +137,7 @@ Studio is one page at `/emby/OpenLightFX/studio/`. Its static shell contains no 
 
 ## Step 1 — Set up a room
 
-**Implementation status:** A Rooms screen is implemented in `src/lib/components/rooms/RoomsScreen.svelte`, with full-stack coverage for room creation, screen selection, and bulb placement. Owner manual verification/acceptance is pending.
+**Implementation status:** A Rooms screen is implemented in `src/lib/components/rooms/RoomsScreen.svelte`, with full-stack coverage for room creation, screen selection, and bulb placement. Step exit depends on required automated coverage passing; remaining coverage is tracked by traceability.
 
 **Goal:** tell OpenLightFX which screen the room has and where its bulbs are, in a few minutes, without JSON, and with confidence that "Lamp 2" really is the lamp on the left.
 
@@ -195,7 +195,7 @@ Reads `GET /OpenLightFX/Studio/Setup`, `GET …/Rooms`, `GET …/Devices`, `POST
 
 ## Step 2 — Pick a movie
 
-**Implementation status:** A Library screen is implemented in `src/lib/components/LibraryScreen.svelte`, with full-stack coverage for movie cards, search, movie navigation, and the no-room link. Owner manual verification/acceptance is pending.
+**Implementation status:** A Library screen is implemented in `src/lib/components/LibraryScreen.svelte`, with full-stack coverage for movie cards, search, movie navigation, and the no-room link. Step exit depends on required automated coverage passing; remaining coverage is tracked by traceability.
 
 **Goal:** find the movie to light in a few seconds, by poster and title, from the Emby library. Movies only.
 
@@ -232,7 +232,7 @@ Reads `GET /OpenLightFX/Studio/Items?search=` (title, year, runtime, poster URL 
 
 **Goal:** get from "this movie" to an open track in one click, whether the movie already has tracks or not.
 
-**Implementation status:** The Movie screen is implemented in `src/lib/components/MovieSelectionScreen.svelte`, with track opening/creation and file-open behavior in the Studio flow. Owner manual verification/acceptance is pending; automated verification is tracked separately.
+**Implementation status:** The Movie screen is implemented in `src/lib/components/MovieSelectionScreen.svelte`, with track opening/creation and file-open behavior in the Studio flow. Step exit depends on required automated coverage passing; remaining coverage is tracked by traceability.
 
 **Screen:** [04-track-open-create.png](wireframes/04-track-open-create.png).
 
@@ -269,7 +269,7 @@ Reads `GET /OpenLightFX/Studio/Items?search=` (title, year, runtime, poster URL 
 
 ## Step 4 — Edit
 
-**Implementation status:** The editor is implemented in `src/lib/components/EditorScreen.svelte` and the Studio session/domain code. The current code includes transport, timeline editing, menus, inspector edits, save/export, layout changes, routing labels, and live preview. Full-stack tests cover a subset of these behaviors; traceability currently reports missing `@browser` coverage for several `EDIT-*` requirements and `DONE-001`. Owner manual verification/acceptance is pending.
+**Implementation status:** The editor is implemented in `src/lib/components/EditorScreen.svelte` and the Studio session/domain code. The current code includes transport, timeline editing, menus, inspector edits, save/export, layout changes, routing labels, and live preview. Full-stack tests cover a subset of these behaviors; traceability currently reports missing `@browser` coverage for several `EDIT-*` requirements and `DONE-001`. The step is not complete until required coverage is added and passes.
 
 **Goal:** play the movie, put light changes at the right moments on the right positions, see them on screen and on the room's bulbs, and save.
 
@@ -353,7 +353,7 @@ The editor works the same, with three differences: the no-room banner shows, **P
 
 ## Step 5 — Watch in Emby
 
-**Implementation status:** The editor has a Watch in Emby action that saves dirty work, activates the track, and opens the Emby item page; a full-stack test covers this flow. Owner manual verification/acceptance is pending.
+**Implementation status:** The editor has a Watch in Emby action that saves dirty work, activates the track, and opens the Emby item page; a full-stack test covers this flow. Step exit depends on all required automated coverage passing.
 
 **Goal:** go from the editor to watching the movie on the room's TV with the lights, without hunting through settings.
 
@@ -748,9 +748,9 @@ Full design, storage, and code mapping: [openlightfx-emby `docs/design/rooms-api
 | `POST /OpenLightFX/Studio/Items/{itemId}/ActiveTrack` | Watch in Emby | Make a track the movie's active track; returns the Emby web URL. |
 | `GET /OpenLightFX/Studio/Items` (extended) | Library | Adds `trackCount` and `hasActiveTrack`. |
 
-## Step acceptance
+## Step exit criteria
 
-The owner manually verifies and decides whether each step is accepted. Requirements in this document describe intended behavior; automated tests, traceability, and other engineering checks may be used during development, but they are not step exit criteria. Automated status should not be presented as owner acceptance.
+A step exits when its mapped requirements have passing tests at the tiers specified in [studio-requirements.md](../requirements/studio-requirements.md#test-strategy), and the traceability gate passes with no unexplained missing coverage. Integrated Studio/plugin/playback paths must be exercised in the isolated local Emby lab where applicable; lab setup and evidence are documented in [local-lab.md](../testing/local-lab.md). Record the commands, results, and evidence for the change. Manual testing can supplement automated evidence, but is not a substitute for required tests or an exit criterion.
 
 ## Out of scope
 

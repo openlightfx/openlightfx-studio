@@ -4,7 +4,7 @@ The requirements in [requirements/studio-requirements.md](requirements/studio-re
 
 Shared fixtures for the plugin live in [../tests/fixtures/README.md](../tests/fixtures/README.md).
 
-For agent-driven local testing, use the [isolated Emby lab](testing/local-lab.md) and `.agents/skills/test-openlightfx-local/SKILL.md`. It builds local checkouts, exercises Studio authoring and actual Emby Web playback, and validates rendered simulated light states with collected evidence.
+The required tests are the exit criteria for changes and journey steps: run the tiers mapped to affected requirements, pass traceability, and record results. For integrated Studio/plugin/playback behavior, use the [isolated Emby lab](testing/local-lab.md) and `.agents/skills/test-openlightfx-local/SKILL.md`. It builds local checkouts, exercises Studio authoring and actual Emby Web playback, and validates rendered simulated light states with collected evidence. Manual checks may supplement this evidence, but do not replace required automated coverage.
 
 ## Commands
 

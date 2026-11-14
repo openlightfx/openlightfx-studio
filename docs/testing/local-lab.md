@@ -1,6 +1,6 @@
 # Isolated local Emby lab
 
-The local lab builds the **current local Studio and plugin checkouts**, including dirty work, into disposable Docker Emby 4.9.3.0. It uses the real plugin and headless [OpenLightFX simulator](https://github.com/openlightfx/openlightfx-simulator), not mocked Studio APIs. It supplements, never replaces, owner acceptance and real-bulb testing.
+The local lab builds the **current local Studio and plugin checkouts**, including dirty work, into disposable Docker Emby 4.9.3.0. It uses the real plugin and headless [OpenLightFX simulator](https://github.com/openlightfx/openlightfx-simulator), not mocked Studio APIs. Its automated scenarios and collected evidence are part of the exit criteria for integrated behavior; they do not claim physical hardware accuracy.
 
 ## Prerequisites
 
@@ -134,7 +134,7 @@ This escape hatch supports new pause/seek/ownership/other workflows without
 patching the test framework for each variation. It does not automatically make
 those workflows covered: the external test must explicitly exercise and assert
 them. Framework/product bug fixes are separate from test-case data changes.
-Neither this interface nor its passes establish hardware accuracy or acceptance.
+This interface and its passes establish evidence only for the behaviors explicitly exercised; they do not establish physical hardware accuracy.
 
 ## Observation contract
 
@@ -153,7 +153,7 @@ This first implementation verifies room setup, UI authoring/save/activation, con
 
 - UDP discovery or Identify coverage: REST bulbs are seeded into the disposable room store. Real discovery needs a separately isolated UDP/multicast profile and per-bulb endpoints; do not use host networking that could discover or flash the owner's bulbs.
 - exhaustive routing/fade/pause/seek/ownership coverage: use reviewed routing fixtures and add focused scenarios; the existing full-stack suite already exercises subsets, mostly at command level.
-- physical hardware accuracy, TV clients, or owner acceptance.
+- physical hardware accuracy or TV clients.
 
 Simulator protocol fidelity remains a separate concern. For example, brightness scales differ across WiZ/LIFX/Hue, so protocol tests should validate normalized rendered state with justified tolerances rather than copying REST expectations.
 

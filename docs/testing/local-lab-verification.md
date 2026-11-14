@@ -1,6 +1,6 @@
 # Local lab implementation verification
 
-This is engineering evidence, not owner acceptance of J1.
+This is recorded automated-test evidence for the covered J1 behavior; it is not evidence for uncovered requirements or physical hardware accuracy.
 
 ## Verified locally
 
@@ -26,6 +26,6 @@ Artifacts are gitignored and restricted. Logs/traces can contain disposable cred
 - `npm run test:browser`: all 164 legacy browser tests failed on the current editor/journey screens. These results are not covered by the new lab passes; no skips or expected failures were added.
 - The complete legacy two-browser full-stack suite and remote CI job were not executed as part of this change. The live CI job needs the simulator observation commit published before cloning it from `main`.
 
-## Remaining scope
+## Remaining scope and exit status
 
-Known REST bulbs are fixtures. This implementation does not validate UDP discovery, Identify, all protocol drivers, exhaustive routing/lifecycle scenarios, or physical bulbs/TV playback. See [local-lab.md](local-lab.md) for the next coverage boundaries and safe extension rules. No hands-on test server was deployed or changed.
+Known REST bulbs are fixtures. This implementation does not validate UDP discovery, Identify, all protocol drivers, exhaustive routing/lifecycle scenarios, or physical bulbs/TV playback. These uncovered behaviors need appropriate automated coverage before the corresponding requirements/steps can exit. See [local-lab.md](local-lab.md) for the next coverage boundaries and safe extension rules. No hands-on test server was deployed or changed.

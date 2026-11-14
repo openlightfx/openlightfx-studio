@@ -17,7 +17,7 @@ The previous rebuild had 158 green browser tests and was unusable: no way to add
 1. Screens were built before the journey through them was written down.
 2. Agents worked from one-paragraph briefs, without this context, and treated "tests pass" as "done".
 
-So: **the journey spec is the source of truth and screens follow it. The owner will manually verify and decide when a step is accepted.**
+So: **the journey spec is the source of truth and screens follow it. A step is done when its required automated checks pass, including the isolated local Emby lab where applicable.**
 
 ## 3. The journey (J1 — First light)
 
@@ -85,7 +85,7 @@ There is no free-form "Add channel". Changing the layout adds or removes channel
 
 ## 7. Verification and acceptance
 
-The owner will manually verify and decide whether each journey step or user-visible change is accepted. Automated tests and traceability checks remain useful engineering tools, but passing them is not a step exit criterion or a substitute for the owner's manual verification. Do not mark a step accepted on the owner's behalf.
+Testing is the exit criterion for journey steps and user-visible changes. Run the required automated checks for the changed requirements, including the isolated local Emby lab for integrated Studio/plugin/playback behavior; use `docs/testing.md` and `docs/testing/local-lab.md` to select and run them. A step is complete only when its required tests and traceability checks pass and evidence is recorded. Do not substitute manual testing or owner sign-off for missing automated coverage. Manual hardware testing may provide additional evidence, but is not the acceptance gate.
 
 ## 8. Running things
 
