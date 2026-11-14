@@ -309,6 +309,7 @@ if (action === 'help') {
           fs.rmSync(path.join(work, 'custom.spec.ts'), { force: true });
         }
         env.OLFX_NDJSON = path.join(work, 'simulator.ndjson');
+        env.OLFX_OUTCOMES = path.join(root, 'test-results', `outcomes-fullstack-lab-${id}.jsonl`);
         env.OLFX_LAB = '1';
         const started = new Date().toISOString();
         let failed;

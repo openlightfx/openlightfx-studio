@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { expect } from 'vitest';
+import { decodeTrack, encodeTrack, newTrackFromMovie, validateTrack } from '../../src/lib/domain';
 import { requirement } from '../harness/requirement';
 
 const fixturePath = path.join(process.cwd(), 'tests/fixtures/routing/cases.json');
@@ -16,6 +17,28 @@ type RoutingCase = {
 function cases(): RoutingCase[] {
   return (JSON.parse(fs.readFileSync(fixturePath, 'utf8')) as { cases: RoutingCase[] }).cases;
 }
+
+requirement('MODEL-001 @fixture every fixed layout matches its channel and hint fixture', () => {
+  const layoutPath = path.join(process.cwd(), 'tests/fixtures/domain/layouts.json');
+  const fixture = JSON.parse(fs.readFileSync(layoutPath, 'utf8')) as {
+    version: number;
+    layouts: {
+      layout: 'LAYOUT_AMBIENT' | 'LAYOUT_2_0' | 'LAYOUT_3_0' | 'LAYOUT_5_0';
+      channels: { id: string; spatialHint: string }[];
+    }[];
+  };
+  expect(fixture.version).toBe(1);
+  expect(fixture.layouts).toHaveLength(4);
+  for (const entry of fixture.layouts) {
+    const created = newTrackFromMovie('movie', 'Layout fixture', 10000, entry.layout);
+    const decoded = decodeTrack(encodeTrack(created));
+    expect(decoded.metadata.channelLayout).toBe(entry.layout);
+    expect(decoded.channels.map(({ id, spatialHint }) => ({ id, spatialHint }))).toEqual(
+      entry.channels
+    );
+    expect(validateTrack(decoded)).toEqual([]);
+  }
+});
 
 requirement(
   'MODEL-003 @fixture shared route examples cover every track channel and room bulb',

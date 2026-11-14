@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "layouts": [
+    {
+      "layout": "LAYOUT_AMBIENT",
+      "channels": [{ "id": "ambient", "spatialHint": "SPATIAL_AMBIENT" }]
+    },
+    {
+      "layout": "LAYOUT_2_0",
+      "channels": [
+        { "id": "left", "spatialHint": "SPATIAL_LEFT" },
+        { "id": "right", "spatialHint": "SPATIAL_RIGHT" }
+      ]
+    },
+    {
+      "layout": "LAYOUT_3_0",
+      "channels": [
+        { "id": "left", "spatialHint": "SPATIAL_LEFT" },
+        { "id": "center", "spatialHint": "SPATIAL_CENTER" },
+        { "id": "right", "spatialHint": "SPATIAL_RIGHT" }
+      ]
+    },
+    {
+      "layout": "LAYOUT_5_0",
+      "channels": [
+        { "id": "left", "spatialHint": "SPATIAL_LEFT" },
+        { "id": "center", "spatialHint": "SPATIAL_CENTER" },
+        { "id": "right", "spatialHint": "SPATIAL_RIGHT" },
+        { "id": "surround-left", "spatialHint": "SPATIAL_SURROUND_LEFT" },
+        { "id": "surround-right", "spatialHint": "SPATIAL_SURROUND_RIGHT" }
+      ]
+    }
+  ]
+}

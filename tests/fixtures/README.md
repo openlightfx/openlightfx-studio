@@ -47,6 +47,8 @@ Assert.Empty(parsed.ValidationErrors); // IO-002
 
 `effects.json` cases include the `input` the renderer was given and the `commands` it must return. Compare offset, RGB, and brightness exactly. Where a proto comment disagrees with the renderer, the fixture wins.
 
+`domain/layouts.json` is the fixed-layout contract used by Studio's domain-fixture test. `routing/cases.json` is the shared plugin-routing contract described below; Studio checks its fixture integrity and lane labels but does not implement routing.
+
 Copy the directory into the test output if the test host cannot see the sibling checkout:
 
 ```xml

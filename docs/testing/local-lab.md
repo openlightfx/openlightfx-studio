@@ -40,7 +40,7 @@ Host ports bind to `127.0.0.1`. The project is always `olfx-lab-<id>`, not Studi
 4. Checks that **both bulbs simultaneously** reach red/blue, then green/blue, using resulting simulator state samples after a fresh cursor.
 5. Stops playback and waits for both bulbs to restore to the off baseline before the next scenario; attaches the authored track and expected/observed samples. Emby Web uses its real Stop keyboard shortcut because merely closing a tab does not reliably report stopped playback.
 
-`run` uses the dedicated serial `fullstack-lab` Playwright project. It accepts additional Playwright arguments, such as `run --grep 'LAB-'`. The legacy Chromium/Firefox full-stack suite remains separate. The lab collects a build identity manifest (revisions, dirty status, tracked diffs and hashes including untracked source files), build log when available, room configuration, saved tracks/sidecars, simulator NDJSON, bounded recent container logs plus Emby's runtime/plugin logs, result JSON with current runner identity, and Playwright screenshots/traces/attachments. Failed labs remain available for inspection. Artifacts record build-time sources: changing code afterward does not update the embedded DLL until reset.
+`run` uses the dedicated serial `fullstack-lab` Playwright project. It accepts additional Playwright arguments, such as `run --grep 'LAB-'`. The legacy Chromium/Firefox full-stack suite remains separate. The lab collects a build identity manifest (revisions, dirty status, tracked diffs and hashes including untracked source files), build log when available, room configuration, saved tracks/sidecars, simulator NDJSON, bounded recent container logs plus Emby's runtime/plugin logs, result JSON with current runner identity, and Playwright screenshots/traces/attachments. Requirement outcomes go to `test-results/outcomes-fullstack-lab-<id>.jsonl`, separate from browser results and from other isolated lab IDs. Failed labs remain available for inspection. Artifacts record build-time sources: changing code afterward does not update the embedded DLL until reset.
 
 ## Source-free scenario variations
 
@@ -135,6 +135,31 @@ patching the test framework for each variation. It does not automatically make
 those workflows covered: the external test must explicitly exercise and assert
 them. Framework/product bug fixes are separate from test-case data changes.
 This interface and its passes establish evidence only for the behaviors explicitly exercised; they do not establish physical hardware accuracy.
+
+## J1 routing and room regressions
+
+`tests/fixtures/lab/model-006-follows.json` is a maintained routing regression fixture, and `e2e/fullstack/lab-j1-model-routing.spec.ts` uses it to verify the plugin's rendered mix for a Center bulb following Ambient, room deletion/unplacement and screen reuse, and persistence of a renamed bulb plus Follows after reload. Run it in a fresh isolated lab because bulb renames persist in the disposable plugin database:
+
+```bash
+export OLFX_LAB_ID=j1-routing OLFX_LAB_PORT=18100 OLFX_LAB_CONTROL_PORT=19206
+export OLFX_LAB_SCENARIO="$PWD/tests/fixtures/lab/model-006-follows.json"
+node scripts/fullstack/lab.mjs start
+OLFX_LAB_TEST_FILE="$PWD/e2e/fullstack/lab-j1-model-routing.spec.ts" node scripts/fullstack/lab.mjs run
+node scripts/fullstack/lab.mjs collect
+node scripts/fullstack/lab.mjs stop
+```
+
+The Follows case uses three independent REST simulator bulbs and asserts the exact brightness-weighted output for all three bulbs. The screen-reuse assertion saves a replacement room on the deleted room's device; the rename regression runs last because a bulb rename is retained by the disposable plugin store. The suite also checks `TRACK-002` against the room's suggested layout before creating a track.
+
+For the genuinely empty, first-run state, use a fresh lab without a scenario (do not seed a room fixture):
+
+```bash
+export OLFX_LAB_ID=j1-first-run OLFX_LAB_PORT=18102 OLFX_LAB_CONTROL_PORT=19208
+node scripts/fullstack/lab.mjs start
+OLFX_LAB_TEST_FILE="$PWD/e2e/fullstack/lab-j1-first-run.spec.ts" node scripts/fullstack/lab.mjs run
+node scripts/fullstack/lab.mjs collect
+node scripts/fullstack/lab.mjs stop
+```
 
 ## Observation contract
 

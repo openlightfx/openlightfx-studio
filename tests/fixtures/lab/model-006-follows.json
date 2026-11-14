@@ -1,0 +1,54 @@
+{
+  "name": "MODEL-006 Follows routes Center through Ambient",
+  "movie": "clip-a",
+  "room": {
+    "name": "Follows routing room",
+    "bulbs": [
+      { "id": "left-bulb", "name": "Left lamp", "position": "left" },
+      { "id": "center-bulb", "name": "Center lamp", "position": "center", "follows": "ambient" },
+      { "id": "right-bulb", "name": "Right lamp", "position": "right" }
+    ]
+  },
+  "track": {
+    "title": "Follows routing regression",
+    "layout": "3.0",
+    "keyframes": [
+      {
+        "channel": "left",
+        "timeMs": 1200,
+        "color": "#ff0000",
+        "brightness": 100,
+        "interpolation": "STEP",
+        "transitionMs": 0
+      },
+      {
+        "channel": "center",
+        "timeMs": 1200,
+        "color": "#00ff00",
+        "brightness": 100,
+        "interpolation": "STEP",
+        "transitionMs": 0
+      },
+      {
+        "channel": "right",
+        "timeMs": 1200,
+        "color": "#0000ff",
+        "brightness": 100,
+        "interpolation": "STEP",
+        "transitionMs": 0
+      }
+    ]
+  },
+  "expectations": [
+    {
+      "name": "Center follows Ambient and mixes all channels; Center also folds into both front bulbs",
+      "withinMs": 6000,
+      "holdMs": 300,
+      "bulbs": {
+        "left-bulb": { "color": "#808000", "brightness": 100, "power": true },
+        "center-bulb": { "color": "#555555", "brightness": 100, "power": true },
+        "right-bulb": { "color": "#008080", "brightness": 100, "power": true }
+      }
+    }
+  ]
+}

@@ -20,6 +20,7 @@ export async function runLabScenario(
   page: Page,
   request: APIRequestContext,
   testInfo: TestInfo,
+  hooks: { beforeTrackCreate?: (page: Page) => Promise<void> } = {},
   file = process.env.OLFX_LAB_SCENARIO_FILE!
 ) {
   const scenario = loadScenario(file);
@@ -103,6 +104,7 @@ export async function runLabScenario(
   expect(movie, `Seeded movie ${scenario.movie}`).toBeTruthy();
   await page.goto(`${studio}#/movie/${movie.itemId}`);
   await page.getByLabel('Title', { exact: true }).fill(`${scenario.track.title} ${Date.now()}`);
+  await hooks.beforeTrackCreate?.(page);
   await page
     .getByRole('button', { name: new RegExp(scenario.track.layout.replace('.', '\\.')) })
     .click();
