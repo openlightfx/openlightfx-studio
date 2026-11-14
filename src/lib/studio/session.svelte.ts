@@ -941,9 +941,8 @@ export class StudioSession {
     const minutes = Number(match[2]);
     const seconds = Number(match[3]);
     const millis = Number((match[4] ?? '').padEnd(3, '0'));
-    const frameMs = frameStepMs(FPS);
-    const requestedMs = ((hours * 60 + minutes) * 60 + seconds) * 1000 + millis;
-    const timestampMs = Math.round(requestedMs / frameMs) * frameMs;
+    // Typed h:mm:ss.mmm values are exact; only pointer placement/dragging snaps to frames.
+    const timestampMs = ((hours * 60 + minutes) * 60 + seconds) * 1000 + millis;
     const id = this.selection[0];
     const current = this.track.keyframes.find((keyframe) => keyframe.id === id);
     if (!current || timestampMs > this.durationMs()) {
