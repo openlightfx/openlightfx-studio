@@ -232,7 +232,7 @@ Reads `GET /OpenLightFX/Studio/Items?search=` (title, year, runtime, poster URL 
 
 **Goal:** get from "this movie" to an open track in one click, whether the movie already has tracks or not.
 
-**Implementation status:** The Movie screen is implemented in `src/lib/components/MovieSelectionScreen.svelte`, with track opening/creation and file-open behavior in the Studio flow. Step exit depends on required automated coverage passing; remaining coverage is tracked by traceability.
+**Implementation status:** **Complete — J1 Step 3.** `TRACK-001` through `TRACK-004` have passing browser and isolated Emby lab coverage in Chromium and Firefox. Saved tracks show metadata and the active badge, invalid tracks cannot be opened, room-suggested creation stays unsaved until Save, and file import handles validation and mismatch confirmation. Room selection carries into editor preview, and layout coverage comes from the plugin. See the [Step 3 verification record](../testing/j1-step3-verification.md) for outcomes, evidence and unchanged broader gate failures. This does not mark other J1 steps complete.
 
 **Screen:** [04-track-open-create.png](wireframes/04-track-open-create.png).
 

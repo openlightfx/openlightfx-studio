@@ -106,7 +106,9 @@
         rooms = nextRooms;
         bulbs = nextBulbs;
         canManage = setup.isAdmin && !session.nonAdmin;
-        selectedRoomId = nextRooms[0]?.id ?? '';
+        const requestedRoom = sessionStorage.getItem('olfx-preview-room');
+        selectedRoomId =
+          nextRooms.find((room) => room.id === requestedRoom)?.id ?? nextRooms[0]?.id ?? '';
       })
       .catch((error: unknown) => {
         if (alive) previewError = (error as Error).message || 'Rooms could not be loaded.';

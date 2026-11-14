@@ -194,6 +194,22 @@ Run with `OLFX_LAB_TEST_FILE="$PWD/e2e/fullstack/lab-j1-step2.spec.ts"` and
 `OLFX_LAB_PLAYBACK=library`; `OLFX_LAB_BROWSER=firefox` selects its Firefox run.
 Use a fresh lab or reset before each final run.
 
+### J1 Step 3 regression
+
+`e2e/fullstack/lab-j1-step3.spec.ts` verifies saved-track metadata/active selection,
+opening, suggested-layout creation with no writes until Save, no-room creation,
+room selection for editor preview, real file import/validation, and the marketplace
+note. It reuses `model-006-follows.json` for its three-bulb inventory only, not
+playback or rendered-light assertions. No bulb commands or video playback are
+part of this room/track setup suite.
+
+Run with that fixture as `OLFX_LAB_SCENARIO`,
+`OLFX_LAB_TEST_FILE="$PWD/e2e/fullstack/lab-j1-step3.spec.ts"`, and
+`OLFX_LAB_PLAYBACK=track-setup`. `OLFX_LAB_BROWSER=firefox` selects Firefox.
+Reset before each final run because the serial suite creates saved tracks.
+See the [Step 3 verification record](j1-step3-verification.md) for exact commands,
+source identities, restricted evidence and the outcome-based traceability gate.
+
 ### Arbitrary test behavior without repository edits
 
 For actions beyond declarative author/play/observe phases, provide an external
