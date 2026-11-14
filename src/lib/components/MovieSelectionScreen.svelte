@@ -10,7 +10,13 @@
   import { loadRooms } from '$lib/api/rooms';
   import type { Room } from '$lib/api/rooms';
   import type { LibraryItem, TrackSummary } from '$lib/api/types';
-  import { decodeTrack, inferChannelLayout, MAX_TRACK_BYTES, validateTrack } from '$lib/domain';
+  import {
+    decodeTrack,
+    inferChannelLayout,
+    MAX_TRACK_BYTES,
+    suggestChannelLayout,
+    validateTrack,
+  } from '$lib/domain';
   import { setPendingImport } from '$lib/studio/pending-import';
 
   const layouts = [
@@ -42,13 +48,10 @@
 
   function suggestedLayout(room: Room | undefined): string {
     if (!room || room.bulbs.length === 0) return 'LAYOUT_2_0';
-    const positions = new Set(room.bulbs.map((bulb) => bulb.position).filter(Boolean));
-    if ([...positions].some((position) => position !== 'ambient')) {
-      if (positions.has('surround-left') || positions.has('surround-right')) return 'LAYOUT_5_0';
-      if (positions.has('center')) return 'LAYOUT_3_0';
-      return 'LAYOUT_2_0';
-    }
-    return 'LAYOUT_AMBIENT';
+    const positions = room.bulbs
+      .map((bulb) => bulb.position)
+      .filter((position): position is NonNullable<typeof position> => position !== null);
+    return suggestChannelLayout(positions);
   }
 
   function layoutLabel(id: string): string {

@@ -54,6 +54,7 @@ import {
   sampleChannel,
   setKelvin,
   shouldFlushAutosave,
+  suggestChannelLayout,
   sidecarDocument,
   snapTime,
   stepPlayhead,
@@ -708,6 +709,16 @@ requirement(
     expect(upgraded.keyframes).toEqual(keyframes);
   }
 );
+
+requirement('MODEL-002 @unit room positions suggest the smallest covering layout', () => {
+  expect(suggestChannelLayout(['ambient'])).toBe('LAYOUT_AMBIENT');
+  expect(suggestChannelLayout(['left', 'right'])).toBe('LAYOUT_2_0');
+  expect(suggestChannelLayout(['left', 'center', 'right'])).toBe('LAYOUT_3_0');
+  expect(suggestChannelLayout(['left', 'right', 'surround-left', 'surround-right'])).toBe(
+    'LAYOUT_5_0'
+  );
+  expect(suggestChannelLayout(['left'])).toBe('LAYOUT_2_0');
+});
 
 requirement('MODEL-001 @unit fixed layouts round-trip and enforce their channel positions', () => {
   const track = newTrackFromMovie('42', 'Three channel movie lighting', 10000, 'LAYOUT_3_0');

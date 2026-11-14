@@ -408,6 +408,16 @@ export function emptyMetadata(title: string, durationMs: number): Track['metadat
   };
 }
 
+export function suggestChannelLayout(positions: Iterable<string>): string {
+  const present = new Set(positions);
+  if ([...present].some((position) => position !== 'ambient')) {
+    if (present.has('surround-left') || present.has('surround-right')) return 'LAYOUT_5_0';
+    if (present.has('center')) return 'LAYOUT_3_0';
+    return 'LAYOUT_2_0';
+  }
+  return 'LAYOUT_AMBIENT';
+}
+
 export const CHANNEL_LAYOUTS: Record<string, TemplateChannel[]> = {
   LAYOUT_AMBIENT: [{ id: 'ambient', displayName: 'Ambient', spatialHint: 'SPATIAL_AMBIENT' }],
   LAYOUT_2_0: [

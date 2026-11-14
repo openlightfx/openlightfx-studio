@@ -108,8 +108,12 @@
         Studio can't reach the OpenLightFX plugin. {error}
         <button onclick={() => void searchItems(search)}>Retry</button>
       </p>
-    {:else if loading}<div class="grid" aria-label="Loading movies">
-        {#each Array(8) as _}<div class="placeholder" aria-hidden="true"></div>{/each}
+    {:else if loading}
+      <div class="loading-state" role="status" aria-label="Loading movies">
+        <p class="loading-label">Loading movies…</p>
+        <div class="grid" aria-hidden="true">
+          {#each Array(8) as _}<div class="placeholder"></div>{/each}
+        </div>
       </div>
     {:else if items.length === 0}
       {#if search}<p class="empty">
@@ -245,8 +249,24 @@
     font-size: 18px;
     font-weight: 600;
   }
+  .loading-label {
+    margin: 0 0 12px;
+    color: var(--text-muted);
+  }
   .placeholder {
-    opacity: 0.55;
+    background: linear-gradient(100deg, #34343b 30%, #45454d 45%, #34343b 60%);
+    background-size: 200% 100%;
+    animation: poster-shimmer 1.4s ease-in-out infinite;
+  }
+  @keyframes poster-shimmer {
+    to {
+      background-position-x: -200%;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .placeholder {
+      animation: none;
+    }
   }
   .title {
     font-weight: 600;

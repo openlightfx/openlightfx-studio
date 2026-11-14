@@ -216,13 +216,13 @@ The header, then a **Search** field and a **Sort** menu in one row, then a grid 
 
 ### Empty and error states
 
-| Situation                   | What the person sees                                                                     |
-| --------------------------- | ---------------------------------------------------------------------------------------- |
-| Library still loading       | Grey poster placeholders, not a spinner over a blank page.                               |
-| Emby has no movies          | "Emby has no movies yet. Add a movie library in Emby, then come back."                   |
-| Search matches nothing      | "No movies match "wick". Check the spelling or clear the search." with **Clear search**. |
-| Movie has no poster in Emby | A grey card with the title in large type. Never a broken image icon.                     |
-| Plugin unreachable          | The ERR-002 full-page error.                                                             |
+| Situation                   | What the person sees                                                                                                                                                                |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Library still loading       | A visible “Loading movies…” status and animated grey poster placeholders stay on screen until the movie request finishes. The shimmer is disabled when reduced motion is preferred. |
+| Emby has no movies          | "Emby has no movies yet. Add a movie library in Emby, then come back."                                                                                                              |
+| Search matches nothing      | "No movies match "wick". Check the spelling or clear the search." with **Clear search**.                                                                                            |
+| Movie has no poster in Emby | A grey card with the title in large type. Never a broken image icon.                                                                                                                |
+| Plugin unreachable          | The ERR-002 full-page error.                                                                                                                                                        |
 
 ### Data
 
@@ -501,7 +501,7 @@ Format: ID, title, layer (all L1), status (all `approved`), a one-line statement
 #### LIB-001 Poster grid of Emby movies
 
 - **Statement:** The Library shows every Emby movie as a poster card with title, year, and track badge; no TV episodes.
-- **Acceptance:** Given Emby with 3 movies and 1 series, then 3 cards show, each with title and year, and the one with a saved track says "1 track".
+- **Acceptance:** Given Emby with 3 movies and 1 series, then 3 cards show, each with title and year, and the one with a saved track says "1 track". While the initial movie request is pending, the visible “Loading movies…” status and poster placeholders remain until the cards are ready.
 - **Tests:** browser, fullstack
 
 #### LIB-002 Search
