@@ -59,6 +59,7 @@ import {
 } from '$lib/api/client';
 import { failedProxyMessage, proxyPlayReason, seekPastHorizon } from '$lib/studio/proxy-playback';
 import { setPendingImport, takePendingImport } from '$lib/studio/pending-import';
+import { framePosition } from '$lib/studio/frame-position';
 
 const DB_NAME = 'openlightfx-studio';
 const STORE = 'crash';
@@ -99,7 +100,10 @@ export class StudioSession {
   pendingRoute = $state('');
   frameUrl = $state('');
   frameLoading = $state(false);
+  frameTimeMs = $state<number | null>(null);
   private frameRequest = 0;
+  private frameAbort: AbortController | null = null;
+  private appliedSeekMs: number | null = null;
   private frameSelection: string[] = [];
   private wasGrowing = false;
   private resumeProxy = false;
@@ -419,12 +423,14 @@ export class StudioSession {
       this.resumeProxy = !video.paused;
       this.pendingSeekMs ??= this.playheadMs;
       this.videoReady = false;
+      this.appliedSeekMs = null;
+      this.cancelEyedrop();
       video.load();
     }
   }
 
   private releasePendingSeek(info: MediaInfo): void {
-    if (this.pendingSeekMs == null || !this.video || this.video.readyState < 1) return;
+    if (this.pendingSeekMs == null || !this.video || this.video.readyState < 2) return;
     if (
       seekPastHorizon(
         this.pendingSeekMs,
@@ -435,8 +441,40 @@ export class StudioSession {
       return;
     if (info.proxy.state === 'missing') return;
     const target = this.pendingSeekMs;
-    if (Number.isFinite(this.video.duration) && this.video.duration * 1000 < target) return;
+    if (
+      info.proxy.state === 'building' &&
+      Number.isFinite(this.video.duration) &&
+      this.video.duration * 1000 < target
+    )
+      return;
+    if (this.appliedSeekMs === target) return;
+    const reachableTarget =
+      info.proxy.state === 'ready' && Number.isFinite(this.video.duration)
+        ? Math.min(target / 1000, this.video.duration)
+        : target / 1000;
+    // Duration/progress can run ahead of a growing Range resource's seekable bytes.
+    // Do not turn a queued target into a native seek that will simply clamp early.
+    let reachable = Math.abs(this.video.currentTime - reachableTarget) < 0.000001;
+    for (let i = 0; i < this.video.seekable.length; i++) {
+      if (
+        this.video.seekable.start(i) <= reachableTarget &&
+        this.video.seekable.end(i) + 0.000001 >= reachableTarget
+      )
+        reachable = true;
+    }
+    if (!reachable) return;
+    this.dispatchSeek(target);
+  }
+
+  private dispatchSeek(target: number): void {
+    if (!this.video) return;
+    this.appliedSeekMs = target;
+    if (!this.video.seeking && Math.abs(this.video.currentTime * 1000 - target) < 0.001) {
+      this.onVideoSeeked();
+      return;
+    }
     this.video.currentTime = target / 1000;
+    if (!this.video.seeking) this.onVideoSeeked();
   }
 
   /**
@@ -607,6 +645,7 @@ export class StudioSession {
       return;
     }
     if (video.paused) {
+      this.cancelEyedrop();
       void video.play();
       this.playing = true;
     } else {
@@ -631,6 +670,8 @@ export class StudioSession {
 
   seek(ms: number): void {
     const time = Math.min(Math.max(0, ms), this.durationMs() || ms);
+    this.cancelEyedrop();
+    this.appliedSeekMs = null;
     this.playheadMs = time;
     if (!this.video || !this.videoSrc) return;
     const building = this.media?.proxy.state === 'building';
@@ -644,7 +685,8 @@ export class StudioSession {
       return;
     }
     this.pendingSeekMs = time;
-    this.video.currentTime = time / 1000;
+    if (this.media) this.releasePendingSeek(this.media);
+    else this.dispatchSeek(time);
   }
 
   onVideoMetadata(): void {
@@ -664,20 +706,40 @@ export class StudioSession {
   }
 
   onVideoSeeked(): void {
-    if (
-      this.video &&
-      this.pendingSeekMs != null &&
-      Math.abs(this.video.currentTime * 1000 - this.pendingSeekMs) <=
-        frameStepMs(this.media?.proxy.fps || FPS)
-    )
+    if (!this.video || this.video.seeking) return;
+    // Native completion is authoritative even if the browser adjusted the time.
+    // A newer target still queued past the encoding horizon is not completed by
+    // an older native event (seek() invalidates appliedSeekMs).
+    if (this.appliedSeekMs != null && this.pendingSeekMs === this.appliedSeekMs) {
+      if (
+        this.media?.proxy.state === 'building' &&
+        Math.abs(this.video.currentTime * 1000 - this.appliedSeekMs) > 1
+      ) {
+        // A growing stream may advertise a range before the browser has the next
+        // fragment. Keep the future target queued until progress/reopen makes it
+        // reachable; the picker still samples the actual displayed position.
+        this.appliedSeekMs = null;
+        return;
+      }
       this.pendingSeekMs = null;
+      this.appliedSeekMs = null;
+    }
+    this.onVideoTimeUpdate();
+  }
+
+  onVideoTimeUpdate(): void {
+    if (!this.video) return;
+    this.playing = !this.video.paused;
+    if (this.pendingSeekMs != null && this.media?.proxy.state === 'ready')
+      this.releasePendingSeek(this.media);
+    if (this.pendingSeekMs != null || this.video.seeking || this.video.readyState < 2) return;
+    this.playheadMs = this.video.currentTime * 1000;
   }
 
   syncFromVideo(): void {
     if (!this.video || this.video.paused) return;
-    this.playing = !this.video.paused;
+    this.onVideoTimeUpdate();
     if (this.pendingSeekMs != null) return;
-    this.playheadMs = this.video.currentTime * 1000;
     const position = this.playheadMs * this.pxPerMs;
     if (position - this.scrollX >= this.laneWidth * 0.75) {
       this.scrollX = Math.max(
@@ -1144,10 +1206,13 @@ export class StudioSession {
   }
 
   cancelEyedrop(): void {
+    this.frameAbort?.abort();
+    this.frameAbort = null;
     this.frameRequest++;
     if (this.frameUrl) URL.revokeObjectURL(this.frameUrl);
     this.frameUrl = '';
     this.frameLoading = false;
+    this.frameTimeMs = null;
   }
 
   async eyedrop(): Promise<void> {
@@ -1157,21 +1222,33 @@ export class StudioSession {
     }
     this.cancelEyedrop();
     const request = this.frameRequest;
+    const controller = new AbortController();
+    this.frameAbort = controller;
+    const itemId = this.item.itemId;
+    const video = this.video;
     this.frameSelection = [...this.selection];
-    this.video?.pause();
+    video?.pause();
     this.playing = false;
     this.frameLoading = true;
     try {
-      const response = await fetchFrame(this.item.itemId, this.playheadMs);
+      const position = await framePosition(video, this.playheadMs, controller.signal);
+      if (request !== this.frameRequest) return;
+      const response = await fetchFrame(itemId, position, controller.signal);
       if (!response.ok) throw new Error(await response.text());
       const blob = await response.blob();
       if (request !== this.frameRequest) return;
+      const timestamp = response.headers.get('X-OpenLightFX-Source-Time-Ms');
+      const measured = timestamp == null ? NaN : Number(timestamp);
+      this.frameTimeMs = Number.isFinite(measured) && measured >= 0 ? measured : null;
       this.frameUrl = URL.createObjectURL(blob);
       this.status = 'Click the frame to pick a color';
     } catch {
       if (request === this.frameRequest) this.alert = 'The frame could not be sampled. Try again.';
     } finally {
-      if (request === this.frameRequest) this.frameLoading = false;
+      if (request === this.frameRequest) {
+        this.frameLoading = false;
+        this.frameAbort = null;
+      }
     }
   }
 

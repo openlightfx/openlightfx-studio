@@ -199,10 +199,21 @@ requirement(
     expect(dialog.message()).toContain('6 seconds');
     await dialog.dismiss();
     await expect(page).toHaveURL(/#\/movie\/m1$/);
-    await chooseFile(page, new Uint8Array([255, 255, 255]));
+    // Native activation was verified by the first upload. As in the title-
+    // mismatch case, repeated uploads after native Cancel exercise validation
+    // through the same input, without Firefox's native-dialog focus race.
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'invalid.lightfx',
+      mimeType: 'application/octet-stream',
+      buffer: Buffer.from([255, 255, 255]),
+    });
     await expect(page.getByRole('alert')).toHaveText("That file isn't a .lightfx track.");
     track.metadata.durationMs = 0;
-    await chooseFile(page, encodeTrack(track));
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'invalid-track.lightfx',
+      mimeType: 'application/octet-stream',
+      buffer: Buffer.from(encodeTrack(track)),
+    });
     await expect(page.getByRole('alert')).toHaveText("That file isn't a .lightfx track.");
     await expect(page).toHaveURL(/#\/movie\/m1$/);
   }

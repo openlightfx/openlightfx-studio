@@ -1,6 +1,12 @@
 # J1 Step 4 — editor implementation verification
 
-## Scope and result
+## Current status: complete
+
+J1 Step 4 is complete against its scoped required automated checks. The current paired movie-frame fix and canvas-timeline follow-up have been revalidated with 288 passing browser tests, 143 Studio unit/fixture tests, 130 plugin tests, and 14 maintained Step 4 isolated-lab tests per browser. The full selected outcome gate listed below also passes against those current results. See [the current verification record](frame-picker-timestamp-fix-verification.md).
+
+The historical results below explain the earlier audit; their 164 legacy-browser failures have since been replaced by approved J1 workflows. The seven separate global traceability gaps and owner-media/hardware limits remain explicit. This does not complete Step 5 or whole-J1 acceptance.
+
+## Historical scope and result
 
 The Step 4 implementation gaps reproduced in the audit are resolved. Passing outcome-based traceability covers `EDIT-001`–`EDIT-014`, plus `MEDIA-016`, `PROP-004`, `TIME-002`, `TIME-010`, `SAVE-003`, `ERR-003`, `PREV-007`, and `PREV-008`.
 

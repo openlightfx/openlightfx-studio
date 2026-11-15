@@ -1,12 +1,15 @@
 <script lang="ts">
   import { sourcePixel } from '$lib/domain';
+  import { formatClock } from '$lib/studio/session.svelte';
   let {
     src,
+    sourceTimeMs = null,
     onpick,
     oncancel,
     onerror,
   }: {
     src: string;
+    sourceTimeMs?: number | null;
     onpick: (color: { r: number; g: number; b: number }) => void;
     oncancel: () => void;
     onerror: () => void;
@@ -57,7 +60,12 @@
     <img bind:this={image} {src} alt="Source frame" onload={loaded} {onerror} />
   </button>
   <div class="instructions">
-    Click the frame to pick a color. Enter picks the center.
+    <span
+      >Click the frame to pick a color. Enter picks the center.
+      {#if sourceTimeMs != null}<span class="source-time"
+          >Source frame: {formatClock(sourceTimeMs)}</span
+        >{/if}
+    </span>
     <button onclick={oncancel}>Cancel color pick</button>
   </div>
 </div>
@@ -94,6 +102,10 @@
     padding: 6px;
     color: white;
     background: #000b;
+  }
+  .source-time {
+    display: block;
+    font-variant-numeric: tabular-nums;
   }
   .instructions button {
     padding: 6px 9px;

@@ -280,8 +280,13 @@ export async function postJson(path: string, body: unknown): Promise<Response> {
   });
 }
 
-export function fetchFrame(itemId: string, timeMs: number): Promise<Response> {
+export function fetchFrame(
+  itemId: string,
+  timeMs: number,
+  signal?: AbortSignal
+): Promise<Response> {
   return send(
-    `/OpenLightFX/Studio/Items/${encodeURIComponent(itemId)}/Frame?timeMs=${Math.round(timeMs)}`
+    `/OpenLightFX/Studio/Items/${encodeURIComponent(itemId)}/Frame?timeMs=${Math.round(timeMs)}`,
+    { signal }
   );
 }

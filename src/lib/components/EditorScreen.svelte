@@ -844,8 +844,12 @@
           muted
           playsinline
           preload="auto"
-          onplay={() => (session.playing = true)}
-          onpause={() => (session.playing = false)}
+          onplay={() => {
+            session.cancelEyedrop();
+            session.playing = true;
+          }}
+          onpause={() => session.onVideoTimeUpdate()}
+          ontimeupdate={() => session.onVideoTimeUpdate()}
           onloadedmetadata={() => session.onVideoMetadata()}
           onloadeddata={() => session.onVideoData()}
           onseeked={() => session.onVideoSeeked()}
@@ -856,6 +860,7 @@
           </p>{/if}
         {#if session.frameUrl}<PluginFramePicker
             src={session.frameUrl}
+            sourceTimeMs={session.frameTimeMs}
             onpick={(color) => session.pickFrameColor(color)}
             oncancel={() => session.cancelEyedrop()}
             onerror={() => {

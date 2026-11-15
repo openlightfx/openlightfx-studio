@@ -235,11 +235,133 @@ requirement(
 );
 
 requirement(
+  'PROP-004 @fullstack picking immediately before a cut matches the actually paused movie frame',
+  async ({ page, request }) => {
+    await create(page, 'Frame identity before a cut');
+    await add(page, 'Left', 0.1, 'ffffff', '100');
+    await expect
+      .poll(async () => (await get(request, `Items/${movie.itemId}/MediaInfo`)).proxy.state, {
+        timeout: 60000,
+      })
+      .toBe('ready');
+    await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeEnabled({
+      timeout: 60000,
+    });
+    await seek(page, 0.199);
+    const video = page.locator('video');
+    await expect
+      .poll(() => video.evaluate((node) => (node as HTMLVideoElement).seeking))
+      .toBe(false);
+    expect(await video.evaluate((node) => (node as HTMLVideoElement).paused)).toBe(true);
+    await expect
+      .poll(() =>
+        video.evaluate((node) => {
+          const v = node as HTMLVideoElement,
+            c = document.createElement('canvas');
+          c.width = v.videoWidth;
+          c.height = v.videoHeight;
+          const context = c.getContext('2d')!;
+          context.drawImage(v, 0, 0);
+          return [...context.getImageData(c.width / 2, c.height / 2, 1, 1).data].slice(0, 3);
+        })
+      )
+      .toEqual([0, 0, 0]);
+    await page.getByRole('button', { name: 'Pick color from movie' }).click();
+    await expect(page.getByAltText('Source frame')).toBeVisible();
+    await page.getByRole('button', { name: 'Source frame — click to sample color' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByLabel('Hex', { exact: true })).toHaveValue('000000');
+  }
+);
+
+requirement(
+  'PROP-004 @fullstack source PNG identity matches paused proxy frames before at and after cuts and at the movie end',
+  async ({ page, request }) => {
+    await create(page, 'Exact frame identity');
+    await add(page, 'Left', 0.1, 'ffffff', '100');
+    await expect
+      .poll(async () => (await get(request, `Items/${movie.itemId}/MediaInfo`)).proxy.state, {
+        timeout: 60000,
+      })
+      .toBe('ready');
+    await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeEnabled({
+      timeout: 60000,
+    });
+    // Initial pointer seek follows the reported workflow. Native API seeks below
+    // independently exercise exact boundaries that pointer pixel rounding cannot.
+    await seek(page, 0.199);
+    const video = page.locator('video');
+    const cases = [
+      [1.99, '000000', 1958],
+      [2, 'fd0000', 2000],
+      [2.01, 'fd0000', 2000],
+      [3.99, 'fd0000', 3958],
+      [4, '007f00', 4000],
+      [4.01, '007f00', 4000],
+      [5.99, '007f00', 5958],
+      [6, '0000fe', 6000],
+      [6.01, '0000fe', 6000],
+      [7.99, '0000fe', 7958],
+      [8, 'ffffff', 8000],
+      [8.01, 'ffffff', 8000],
+      [9.99, 'ffffff', 9958],
+      [10, 'ffffff', 9958],
+    ] as const;
+    for (const [time, hex, sourceMs] of cases) {
+      await video.evaluate((node, seconds) => {
+        (node as HTMLVideoElement).currentTime = seconds;
+      }, time);
+      await expect
+        .poll(() => video.evaluate((node) => (node as HTMLVideoElement).seeking))
+        .toBe(false);
+      await page.evaluate(
+        () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      );
+      const rgb = await video.evaluate((node) => {
+        const v = node as HTMLVideoElement,
+          c = document.createElement('canvas');
+        c.width = v.videoWidth;
+        c.height = v.videoHeight;
+        const context = c.getContext('2d')!;
+        context.drawImage(v, 0, 0);
+        return [...context.getImageData(c.width / 2, c.height / 2, 1, 1).data].slice(0, 3);
+      });
+      if (hex === '000000') expect(rgb).toEqual([0, 0, 0]);
+      else if (hex === 'ffffff') expect(rgb).toEqual([255, 255, 255]);
+      else {
+        const dominant = hex === 'fd0000' ? 0 : hex === '007f00' ? 1 : 2;
+        for (let i = 0; i < 3; i++)
+          if (i !== dominant) expect(rgb[dominant] - rgb[i]).toBeGreaterThan(64);
+      }
+      const frame = page.waitForResponse((response) => response.url().includes('/Frame?'));
+      await page.getByRole('button', { name: 'Pick color from movie' }).click();
+      const response = await frame;
+      expect(response.ok()).toBeTruthy();
+      expect(response.headers()['x-openlightfx-source-time-ms']).toBe(String(sourceMs));
+      if (time === 10)
+        await expect(page.getByText('Source frame: 00:00:09.958', { exact: true })).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: 'Source frame — click to sample color' })
+      ).toBeEnabled();
+      await page.getByRole('button', { name: 'Source frame — click to sample color' }).focus();
+      await page.keyboard.press('Enter');
+      await expect(page.getByLabel('Hex', { exact: true })).toHaveValue(hex);
+    }
+    const saved = await save(page, request);
+    expect(saved.track.keyframes[0].color).toEqual({ r: 255, g: 255, b: 255 });
+  }
+);
+
+requirement(
   'PROP-004 @fullstack the real plugin PNG supplies the original center pixel to the inspector and saved protobuf',
   async ({ page, request }) => {
     await create(page, 'Step 4 eyedropper');
     await add(page, 'Left', 0.3, '000000', '100');
     await seek(page, 0.3);
+    // A cold proxy may still be encoding; extraction must not race a queued seek.
+    await expect(page.getByRole('button', { name: 'Pick color from movie' })).toBeEnabled({
+      timeout: 60000,
+    });
     const response = page.waitForResponse((response) => response.url().includes('/Frame?'));
     await page.getByRole('button', { name: 'Pick color from movie' }).click();
     expect((await response).ok()).toBeTruthy();
@@ -255,6 +377,84 @@ requirement(
     await expect(page.getByLabel('Hex', { exact: true })).toHaveValue(hex);
     const saved = await save(page, request);
     expect(saved.track.keyframes[0].color).toEqual({ r: pixel.r, g: pixel.g, b: pixel.b });
+  }
+);
+
+requirement(
+  'PROP-004 @fullstack forward scrub PNGs match the actual movie position and the independently expected rendered proxy scene',
+  async ({ page, request }) => {
+    await create(page, 'Forward frame picker');
+    await add(page, 'Left', 0.1, '000000', '100');
+    await expect
+      .poll(async () => (await get(request, `Items/${movie.itemId}/MediaInfo`)).proxy.state, {
+        timeout: 60000,
+      })
+      .toBe('ready');
+    await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeEnabled({
+      timeout: 60000,
+    });
+    const pixels = JSON.parse(
+      fs.readFileSync(`${process.env.OLFX_MEDIA_DIR}/clip-a-center-pixels.json`, 'utf8')
+    ).pixels;
+    for (const [fraction, name] of [
+      [0.3, 'red'],
+      [0.5, 'green'],
+      [0.7, 'blue'],
+    ] as const) {
+      const pixel = pixels.find((entry: any) => entry.name === name);
+      await seek(page, fraction);
+      await expect(page.getByAltText('Source frame')).toHaveCount(0);
+      await expect
+        .poll(() =>
+          page
+            .locator('video')
+            .evaluate((node) => {
+              const video = node as HTMLVideoElement;
+              const canvas = document.createElement('canvas');
+              canvas.width = video.videoWidth;
+              canvas.height = video.videoHeight;
+              const context = canvas.getContext('2d')!;
+              context.drawImage(video, 0, 0);
+              return [
+                ...context.getImageData(
+                  Math.floor(canvas.width / 2),
+                  Math.floor(canvas.height / 2),
+                  1,
+                  1
+                ).data,
+              ].slice(0, 3);
+            })
+            .then((rgb) => {
+              // Video color management differs from PNG RGB-byte decoding:
+              // the half-green BT.709 frame is brighter in browser sRGB.
+              // Check the independent scene here; exact PNG/protobuf bytes below.
+              const dominant = { red: 0, green: 1, blue: 2 }[name];
+              return (
+                rgb[dominant] - Math.max(...rgb.filter((_, index) => index !== dominant)) >= 64
+              );
+            })
+        )
+        .toBe(true);
+      const response = page.waitForResponse((response) => response.url().includes('/Frame?'));
+      await page.getByRole('button', { name: 'Pick color from movie' }).click();
+      const frame = await response;
+      expect(frame.ok()).toBeTruthy();
+      const requested = new URL(frame.url()).searchParams.get('timeMs');
+      const nativeTime = await page
+        .locator('video')
+        .evaluate((node) => (node as HTMLVideoElement).currentTime * 1000);
+      expect(Math.abs(Number(requested) - nativeTime)).toBeLessThanOrEqual(1);
+      expect(Math.abs(Number(requested) - fraction * 10000)).toBeLessThanOrEqual(42);
+      await expect(page.getByAltText('Source frame')).toBeVisible();
+      await page.getByRole('button', { name: 'Source frame — click to sample color' }).focus();
+      await page.keyboard.press('Enter');
+      await expect(page.getByLabel('Hex', { exact: true })).toHaveValue(
+        [pixel.r, pixel.g, pixel.b].map((value) => value.toString(16).padStart(2, '0')).join('')
+      );
+    }
+    const saved = await save(page, request);
+    const blue = pixels.find((entry: any) => entry.name === 'blue');
+    expect(saved.track.keyframes[0].color).toEqual({ r: blue.r, g: blue.g, b: blue.b });
   }
 );
 
