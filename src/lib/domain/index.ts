@@ -7,6 +7,7 @@ export * from './safety';
 export * from './encode';
 export * from './shortcuts';
 export * from './edit';
+export * from './editor';
 export * from './save';
 export * from './media';
 export * from './effects';

@@ -18,6 +18,18 @@ describe('requirement-scoped traceability', () => {
     expect(gate('--requirements').status).toBe(1);
     expect(gate('--requirements', 'ROOM-999').status).toBe(1);
   });
+  it('fails a scoped acceptance report when its required fullstack tier was never run', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'olfx-traceability-'));
+    const report = path.join(dir, 'report.json');
+    try {
+      fs.writeFileSync(report, JSON.stringify({ tests: [] }));
+      const result = gate('--requirements', 'ROOM-004', '--report', report);
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain('ROOM-004 no passing test contains ROOM-004 and @fullstack');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
   it('requires passing outcomes in the report, not merely existing test titles', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'olfx-traceability-'));
     const report = path.join(dir, 'report.json');

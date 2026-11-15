@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { L1_SHORTCUTS, sampleChannel } from '$lib/domain';
+  import { onMount, untrack } from 'svelte';
+  import { L1_SHORTCUTS, sampleChannel, displayedRgb } from '$lib/domain';
+  import PluginFramePicker from './PluginFramePicker.svelte';
   import type { Channel, EffectKeyframe, Keyframe, Track } from '$lib/domain';
   import { setActiveTrack } from '$lib/api/client';
   import {
@@ -22,19 +23,22 @@
   let menu = $state('');
   let video = $state<HTMLVideoElement | null>(null);
   let fileInput: HTMLInputElement;
-  let timelineContainer: HTMLDivElement;
+  let timelineContainer = $state<HTMLDivElement>();
   let rooms = $state<Room[]>([]);
   let bulbs = $state<RoomBulb[]>([]);
   let selectedRoomId = $state('');
   let routing = $state<RoomRouting | null>(null);
   let routingError = $state('');
   let roomsLoaded = $state(false);
-  let canManage = $state(true);
+  let canManage = $state(false);
   let lightsOn = $state(false);
   let previewError = $state('');
   let watchConfirmation = $state('');
   let settingsOpen = $state(false);
+  let aboutOpen = $state(false);
   let leavePrompt = $state(false);
+  let leaveAction: () => void = () => {};
+  let leaveForFile = false;
   let routingRequest = 0;
   let sendingFrame = false;
   let lastPreviewFrame = '';
@@ -56,6 +60,30 @@
 
   $effect(() => {
     if (video) bindVideo(video);
+  });
+  $effect(() => {
+    const container = timelineContainer;
+    if (!container) return;
+    const observer = new ResizeObserver(() => {
+      session.laneWidth = Math.max(1, container.clientWidth - 150);
+      if (session.fit && container.clientWidth) fitTimeline();
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  });
+  $effect(() => {
+    if (session.fit && duration && timelineContainer) untrack(fitTimeline);
+  });
+  $effect(() => {
+    if (timelineContainer) timelineContainer.scrollLeft = session.scrollX;
+  });
+  $effect(() => {
+    const route = session.pendingRoute;
+    if (route)
+      requestLeave(() => {
+        session.pendingRoute = '';
+        location.hash = route;
+      });
   });
 
   $effect(() => {
@@ -106,6 +134,7 @@
         rooms = nextRooms;
         bulbs = nextBulbs;
         canManage = setup.isAdmin && !session.nonAdmin;
+        session.canManage = canManage;
         const requestedRoom = sessionStorage.getItem('olfx-preview-room');
         selectedRoomId =
           nextRooms.find((room) => room.id === requestedRoom)?.id ?? nextRooms[0]?.id ?? '';
@@ -120,6 +149,7 @@
     return () => {
       alive = false;
       window.clearInterval(timer);
+      session.cancelEyedrop();
       if (lightsOn) void stopRoomPreview();
     };
   });
@@ -213,6 +243,20 @@
     }
   }
 
+  function previewFailure(error: unknown): string {
+    const message = (error as Error).message || 'The room bulbs did not answer.';
+    const room = rooms.find((room) => room.id === selectedRoomId);
+    if (!room) return message;
+    const failed = bulbs.filter(
+      (bulb) =>
+        room.bulbs.some((entry) => entry.id === bulb.id) &&
+        (message.includes(bulb.id) || (bulb.ipAddress && message.includes(bulb.ipAddress)))
+    );
+    return failed.length
+      ? `${room.name}'s bulbs didn't answer: ${failed.map((bulb) => bulb.name).join(', ')}`
+      : `Preview in ${room.name} stopped: ${message}`;
+  }
+
   async function pushPreviewFrame() {
     const track = session.track as Track | null;
     if (!lightsOn || !track || sendingFrame) return;
@@ -246,7 +290,7 @@
       lastPreviewSentAt = Date.now();
     } catch (error) {
       lightsOn = false;
-      previewError = (error as Error).message || 'The room bulbs did not answer.';
+      previewError = previewFailure(error);
       try {
         await stopRoomPreview();
       } catch {
@@ -367,8 +411,10 @@
   }
 
   function fitTimeline() {
-    if (timelineContainer) session.laneWidth = timelineContainer.clientWidth;
-    session.zoomFit();
+    if (timelineContainer?.clientWidth) {
+      session.laneWidth = Math.max(1, timelineContainer.clientWidth - 150);
+      session.zoomFit();
+    }
   }
 
   function moveDiamond(event: PointerEvent, keyframeId: string) {
@@ -381,20 +427,51 @@
     session.moveKeyframe(keyframeId, ((event.clientX - bounds.left) / bounds.width) * duration);
   }
 
-  function closeEditor() {
+  function requestLeave(action: () => void, forFile = false) {
+    leaveAction = action;
+    leaveForFile = forFile;
     if (session.dirty) {
       leavePrompt = true;
       return;
     }
-    location.hash = `#/movie/${encodeURIComponent(session.item?.itemId ?? '')}`;
+    action();
   }
-
+  function closeEditor() {
+    requestLeave(() => {
+      location.hash = `#/movie/${encodeURIComponent(session.item?.itemId ?? '')}`;
+    });
+  }
   async function saveAndLeave() {
     await session.save();
     if (!session.dirty) {
       leavePrompt = false;
-      location.hash = `#/movie/${encodeURIComponent(session.item?.itemId ?? '')}`;
+      leaveAction();
     }
+  }
+  async function discardAndLeave() {
+    if (!leaveForFile) await session.discardEdits();
+    leavePrompt = false;
+    leaveAction();
+  }
+  function timelineWheel(event: WheelEvent) {
+    if (event.ctrlKey || event.metaKey) {
+      event.preventDefault();
+      session.zoomKey(event.deltaY < 0 ? ']' : '[', false);
+    } else if (event.shiftKey && timelineContainer) {
+      event.preventDefault();
+      timelineContainer.scrollLeft += event.deltaY + event.deltaX;
+    }
+  }
+  function laneFill(keyframes: Keyframe[], frame: Keyframe, next?: Keyframe): string {
+    const color = displayedRgb(sampleChannel(keyframes, frame.timestampMs));
+    if (!next || next.interpolation === 'STEP' || !next.transitionMs) return `rgb(${color})`;
+    const stop = Math.max(
+      0,
+      (100 * (next.timestampMs - next.transitionMs - frame.timestampMs)) /
+        (next.timestampMs - frame.timestampMs)
+    );
+    const end = displayedRgb(sampleChannel(keyframes, next.timestampMs));
+    return `linear-gradient(to right, rgb(${color}) ${stop}%, rgb(${end}) 100%)`;
   }
 
   async function watchInEmby() {
@@ -423,6 +500,45 @@
       tab.close();
       session.alert = (error as Error).message || 'Could not open this movie in Emby.';
     }
+  }
+
+  function dialogFocus(node: HTMLDivElement) {
+    const previous = document.activeElement as HTMLElement | null;
+    const controls = () => [
+      ...node.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href]'
+      ),
+    ];
+    controls()[0]?.focus();
+    function keydown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        leavePrompt = false;
+        settingsOpen = false;
+        session.helpOpen = false;
+        aboutOpen = false;
+        session.pendingRoute = '';
+      } else if (event.key === 'Tab') {
+        const items = controls();
+        const first = items[0],
+          last = items.at(-1);
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }
+    }
+    node.addEventListener('keydown', keydown);
+    return {
+      destroy() {
+        node.removeEventListener('keydown', keydown);
+        if (previous?.isConnected) previous.focus();
+      },
+    };
   }
 
   async function handleFile(file?: File) {
@@ -483,17 +599,24 @@
                   role="menuitem"
                   onclick={() => {
                     menu = '';
-                    fileInput?.click();
+                    requestLeave(() => fileInput?.click(), true);
                   }}>Open a .lightfx file…</button
                 >
                 <button
                   role="menuitem"
-                  disabled={!session.track || !canManage}
+                  disabled={!session.track ||
+                    !canManage ||
+                    session.saving ||
+                    !session.durationKnown}
                   title={!canManage
                     ? 'Only an Emby administrator can save'
                     : !session.track
                       ? 'No track is open'
-                      : ''}
+                      : !session.durationKnown
+                        ? 'The movie duration is unknown'
+                        : session.saving
+                          ? 'Saving…'
+                          : ''}
                   onclick={() => {
                     menu = '';
                     void session.save();
@@ -536,6 +659,7 @@
                 <button
                   role="menuitem"
                   disabled={!session.selection.length}
+                  title={!session.selection.length ? 'Select a keyframe first' : ''}
                   onclick={() => {
                     menu = '';
                     session.deleteSelection();
@@ -545,7 +669,7 @@
                   role="menuitem"
                   onclick={() => {
                     menu = '';
-                    settingsOpen = true;
+                    if (session.track) settingsOpen = true;
                   }}>Track settings…</button
                 >
               {:else}
@@ -556,10 +680,12 @@
                     session.helpOpen = true;
                   }}>Keyboard shortcuts</button
                 >
-                <a
+                <button
                   role="menuitem"
-                  href="https://github.com/openlightfx/openlightfx-studio/blob/main/docs/journeys/J1-first-light.md"
-                  onclick={() => (menu = '')}>How Studio works</a
+                  onclick={() => {
+                    menu = '';
+                    aboutOpen = true;
+                  }}>How Studio works</button
                 >
               {/if}
             </div>
@@ -579,7 +705,7 @@
         ? 'Saving…'
         : session.dirty
           ? 'Unsaved changes'
-          : session.status || 'Saved'}</span
+          : 'Saved'}</span
     >
     <span class="spacer"></span>
     {#if rooms.length > 0}
@@ -630,7 +756,15 @@
   </header>
   {#if roomsLoaded && roomCount === 0}
     <div class="no-room" role="status">
-      Set up a room to preview on your lights. <a href="#/rooms">Set up a room</a>
+      Set up a room to preview on your lights. <a
+        href="#/rooms"
+        onclick={(event) => {
+          event.preventDefault();
+          requestLeave(() => {
+            location.hash = '#/rooms';
+          });
+        }}>Set up a room</a
+      >
     </div>
   {/if}
   <main class="workspace">
@@ -652,8 +786,23 @@
           preload="auto"
           onplay={() => (session.playing = true)}
           onpause={() => (session.playing = false)}
+          onloadedmetadata={() => session.onVideoMetadata()}
+          onloadeddata={() => session.onVideoData()}
+          onseeked={() => session.onVideoSeeked()}
           onerror={() => session.onVideoError()}
         ></video>
+        {#if session.frameLoading}<p class="play-reason" role="status">
+            Loading source frame…
+          </p>{/if}
+        {#if session.frameUrl}<PluginFramePicker
+            src={session.frameUrl}
+            onpick={(color) => session.pickFrameColor(color)}
+            oncancel={() => session.cancelEyedrop()}
+            onerror={() => {
+              session.cancelEyedrop();
+              session.alert = 'The frame could not be sampled. Try again.';
+            }}
+          />{/if}
         {#each session.channels as channel (channel.id)}
           <div
             class={`region ${channel.spatialHint}`}
@@ -762,7 +911,15 @@
             /> K</label
           >
         {/if}
-        <button onclick={() => void session.eyedrop()}>Pick color from movie</button>
+        <button
+          disabled={!session.item || session.frameLoading}
+          title={!session.item
+            ? 'Open a movie first'
+            : session.frameLoading
+              ? 'Loading source frame…'
+              : ''}
+          onclick={() => void session.eyedrop()}>Pick color from movie</button
+        >
         <div class="history-swatches" aria-label="Recent colors">
           {#each session.historyColors as color, index (index)}
             <button
@@ -873,7 +1030,14 @@
         <button aria-label="Zoom in" onclick={() => session.zoomKey(']', false)}>+</button>
         <button onclick={fitTimeline}>Fit</button>
       </div>
-      <div class="timeline-scroll" bind:this={timelineContainer}>
+      <div
+        class="timeline-scroll"
+        bind:this={timelineContainer}
+        onwheel={timelineWheel}
+        onscroll={() => {
+          if (timelineContainer) session.scrollX = timelineContainer.scrollLeft;
+        }}
+      >
         <div
           class="ruler"
           style={`width:${timelineWidth}px`}
@@ -895,7 +1059,8 @@
             if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
               event.preventDefault();
               event.stopPropagation();
-              session.step(event.key === 'ArrowLeft' ? -1 : 1);
+              if (event.shiftKey) session.skip(event.key === 'ArrowLeft' ? -1 : 1);
+              else session.step(event.key === 'ArrowLeft' ? -1 : 1);
             }
           }}
         >
@@ -909,13 +1074,16 @@
             session.track?.keyframes
               .filter((keyframe: Keyframe) => keyframe.channelId === channel.id)
               .toSorted((a: Keyframe, b: Keyframe) => a.timestampMs - b.timestampMs) ?? []}
-          <div class="lane-row" style={`width:${timelineWidth}px`}>
+          <div class="lane-row" style={`width:${timelineWidth + 150}px`}>
             <div class="lane-header">
               <button
                 class="lane-name"
                 title={laneDescription(channel)}
-                onclick={() => (session.activeChannelId = channel.id)}
-                >{laneDescription(channel)}</button
+                onclick={() => {
+                  session.selection = [];
+                  selectedEffectId = '';
+                  session.activeChannelId = channel.id;
+                }}>{laneDescription(channel)}</button
               >
               <button
                 type="button"
@@ -935,7 +1103,7 @@
                 <span
                   class="color-segment default-segment"
                   aria-hidden="true"
-                  style={`left:0;width:100%;background:rgb(${channel.defaultColor.r},${channel.defaultColor.g},${channel.defaultColor.b})`}
+                  style={`left:0;width:100%;background:rgb(${displayedRgb({ ...channel.defaultColor, brightness: channel.defaultBrightness })})`}
                 ></span>
               {/if}
               {#if session.track?.keyframes.length === 0}
@@ -952,10 +1120,8 @@
                     selectedEffectId = effect.id;
                     session.selection = [];
                     session.activeChannelId = channel.id;
-                    session.status =
-                      'Effect editing comes in a later version. This effect is kept as is.';
-                  }}
-                ></button>
+                  }}>{effect.effectType}</button
+                >
               {/each}
               {#each laneKeyframes as keyframe, index (keyframe.id)}
                 {@const next = laneKeyframes[index + 1]}
@@ -963,7 +1129,7 @@
                 <span
                   class="color-segment"
                   aria-hidden="true"
-                  style={`left:${(keyframe.timestampMs / duration) * 100}%;width:${(((next?.timestampMs ?? duration) - keyframe.timestampMs) / duration) * 100}%;background:rgb(${frameSample.r},${frameSample.g},${frameSample.b})`}
+                  style={`left:${(keyframe.timestampMs / duration) * 100}%;width:${(((next?.timestampMs ?? duration) - keyframe.timestampMs) / duration) * 100}%;background:${laneFill(laneKeyframes, keyframe, next)}`}
                 ></span>
                 <button
                   class="diamond"
@@ -988,7 +1154,23 @@
       </div>
     </section>
   </main>
-  {#if session.alert}<div class="alert" role="alert">{session.alert}</div>{/if}
+  {#if session.alert}<div class="alert" role="alert">
+      {session.alert}
+      {#if session.saveConflict}
+        <button
+          onclick={() => {
+            if (window.confirm('Reload the server track and discard your unsaved changes?'))
+              void session.reloadFromServer();
+          }}>Reload</button
+        >
+        <button onclick={() => void session.saveAsNewTrack()}>Save as new track</button>
+      {/if}
+    </div>{/if}
+  {#if session.importWarning}<div class="watch-confirmation" role="status">
+      The imported track's duration differs from this movie. <button
+        onclick={() => session.useMovieDuration()}>Use movie duration</button
+      >
+    </div>{/if}
   {#if previewError}<div class="alert" role="alert">{previewError}</div>{/if}
   {#if routingError}<div class="alert" role="alert">{routingError}</div>{/if}
   {#if watchConfirmation}
@@ -1002,7 +1184,13 @@
   {/if}
   {#if session.helpOpen}
     <div class="modal-backdrop">
-      <div class="leave-dialog" role="dialog" aria-modal="true" aria-labelledby="shortcut-title">
+      <div
+        class="leave-dialog"
+        use:dialogFocus
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="shortcut-title"
+      >
         <h2 id="shortcut-title">Keyboard shortcuts</h2>
         <ul>
           {#each L1_SHORTCUTS as binding (binding.action)}
@@ -1013,9 +1201,47 @@
       </div>
     </div>
   {/if}
+  {#if aboutOpen}
+    <div class="modal-backdrop">
+      <div
+        class="leave-dialog"
+        use:dialogFocus
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="about-title"
+      >
+        <h2 id="about-title">How Studio works</h2>
+        <p>
+          1. Set up a room: choose its screen, find and identify its bulbs, then place them around
+          the screen.
+        </p>
+        <p>2. Pick a movie from your Emby Library.</p>
+        <p>
+          3. Open or create a lighting track. Its layout determines the timeline's channels, not
+          individual bulbs.
+        </p>
+        <p>
+          4. Use the ruler to seek, click a lane to add a keyframe, and edit its color and
+          brightness. Choose a room and turn Lights on to preview. Save keeps your track; Export
+          downloads a copy.
+        </p>
+        <p>
+          5. Watch in Emby saves and activates the track. Start the movie on your room's screen and
+          its lights will follow.
+        </p>
+        <button onclick={() => (aboutOpen = false)}>Close</button>
+      </div>
+    </div>
+  {/if}
   {#if settingsOpen && session.track}
     <div class="modal-backdrop">
-      <div class="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div
+        class="settings-dialog"
+        use:dialogFocus
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
+      >
         <h2 id="settings-title">Track settings</h2>
         <label
           >Title <input
@@ -1137,17 +1363,31 @@
   {/if}
   {#if leavePrompt}
     <div class="modal-backdrop">
-      <div class="leave-dialog" role="dialog" aria-modal="true" aria-labelledby="leave-title">
+      <div
+        class="leave-dialog"
+        use:dialogFocus
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="leave-title"
+      >
         <h2 id="leave-title">Save changes to {session.track?.metadata.title ?? 'this track'}?</h2>
         <p>Studio keeps a recovery copy while you edit.</p>
-        <button onclick={() => void saveAndLeave()}>Save</button>
+        <button
+          disabled={!canManage || session.saving}
+          title={!canManage
+            ? 'Only an Emby administrator can save'
+            : session.saving
+              ? 'Saving…'
+              : ''}
+          onclick={() => void saveAndLeave()}>Save</button
+        >
+        <button onclick={() => void discardAndLeave()}>Don't save</button>
         <button
           onclick={() => {
             leavePrompt = false;
-            location.hash = `#/movie/${encodeURIComponent(session.item?.itemId ?? '')}`;
-          }}>Don't save</button
+            session.pendingRoute = '';
+          }}>Cancel</button
         >
-        <button onclick={() => (leavePrompt = false)}>Cancel</button>
       </div>
     </div>
   {/if}
@@ -1240,8 +1480,7 @@
     border: 1px solid #41415a;
     box-shadow: 0 8px 24px #0009;
   }
-  .menu button,
-  .menu a {
+  .menu button {
     display: flex;
     justify-content: space-between;
     color: inherit;
@@ -1251,8 +1490,7 @@
     background: transparent;
     padding: 8px;
   }
-  .menu button:hover,
-  .menu a:hover {
+  .menu button:hover {
     background: #343450;
   }
   .track-title {
@@ -1414,6 +1652,7 @@
     height: calc(100% - 38px);
   }
   .ruler {
+    margin-left: 150px;
     height: 30px;
     display: flex;
     justify-content: space-between;
@@ -1439,7 +1678,7 @@
   .lane-row {
     height: 40px;
     display: grid;
-    grid-template-columns: 150px minmax(400px, 1fr);
+    grid-template-columns: 150px minmax(0, 1fr);
     border-bottom: 1px solid #303047;
   }
   .lane-header {

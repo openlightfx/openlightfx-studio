@@ -210,6 +210,23 @@ Reset before each final run because the serial suite creates saved tracks.
 See the [Step 3 verification record](j1-step3-verification.md) for exact commands,
 source identities, restricted evidence and the outcome-based traceability gate.
 
+### J1 Step 4 regression
+
+`e2e/fullstack/lab-j1-step4.spec.ts` covers a genuinely cold/building edit proxy,
+rendered ruler scrubbing/transport, original plugin PNG pixels, exact saved
+inspector/settings/sidecar fields, routing labels, no-room saves, fresh routed
+preview receipts and rendered states, Stop's supported off fallback, real Emby
+ownership/takeover, eight synthetic effects, actual non-admin permissions, and
+validation/concurrency recovery.
+
+Use `model-006-follows.json`, `OLFX_LAB_TEST_FILE="$PWD/e2e/fullstack/lab-j1-step4.spec.ts"`,
+and `OLFX_LAB_PLAYBACK=editor`. This suite does use rendered-state and controlled
+Emby-session evidence, unlike the Step 3 setup suite. Reset before **each** browser
+run: `start` can reuse a completed proxy and saved tracks, which does not satisfy
+the first test's cold-proxy precondition. Select Firefox with `OLFX_LAB_BROWSER=firefox`.
+See the [Step 4 implementation verification record](j1-step4-verification.md) for
+commands, source identities, restricted evidence, and remaining acceptance limits.
+
 ### Arbitrary test behavior without repository edits
 
 For actions beyond declarative author/play/observe phases, provide an external

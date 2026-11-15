@@ -129,7 +129,8 @@ requirement(
 
 async function chooseFile(page: Page, bytes: Uint8Array, name = 'import.lightfx') {
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Open a .lightfx file…', exact: true }).click();
+  // Keyboard activation avoids rapid repeated clicks becoming a native double-click.
+  await page.getByRole('button', { name: 'Open a .lightfx file…', exact: true }).press('Enter');
   await (
     await chooser
   ).setFiles({ name, mimeType: 'application/octet-stream', buffer: Buffer.from(bytes) });

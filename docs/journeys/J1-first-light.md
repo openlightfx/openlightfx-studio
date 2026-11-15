@@ -269,7 +269,7 @@ Reads `GET /OpenLightFX/Studio/Items?search=` (title, year, runtime, poster URL 
 
 ## Step 4 — Edit
 
-**Implementation status:** The editor is implemented in `src/lib/components/EditorScreen.svelte` and the Studio session/domain code. The current code includes transport, timeline editing, menus, inspector edits, save/export, layout changes, routing labels, and live preview. Full-stack tests cover a subset of these behaviors; traceability currently reports missing `@browser` coverage for several `EDIT-*` requirements and `DONE-001`. The step is not complete until required coverage is added and passes.
+**Implementation status:** The audited editor gaps are implemented, and passing scoped outcome traceability covers `EDIT-001`–`EDIT-014` in their required tiers. Chromium and Firefox browser and isolated Emby lab regressions cover PNG sampling, zoom/drag constraints, menus, transport, inspector/settings, save/conflict recovery, routing/live preview, actual Emby ownership/takeover, no-room and non-admin behavior, and eight-effect preservation. See the [Step 4 implementation verification record](../testing/j1-step4-verification.md) for commands, evidence, and limits: effects use a synthetic fixture rather than the unavailable named John Wick track; REST restoration checks the supported off fallback. Project-wide traceability/legacy-browser failures and whole-J1 exit criteria remain outstanding. This is not a whole-J1 completion claim.
 
 **Goal:** play the movie, put light changes at the right moments on the right positions, see them on screen and on the room's bulbs, and save.
 

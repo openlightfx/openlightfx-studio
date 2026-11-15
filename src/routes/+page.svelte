@@ -12,8 +12,18 @@
   let bootedEditorRoute = '';
 
   onMount(() => {
+    const syncSavedRoute = () => {
+      hashRoute = location.hash;
+      bootedEditorRoute = hashRoute;
+    };
     const updateRoute = () => {
-      hashRoute = location.hash || '';
+      const nextRoute = location.hash || '';
+      if (session.dirty && hashRoute.startsWith('#/edit/') && nextRoute !== hashRoute) {
+        history.replaceState(null, '', hashRoute);
+        session.pendingRoute = nextRoute;
+        return;
+      }
+      hashRoute = nextRoute;
       if (hashRoute) localStorage.setItem('olfx-last-route', hashRoute);
       if (hashRoute.startsWith('#/edit/') && hashRoute !== bootedEditorRoute) {
         bootedEditorRoute = hashRoute;
@@ -27,6 +37,7 @@
     };
     updateRoute();
     window.addEventListener('hashchange', updateRoute);
+    window.addEventListener('olfx-editor-route-replaced', syncSavedRoute);
     if (!location.hash) {
       void loadRooms()
         .then((rooms) => {
@@ -54,6 +65,7 @@
     frame = requestAnimationFrame(loop);
     return () => {
       window.removeEventListener('hashchange', updateRoute);
+      window.removeEventListener('olfx-editor-route-replaced', syncSavedRoute);
       stopAutosave();
       cancelAnimationFrame(frame);
     };
@@ -62,9 +74,20 @@
   function onKeydown(event: KeyboardEvent) {
     if (!hashRoute.startsWith('#/edit/')) return;
     const target = event.target as HTMLElement | null;
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+      event.preventDefault();
+      // Commit pending onchange fields (time/settings/fade) without losing input focus.
+      target?.blur();
+      target?.focus({ preventScroll: true });
+      void session.save();
+      return;
+    }
     const typing =
       target &&
-      (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+      (target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable);
     if (event.key === '?' || (event.key === '/' && event.shiftKey)) {
       if (typing) return;
       event.preventDefault();
@@ -135,7 +158,15 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} />
+<svelte:window
+  onkeydown={onKeydown}
+  onbeforeunload={(event) => {
+    if (session.dirty) {
+      event.preventDefault();
+      event.returnValue = '';
+    }
+  }}
+/>
 
 {#if !hashRoute}
   <div class="route-loading" role="status">Loading OpenLightFX Studio…</div>

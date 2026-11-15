@@ -1,5 +1,10 @@
 import {
   acceptSpacing,
+  anchoredScroll,
+  displayedRgb,
+  dragKeepsOrder,
+  MAX_TRACK_BYTES,
+  validateTrack,
   addChannel,
   applyZoomChord,
   AUTOSAVE_INTERVAL_MS,
@@ -53,7 +58,7 @@ import {
   type TrackSummary,
 } from '$lib/api/client';
 import { failedProxyMessage, proxyPlayReason, seekPastHorizon } from '$lib/studio/proxy-playback';
-import { takePendingImport } from '$lib/studio/pending-import';
+import { setPendingImport, takePendingImport } from '$lib/studio/pending-import';
 
 const DB_NAME = 'openlightfx-studio';
 const STORE = 'crash';
@@ -88,6 +93,16 @@ export class StudioSession {
   localDev = $state(true);
   pluginDown = $state(false);
   nonAdmin = $state(false);
+  canManage = $state(false);
+  saving = $state(false);
+  saveConflict = $state(false);
+  pendingRoute = $state('');
+  frameUrl = $state('');
+  frameLoading = $state(false);
+  private frameRequest = 0;
+  private frameSelection: string[] = [];
+  private wasGrowing = false;
+  private resumeProxy = false;
   playbackActive = $state(false);
   items = $state<LibraryItem[]>([]);
   search = $state('');
@@ -108,6 +123,7 @@ export class StudioSession {
   canRedo = $state(false);
   playheadMs = $state(0);
   playing = $state(false);
+  videoReady = $state(false);
   pxPerMs = $state(INITIAL_PX_PER_MS);
   scrollX = $state(0);
   fit = $state(false);
@@ -169,7 +185,12 @@ export class StudioSession {
   }
 
   get canPlay(): boolean {
-    return Boolean(this.videoSrc) && !this.videoError && this.media?.proxy.state !== 'failed';
+    return (
+      Boolean(this.videoSrc) &&
+      this.videoReady &&
+      !this.videoError &&
+      (this.media?.proxy.state === 'ready' || this.media?.proxy.state === 'building')
+    );
   }
 
   async boot(): Promise<void> {
@@ -189,6 +210,8 @@ export class StudioSession {
     this.track = null;
     this.trackId = '';
     this.videoSrc = '';
+    this.videoReady = false;
+    this.wasGrowing = false;
     this.videoError = '';
     this.movieMs = null;
     this.durationKnown = false;
@@ -313,7 +336,8 @@ export class StudioSession {
     this.movieMs = resolved.durationMs;
     this.durationKnown = resolved.durationMs !== null && resolved.durationMs > 0;
     this.applyProxy(info);
-    if (info?.proxy.state === 'building') void this.watchProxy(itemId, token);
+    if (info && ['missing', 'building'].includes(info.proxy.state))
+      void this.watchProxy(itemId, token);
     const tracks = await fetchTracks(itemId);
     if (token !== this.bootToken) return;
     this.trackChoices = tracks;
@@ -351,7 +375,7 @@ export class StudioSession {
         },
         itemId,
         id,
-        false,
+        true,
         token
       );
     } else if (requested) await this.openTrack(requested, resolved.durationMs, token);
@@ -370,6 +394,7 @@ export class StudioSession {
       this.videoError = failedProxyMessage(info.proxy.reason);
       return;
     }
+    if (info.proxy.state === 'building' || info.proxy.state === 'missing') this.wasGrowing = true;
     const url = info.proxy.editUrl ?? '';
     const playable = url && (info.proxy.state === 'ready' || info.proxy.state === 'building');
     if (playable) {
@@ -377,14 +402,29 @@ export class StudioSession {
         this.videoError = '';
         this.videoSrc = url;
       }
+      this.refreshCompletedProxy(info);
       this.releasePendingSeek(info);
       return;
     }
     this.videoSrc = url;
   }
 
+  private refreshCompletedProxy(info: MediaInfo): void {
+    const video = this.video;
+    if (!this.wasGrowing || info.proxy.state !== 'ready' || !video || video.readyState < 1) return;
+    {
+      // A Range response opened while encoding can end at its original byte horizon.
+      // Reopen the completed edit proxy, retaining transport state and the requested seek.
+      this.wasGrowing = false;
+      this.resumeProxy = !video.paused;
+      this.pendingSeekMs ??= this.playheadMs;
+      this.videoReady = false;
+      video.load();
+    }
+  }
+
   private releasePendingSeek(info: MediaInfo): void {
-    if (this.pendingSeekMs == null) return;
+    if (this.pendingSeekMs == null || !this.video || this.video.readyState < 1) return;
     if (
       seekPastHorizon(
         this.pendingSeekMs,
@@ -393,9 +433,10 @@ export class StudioSession {
       )
     )
       return;
+    if (info.proxy.state === 'missing') return;
     const target = this.pendingSeekMs;
-    this.pendingSeekMs = null;
-    if (this.video) this.video.currentTime = target / 1000;
+    if (Number.isFinite(this.video.duration) && this.video.duration * 1000 < target) return;
+    this.video.currentTime = target / 1000;
   }
 
   /**
@@ -404,7 +445,11 @@ export class StudioSession {
    * keeping the progress current, and stop when another item is selected.
    */
   private async watchProxy(itemId: string, token: number): Promise<void> {
-    while (token === this.bootToken && this.media?.proxy.state === 'building') {
+    while (
+      token === this.bootToken &&
+      this.media &&
+      ['missing', 'building'].includes(this.media.proxy.state)
+    ) {
       await new Promise((resolve) => setTimeout(resolve, PROXY_POLL_MS));
       if (token !== this.bootToken) return;
       let info: MediaInfo;
@@ -423,7 +468,8 @@ export class StudioSession {
   async openTrack(
     summary: TrackSummary,
     durationMs: number | null = this.movieMs,
-    token = this.bootToken
+    token = this.bootToken,
+    forceServer = false
   ): Promise<void> {
     this.trackId = summary.trackId;
     this.trackUpdatedAt = summary.updatedAt;
@@ -432,6 +478,8 @@ export class StudioSession {
     let track: Track;
     try {
       track = decodeTrack(await fetchTrackBytes(summary.trackId, summary.itemId));
+      const errors = validateTrack(track);
+      if (errors.length) throw new Error(errors.join(' '));
     } catch (error) {
       throw new Error(
         `Could not load “${summary.title || summary.trackId}”: ${(error as Error).message}`
@@ -440,7 +488,7 @@ export class StudioSession {
     if (token !== this.bootToken) return;
     if (durationMs && durationMs > 0)
       track = { ...track, metadata: { ...track.metadata, durationMs } };
-    await this.adopt(track, summary.itemId, summary.trackId, false, token);
+    await this.adopt(track, summary.itemId, summary.trackId, false, token, forceServer);
   }
 
   async openNewTrack(
@@ -460,7 +508,7 @@ export class StudioSession {
     );
     const { itemId: _item, ...track } = created;
     track.metadata = { ...track.metadata, movieTitle: item.name, year: item.year };
-    await this.adopt(track, item.itemId, this.trackId, false, this.bootToken);
+    await this.adopt(track, item.itemId, this.trackId, true, this.bootToken);
   }
 
   chooseNewTrack(): void {
@@ -480,12 +528,16 @@ export class StudioSession {
     itemId: string,
     trackId: string,
     dirty: boolean,
-    token = this.bootToken
+    token = this.bootToken,
+    forceServer = false
   ): Promise<void> {
     const crash = await this.readCrash(crashKey(itemId, trackId));
     if (token !== this.bootToken) return;
-    const source = chooseLoadSource(this.serverUpdatedAt, crash);
+    const source = forceServer ? 'server' : chooseLoadSource(this.serverUpdatedAt, crash);
     const chosen = source === 'crash' && crash ? crash.track : track;
+    this.cancelEyedrop();
+    this.saveConflict = false;
+    this.fit = true;
     this.track = chosen;
     this.playheadMs = source === 'crash' && crash ? crash.playheadMs : 0;
     this.scrollX = source === 'crash' && crash ? crash.scrollX : 0;
@@ -495,7 +547,10 @@ export class StudioSession {
     this.activeChannelId = chosen.channels[0]?.id ?? null;
     this.syncPropertyFields();
     this.restored = source === 'crash' ? 'Unsaved edits were restored' : '';
-    if (dirty) this.dirty = true;
+    if (dirty) {
+      this.dirty = true;
+      await this.persist(true);
+    }
     // Assigning videoSrc already loads a remote URL. load() aborts that request,
     // and a growing proxy does not survive the restart.
     if (this.video && this.videoSrc.startsWith('blob:')) this.video.load();
@@ -508,6 +563,12 @@ export class StudioSession {
   }
 
   edit(next: Track, message = ''): void {
+    next = {
+      ...next,
+      keyframes: next.keyframes.toSorted(
+        (a, b) => a.channelId.localeCompare(b.channelId) || a.timestampMs - b.timestampMs
+      ),
+    };
     this.history.edit(next);
     this.track = this.history.current;
     this.canUndo = this.history.canUndo;
@@ -560,7 +621,7 @@ export class StudioSession {
   }
 
   step(direction: 1 | -1): void {
-    const delta = frameStepMs(FPS) * direction;
+    const delta = frameStepMs(this.media?.proxy.fps || FPS) * direction;
     this.seek(Math.min(Math.max(0, this.playheadMs + delta), this.durationMs()));
   }
 
@@ -574,12 +635,42 @@ export class StudioSession {
     if (!this.video || !this.videoSrc) return;
     const building = this.media?.proxy.state === 'building';
     const encoded = this.media?.proxy.encodedThroughMs ?? 0;
-    if (seekPastHorizon(time, encoded, Boolean(building))) {
+    if (
+      this.video.readyState < 1 ||
+      this.media?.proxy.state === 'missing' ||
+      seekPastHorizon(time, encoded, Boolean(building))
+    ) {
       this.pendingSeekMs = time;
       return;
     }
-    this.pendingSeekMs = null;
+    this.pendingSeekMs = time;
     this.video.currentTime = time / 1000;
+  }
+
+  onVideoMetadata(): void {
+    if (this.media) {
+      this.refreshCompletedProxy(this.media);
+      this.releasePendingSeek(this.media);
+    }
+  }
+
+  onVideoData(): void {
+    this.videoReady = true;
+    this.onVideoMetadata();
+    if (this.resumeProxy) {
+      this.resumeProxy = false;
+      void this.video?.play();
+    }
+  }
+
+  onVideoSeeked(): void {
+    if (
+      this.video &&
+      this.pendingSeekMs != null &&
+      Math.abs(this.video.currentTime * 1000 - this.pendingSeekMs) <=
+        frameStepMs(this.media?.proxy.fps || FPS)
+    )
+      this.pendingSeekMs = null;
   }
 
   syncFromVideo(): void {
@@ -672,7 +763,7 @@ export class StudioSession {
       return;
     }
     const duration = this.durationMs() || timeMs;
-    const frameMs = frameStepMs(FPS);
+    const frameMs = frameStepMs(this.media?.proxy.fps || FPS);
     const snappedTime = Math.round(timeMs / frameMs) * frameMs;
     const time = Math.min(Math.max(0, Math.round(snappedTime)), duration);
     const own = this.track.keyframes.filter((kf) => kf.channelId === channel);
@@ -781,14 +872,20 @@ export class StudioSession {
   }
 
   zoomKey(key: string, modifier: boolean): void {
-    const next = applyZoomChord(
-      this.pxPerMs,
-      key,
-      modifier,
-      this.durationMs() || 1,
-      this.laneWidth
-    );
+    const oldScale = this.pxPerMs;
+    const next = applyZoomChord(oldScale, key, modifier, this.durationMs() || 1, this.laneWidth);
     this.pxPerMs = next;
+    this.scrollX =
+      key === '\\'
+        ? 0
+        : anchoredScroll(
+            this.playheadMs,
+            oldScale,
+            next,
+            this.scrollX,
+            this.durationMs(),
+            this.laneWidth
+          );
     this.fit = key === '\\';
   }
 
@@ -908,7 +1005,7 @@ export class StudioSession {
     if (!this.track || !Number.isFinite(requestedTimeMs)) return;
     const current = this.track.keyframes.find((keyframe) => keyframe.id === id);
     if (!current) return;
-    const frameMs = frameStepMs(FPS);
+    const frameMs = frameStepMs(this.media?.proxy.fps || FPS);
     let timestampMs = Math.round(requestedTimeMs / frameMs) * frameMs;
     if (Math.abs(timestampMs - this.playheadMs) <= 100)
       timestampMs = Math.round(this.playheadMs / frameMs) * frameMs;
@@ -916,7 +1013,7 @@ export class StudioSession {
     const sameChannel = this.track.keyframes.filter(
       (keyframe) => keyframe.channelId === current.channelId && keyframe.id !== id
     );
-    if (!canInsert(sameChannel, timestampMs, this.spacingLimit())) {
+    if (!dragKeepsOrder(current, sameChannel, timestampMs, this.spacingLimit())) {
       this.status = 'Keyframes cannot cross or overlap on the same lane';
       return;
     }
@@ -1032,41 +1129,123 @@ export class StudioSession {
       this.track.keyframes.filter((kf) => kf.channelId === channelId),
       this.playheadMs
     );
-    return `${sample.r},${sample.g},${sample.b}`;
+    return displayedRgb(sample);
+  }
+
+  cancelEyedrop(): void {
+    this.frameRequest++;
+    if (this.frameUrl) URL.revokeObjectURL(this.frameUrl);
+    this.frameUrl = '';
+    this.frameLoading = false;
   }
 
   async eyedrop(): Promise<void> {
-    if (!this.item) {
-      this.status = 'The frame could not be sampled';
+    if (!this.item || !this.selection.length) {
+      this.status = 'Select a keyframe before picking a color';
       return;
     }
+    this.cancelEyedrop();
+    const request = this.frameRequest;
+    this.frameSelection = [...this.selection];
+    this.video?.pause();
+    this.playing = false;
+    this.frameLoading = true;
     try {
       const response = await fetchFrame(this.item.itemId, this.playheadMs);
-      if (!response.ok) {
-        this.status = 'The frame could not be sampled';
-        return;
-      }
-      this.status = 'Sampled frame';
+      if (!response.ok) throw new Error(await response.text());
+      const blob = await response.blob();
+      if (request !== this.frameRequest) return;
+      this.frameUrl = URL.createObjectURL(blob);
+      this.status = 'Click the frame to pick a color';
     } catch {
-      this.status = 'The frame could not be sampled';
+      if (request === this.frameRequest) this.alert = 'The frame could not be sampled. Try again.';
+    } finally {
+      if (request === this.frameRequest) this.frameLoading = false;
     }
   }
 
-  async importFile(file: File): Promise<void> {
-    if (!this.track || !this.item) return;
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const result = importTrack(this.track, bytes, this.item.itemId);
-    if (result.errors.length) {
-      this.alert = result.errors.join(' ');
-      this.status = result.errors.join(' ');
-      return;
-    }
-    this.edit(result.track, 'Imported track');
-    this.importWarning = importDurationWarning(
-      this.movieMs ?? 0,
-      result.track.metadata.durationMs,
-      true
+  pickFrameColor(color: { r: number; g: number; b: number }): void {
+    this.selection = this.frameSelection.filter((id) =>
+      this.track?.keyframes.some((frame) => frame.id === id)
     );
+    this.applyColor(color);
+    this.cancelEyedrop();
+    this.status = 'Picked color from movie';
+  }
+
+  async importFile(file: File): Promise<void> {
+    if (!this.item) return;
+    try {
+      if (!file.name.toLowerCase().endsWith('.lightfx') || file.size > MAX_TRACK_BYTES)
+        throw new Error();
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const decoded = decodeTrack(bytes);
+      if (validateTrack(decoded).length) throw new Error();
+      const source = decoded.metadata.movieTitle.trim();
+      if (
+        ((source && source.toLocaleLowerCase() !== this.item.name.toLocaleLowerCase()) ||
+          importDurationWarning(this.movieMs ?? 0, decoded.metadata.durationMs, true)) &&
+        !window.confirm(
+          `This track is for ${source || 'a movie with a different runtime'} (${Math.round(decoded.metadata.durationMs / 1000)} seconds), but you selected ${this.item.name} (${Math.round((this.movieMs ?? 0) / 1000)} seconds). Continue importing it?`
+        )
+      )
+        return;
+      await this.discardEdits();
+      const itemId = this.item.itemId;
+      if (location.hash.endsWith('/import')) {
+        await this.selectItem(itemId, undefined, undefined, { fileName: file.name, bytes });
+      } else {
+        setPendingImport(itemId, file.name, bytes);
+        location.hash = `#/edit/${encodeURIComponent(itemId)}/import`;
+      }
+    } catch {
+      this.alert = "That file isn't a .lightfx track.";
+    }
+  }
+
+  async discardEdits(): Promise<void> {
+    this.dirty = false;
+    await this.persist(false);
+  }
+
+  async reloadFromServer(): Promise<void> {
+    if (!this.item) return;
+    try {
+      const choices = await fetchTracks(this.item.itemId);
+      const summary = choices.find((track) => track.trackId === this.trackId);
+      if (!summary)
+        throw new Error(
+          'This track is no longer on the server. Save as a new track to keep your work.'
+        );
+      await this.openTrack(summary, this.movieMs, this.bootToken, true);
+      this.alert = '';
+      this.status = 'Saved';
+      await this.persist(false);
+    } catch (error) {
+      this.alert = (error as Error).message || 'The track could not be reloaded.';
+    }
+  }
+
+  async saveAsNewTrack(): Promise<void> {
+    if (!this.track || this.saving || !this.canManage) return;
+    this.trackId = `${slug(this.track.metadata.title).slice(0, 48)}-${crypto.randomUUID().slice(0, 8)}`;
+    this.trackUpdatedAt = '';
+    this.saveConflict = false;
+    this.dirty = true;
+    await this.save();
+  }
+
+  private saveError(message: string): void {
+    this.alert = message;
+    this.status = 'Save failed';
+    const faulty = this.track?.keyframes
+      .toSorted((a, b) => b.id.length - a.id.length)
+      .find((frame) => message.includes(frame.id));
+    if (faulty) {
+      this.selection = [faulty.id];
+      this.activeChannelId = faulty.channelId;
+      this.syncPropertyFields();
+    }
   }
 
   useMovieDuration(): void {
@@ -1076,67 +1255,88 @@ export class StudioSession {
   }
 
   async save(): Promise<void> {
-    this.status = 'Saving…';
+    if (this.saving) return;
+    if (this.hosted && !this.canManage) {
+      this.saveError('Only an Emby administrator can save');
+      return;
+    }
     if (!this.track) {
-      this.status = 'The movie duration is unknown';
+      this.saveError('The movie duration is unknown');
       return;
     }
-    const upgraded = upgradeLegacyTrackLayout(this.track);
-    if (upgraded !== this.track) {
-      this.track = upgraded;
-      this.dirty = true;
-    }
-    const withSafety = { ...upgraded, safety: computeSafety(upgraded) };
-    if (!this.hosted) {
-      if (!this.durationKnown) {
-        this.status = 'The movie duration is unknown';
+    this.saving = true;
+    this.status = 'Saving…';
+    try {
+      const upgraded = upgradeLegacyTrackLayout(this.track);
+      if (upgraded !== this.track) this.track = upgraded;
+      const source = this.track;
+      const withSafety = { ...source, safety: computeSafety(source) };
+      const plan = planHostedSave({
+        track: withSafety,
+        sidecar: this.sidecar(),
+        itemId: this.item?.itemId ?? '',
+        trackId: this.trackId,
+        durationKnown: this.durationKnown,
+      });
+      if (plan.blocked) {
+        this.saveError(plan.message ?? 'Save blocked');
         return;
       }
-      this.download(withSafety);
-      this.track = withSafety;
-      this.dirty = false;
-      await this.persist(false);
-      return;
-    }
-    const plan = planHostedSave({
-      track: withSafety,
-      sidecar: this.sidecar(),
-      itemId: this.item?.itemId ?? '',
-      trackId: this.trackId,
-      durationKnown: this.durationKnown,
-    });
-    if (plan.blocked) {
-      this.alert = plan.message ?? 'Save blocked';
-      this.status = plan.message ?? '';
-      return;
-    }
-    const bytes = encodeTrack(withSafety);
-    for (const request of plan.requests) {
-      const response =
-        request.method === 'PUT' && request.path.includes('/Tracks/')
-          ? await putBytes(
-              request.path,
-              bytes,
-              this.trackUpdatedAt ? { 'If-Match': this.trackUpdatedAt } : {}
-            )
-          : request.method === 'PUT'
-            ? await putJson(request.path, sidecarDocument(this.sidecar()))
-            : await postJson(request.path, {
-                itemId: this.item?.itemId,
-                trackPath: `lightfx/${this.trackId}.lightfx`,
-              });
-      if (!response.ok) {
-        const message = await response.text();
-        this.alert = message || `Save failed (${response.status})`;
-        if (response.status === 403) this.adminMessage = 'Admin is required';
-        return;
+      if (!this.hosted) {
+        this.download(withSafety);
+      } else {
+        for (const request of plan.requests) {
+          const isTrack = request.path.includes('/Tracks/');
+          const response = isTrack
+            ? await putBytes(
+                request.path,
+                encodeTrack(withSafety),
+                this.trackUpdatedAt ? { 'If-Match': this.trackUpdatedAt } : {}
+              )
+            : await putJson(request.path, sidecarDocument(this.sidecar()));
+          if (!response.ok) {
+            const raw = await response.text();
+            let message = raw;
+            try {
+              const parsed = JSON.parse(raw);
+              message = parsed.ResponseStatus?.Message ?? parsed.message ?? raw;
+            } catch {
+              /* Plain-text plugin errors are valid. */
+            }
+            this.saveConflict = response.status === 409;
+            this.saveError(message || `Save failed (${response.status})`);
+            return;
+          }
+          if (isTrack) {
+            // The plugin returns a fresh concurrency token after every successful write.
+            const body = await response.text();
+            if (body)
+              this.trackUpdatedAt =
+                JSON.parse(body).updatedAt ?? JSON.parse(body).UpdatedAt ?? this.trackUpdatedAt;
+          }
+        }
       }
+      if (this.track === source) {
+        this.track = withSafety;
+        this.dirty = false;
+      }
+      this.saveConflict = false;
+      this.alert = '';
+      this.status = 'Saved';
+      await this.persist(this.dirty);
+      if (this.item) {
+        history.replaceState(
+          null,
+          '',
+          `#/edit/${encodeURIComponent(this.item.itemId)}/${encodeURIComponent(this.trackId)}`
+        );
+        window.dispatchEvent(new Event('olfx-editor-route-replaced'));
+      }
+    } catch (error) {
+      this.saveError((error as Error).message || 'Save could not reach Emby. Try again.');
+    } finally {
+      this.saving = false;
     }
-    this.track = withSafety;
-    this.dirty = false;
-    this.alert = '';
-    this.status = 'Saved';
-    await this.persist(false);
   }
 
   download(track = this.track): void {

@@ -309,7 +309,7 @@ function loadAllow(file) {
   return new Set(list);
 }
 
-function checkApproved(reqs, titles, useReport, allow) {
+function checkApproved(reqs, titles, useReport, allow, requireFullstack = false) {
   const approved = reqs.filter((req) => req.status === 'approved' && req.layer === 'L1');
   let fullstackNotRun = false;
   for (const req of approved) {
@@ -323,7 +323,7 @@ function checkApproved(reqs, titles, useReport, allow) {
         (test) => test.name.includes(req.id) && test.name.includes(`@${tier}`)
       );
       const key = `${req.id}@${tier}`;
-      if (useReport && tier === 'fullstack' && hits.length === 0) {
+      if (useReport && tier === 'fullstack' && hits.length === 0 && !requireFullstack) {
         fullstackNotRun = true;
         continue;
       }
@@ -381,7 +381,13 @@ if (args.requirements) {
   }
   gated = reqs.filter((req) => args.requirements.includes(req.id));
 }
-checkApproved(gated, titles, Boolean(args.report), loadAllow(args.allowExpected));
+checkApproved(
+  gated,
+  titles,
+  Boolean(args.report),
+  loadAllow(args.allowExpected),
+  Boolean(args.requirements)
+);
 
 if (problems.length > 0) {
   for (const problem of problems) console.error(problem);
