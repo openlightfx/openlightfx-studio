@@ -1,7 +1,13 @@
 <script lang="ts">
-  import { displayedRgb, projectLanePoints, lowerBoundLanePoints, hitLanePoint } from '$lib/domain';
+  import {
+    displayedRgb,
+    projectLanePoints,
+    lowerBoundLanePoints,
+    clientXToTimelineTime,
+  } from '$lib/domain';
   import type { Keyframe, LanePaintPoint } from '$lib/domain';
-  let { frames, scale, scroll, width, selected, label, defaultRgb, choose, begin, finish, empty } =
+  import { createChannelSampler } from '$lib/domain/sample';
+  let { frames, scale, scroll, width, selected, label, defaultRgb, choose, begin, beginBlank } =
     $props<{
       frames: Keyframe[];
       scale: number;
@@ -12,22 +18,29 @@
       defaultRgb: string;
       choose: (event: MouseEvent | KeyboardEvent, id: string) => void;
       begin: (event: PointerEvent, id: string) => void;
-      finish: (event: PointerEvent, id: string) => void;
-      empty: (event: MouseEvent) => void;
+      beginBlank: (event: PointerEvent) => void;
     }>();
   let canvas = $state<HTMLCanvasElement>();
-  let dragging = '';
-  let downX = 0;
-  let suppressClick = false;
-  let pickedOnDown = false;
   // Cache scalar paint data when authoring changes, not on every zoom/playback frame.
   const points: LanePaintPoint[] = $derived(projectLanePoints(frames));
+  const sample = $derived(createChannelSampler(frames));
   const selectedIds = $derived(new Set(selected));
   const lowerBound = (time: number) => lowerBoundLanePoints(points, time);
   function hit(event: MouseEvent | PointerEvent): string {
     if (!canvas) return '';
-    const x = event.clientX - canvas.getBoundingClientRect().left;
-    return hitLanePoint(points, x, scale, scroll);
+    const bounds = canvas.getBoundingClientRect();
+    const time = clientXToTimelineTime(event.clientX, {
+      originClientX: bounds.left,
+      scrollX: scroll,
+      pxPerMs: scale,
+      durationMs: Math.max(0, frames.at(-1)?.timestampMs ?? 0) + (width + scroll) / scale,
+    });
+    if (time === null) return '';
+    const index = lowerBound(time);
+    const nearest = [points[index - 1], points[index]]
+      .filter(Boolean)
+      .toSorted((a, b) => Math.abs(a.time - time) - Math.abs(b.time - time))[0];
+    return nearest && Math.abs(nearest.time - time) * scale <= 9 ? nearest.id : '';
   }
   $effect(() => {
     const data = points,
@@ -43,9 +56,21 @@
     context.scale(ratio, ratio);
     context.clearRect(0, 0, viewWidth, 40);
     context.globalAlpha = 0.3;
-    if (!data.length) {
-      context.fillStyle = `rgb(${defaultRgb})`;
-      context.fillRect(0, 0, viewWidth, 40);
+    // Sample exactly the playback semantics, bounded by visible CSS pixels rather
+    // than track length. This also handles Kelvin and interrupted incoming fades.
+    let runStart = 0;
+    let previousColor = '';
+    for (let pixel = 0; pixel <= Math.ceil(viewWidth); pixel++) {
+      const color =
+        pixel < viewWidth ? `rgb(${displayedRgb(sample((start + pixel) / scale))})` : '';
+      if (color !== previousColor) {
+        if (previousColor) {
+          context.fillStyle = previousColor;
+          context.fillRect(runStart, 0, pixel - runStart, 40);
+        }
+        runStart = pixel;
+        previousColor = color;
+      }
     }
     const first = Math.max(0, lowerBound((start - 10) / scale) - 1);
     let visible = 0,
@@ -55,24 +80,6 @@
         next = data[i + 1],
         x = point.time * scale - start;
       if (x > viewWidth + 10) break;
-      const end = Math.min(viewWidth, next ? next.time * scale - start : viewWidth);
-      const beginX = Math.max(0, x);
-      if (end - beginX >= 0.5) {
-        const color = `rgb(${displayedRgb(point.color)})`;
-        if (next && next.interpolation !== 'STEP' && next.transition) {
-          const fadeX = Math.max(beginX, (next.time - next.transition) * scale - start);
-          context.fillStyle = color;
-          context.fillRect(beginX, 0, fadeX - beginX, 40);
-          const gradient = context.createLinearGradient(fadeX, 0, Math.max(fadeX + 0.01, end), 0);
-          gradient.addColorStop(0, color);
-          gradient.addColorStop(1, `rgb(${displayedRgb(next.color)})`);
-          context.fillStyle = gradient;
-          context.fillRect(fadeX, 0, end - fadeX, 40);
-        } else {
-          context.fillStyle = color;
-          context.fillRect(beginX, 0, end - beginX, 40);
-        }
-      }
       if (x < -8 || x > viewWidth + 8) continue;
       visible++;
       // Dense marks share pixels at Fit. Paint the final mark at each pixel once.
@@ -107,37 +114,16 @@
   class="lane-canvas"
   role="button"
   tabindex="0"
-  aria-label={`${label} timeline lane, ${frames.length} keyframes. Enter or Up and Down select keyframes.`}
+  aria-label={`${label} timeline lane, ${frames.length} keyframes. Enter or Up and Down select keyframes; Shift extends the range; Control or Command toggles.`}
   data-keyframe-count={frames.length}
   style={`left:${scroll}px;width:${Math.max(1, width)}px;height:40px`}
   onpointerdown={(event) => {
-    downX = event.clientX;
-    dragging = hit(event);
-    pickedOnDown = Boolean(dragging);
-    if (dragging) {
-      choose(event, dragging);
-      begin(event, dragging);
-    }
-  }}
-  onpointerup={(event) => {
-    suppressClick = Boolean(dragging) && Math.abs(event.clientX - downX) >= 4;
-    if (dragging) finish(event, dragging);
-    dragging = '';
-  }}
-  onpointercancel={() => {
-    dragging = '';
-  }}
-  onclick={(event) => {
-    event.stopPropagation();
-    if (suppressClick || pickedOnDown) {
-      suppressClick = false;
-      pickedOnDown = false;
-      return;
-    }
+    if (event.button !== 0) return;
     const id = hit(event);
-    if (id) choose(event, id);
-    else empty(event);
+    if (id) begin(event, id);
+    else beginBlank(event);
   }}
+  onclick={(event) => event.stopPropagation()}
   onkeydown={(event) => {
     if (!['Enter', ' ', 'ArrowUp', 'ArrowDown'].includes(event.key) || !points.length) return;
     event.preventDefault();
@@ -153,6 +139,7 @@
 
 <style>
   canvas {
+    touch-action: none;
     position: absolute;
     top: 0;
     cursor: crosshair;

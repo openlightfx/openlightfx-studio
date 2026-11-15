@@ -235,6 +235,59 @@ requirement(
 );
 
 requirement(
+  'ED2-007 @fullstack stepping across the proxy cut selects the independently expected rendered and PNG frame',
+  async ({ page, request }) => {
+    await create(page, 'Frame step cut identity');
+    await add(page, 'Left', 0.1, '000000', '100');
+    await expect
+      .poll(async () => (await get(request, `Items/${movie.itemId}/MediaInfo`)).proxy.state, {
+        timeout: 60000,
+      })
+      .toBe('ready');
+    const video = page.locator('video');
+    await seek(page, 0.199);
+    // The synthetic movie cuts from black to red at exactly 2 s. The last
+    // preceding proxy frame is 47/24 s; one UI frame step must show frame 48.
+    await expect
+      .poll(() => video.evaluate((node) => (node as HTMLVideoElement).currentTime))
+      .toBeGreaterThan(47 / 24);
+    await expect
+      .poll(() => video.evaluate((node) => (node as HTMLVideoElement).currentTime))
+      .toBeLessThan(2);
+    await page.getByRole('button', { name: 'Next frame' }).click();
+    await expect
+      .poll(() => video.evaluate((node) => Math.abs((node as HTMLVideoElement).currentTime - 2)))
+      .toBeLessThan(0.01);
+    await expect
+      .poll(() =>
+        video.evaluate((node) => {
+          const element = node as HTMLVideoElement;
+          const canvas = document.createElement('canvas');
+          canvas.width = element.videoWidth;
+          canvas.height = element.videoHeight;
+          const context = canvas.getContext('2d')!;
+          context.drawImage(element, 0, 0);
+          const pixel = context.getImageData(canvas.width / 2, canvas.height / 2, 1, 1).data;
+          return pixel[0] - Math.max(pixel[1], pixel[2]);
+        })
+      )
+      .toBeGreaterThan(64);
+
+    const png = page.waitForResponse((response) => response.url().includes('/Frame?'));
+    await page.getByRole('button', { name: 'Pick color from movie' }).click();
+    const response = await png;
+    expect(response.ok()).toBeTruthy();
+    expect(response.headers()['x-openlightfx-source-time-ms']).toBe('2000');
+    await expect(
+      page.getByRole('button', { name: 'Source frame — click to sample color' })
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Source frame — click to sample color' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByLabel('Hex', { exact: true })).toHaveValue('fd0000');
+  }
+);
+
+requirement(
   'PROP-004 @fullstack picking immediately before a cut matches the actually paused movie frame',
   async ({ page, request }) => {
     await create(page, 'Frame identity before a cut');
@@ -626,6 +679,195 @@ requirement(
 );
 
 requirement(
+  'ED2-025 @fullstack visual overlay toggles do not issue bulb commands, alter authored cues, or disturb a real preview',
+  async ({ page, request }) => {
+    await create(page, `Step 4 overlay ${browser} ${Date.now()}`, '3.0');
+    await add(page, 'Left', 0.4, 'ff0000', '40');
+    await add(page, 'Center', 0.4, '00ff00', '60');
+    await add(page, 'Right', 0.4, '0000ff', '80');
+    await seek(page, 0.6);
+    await expect(page.getByRole('button', { name: 'Overlay on' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    await expect(page.getByRole('switch', { name: 'Lights', exact: true })).toHaveAttribute(
+      'aria-checked',
+      'false'
+    );
+
+    const offCursor = await cursor(request);
+    const offReceiptStart = receipts().length;
+    await page.getByRole('button', { name: 'Overlay on' }).click();
+    await expect(page.getByRole('button', { name: 'Overlay off' })).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    );
+    await page.keyboard.press('v');
+    await expect(page.getByRole('button', { name: 'Overlay on' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    await expect(page.getByRole('switch', { name: 'Lights', exact: true })).toHaveAttribute(
+      'aria-checked',
+      'false'
+    );
+    const noPreviewSample = await waitForObservation(control, { after: offCursor, bulbs: off });
+    expect(receipts().slice(offReceiptStart)).toHaveLength(0);
+    const saved = await save(page, request);
+    expect(
+      saved.track.keyframes
+        .map(({ channelId, color, brightness }) => ({ channelId, color, brightness }))
+        .sort((a, b) => a.channelId.localeCompare(b.channelId))
+    ).toEqual([
+      { channelId: 'center', color: { r: 0, g: 255, b: 0 }, brightness: 60 },
+      { channelId: 'left', color: { r: 255, g: 0, b: 0 }, brightness: 40 },
+      { channelId: 'right', color: { r: 0, g: 0, b: 255 }, brightness: 80 },
+    ]);
+
+    const expected = {
+      'left-bulb': {
+        r: 255,
+        g: 0,
+        b: 0,
+        brightness: 40,
+        power: true,
+        display_color: { r: 102, g: 0, b: 0 },
+      },
+      'center-bulb': {
+        r: 0,
+        g: 255,
+        b: 0,
+        brightness: 60,
+        power: true,
+        display_color: { r: 0, g: 153, b: 0 },
+      },
+      'right-bulb': {
+        r: 0,
+        g: 0,
+        b: 255,
+        brightness: 80,
+        power: true,
+        display_color: { r: 0, g: 0, b: 204 },
+      },
+    };
+    await expect(page.getByRole('switch', { name: 'Lights', exact: true })).toBeEnabled();
+    const previewCursor = await cursor(request);
+    const previewReceiptStart = receipts().length;
+    await page.getByRole('switch', { name: 'Lights', exact: true }).click();
+    const activated = await waitForObservation(control, {
+      after: previewCursor,
+      bulbs: expected,
+      tolerance: 2,
+    });
+    const activationReceipts = receipts().slice(previewReceiptStart);
+    for (const [id, state] of Object.entries(expected)) {
+      expect(
+        activationReceipts.some(
+          (event) =>
+            event.bulb_id === id &&
+            [event.params.r, event.params.g, event.params.b].map(Number).join() ===
+              [state.r, state.g, state.b].join() &&
+            Number(event.params.brightness) === state.brightness
+        )
+      ).toBe(true);
+    }
+    await test.info().attach('ed2-025-preview-on.json', {
+      body: JSON.stringify({
+        savedTrack: saved.track,
+        noPreviewSample,
+        sample: activated,
+        receipts: activationReceipts,
+      }),
+      contentType: 'application/json',
+    });
+
+    // Align immediately after a known 5-second keepalive, and wait until all its
+    // driver commands have arrived. This leaves an explicit no-keepalive window
+    // in which even redundant control intents from an overlay toggle are a bug.
+    const keepaliveReceiptStart = receipts().length;
+    const keepalive = await page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' && response.url().endsWith('/Preview/Frame'),
+      { timeout: 8000 }
+    );
+    expect(keepalive.ok()).toBeTruthy();
+    await expect
+      .poll(() =>
+        Object.keys(expected).every((id) =>
+          receipts()
+            .slice(keepaliveReceiptStart)
+            .some((event) => event.bulb_id === id)
+        )
+      )
+      .toBe(true);
+    const keepaliveReceipts = receipts().slice(keepaliveReceiptStart);
+    const alignedAt = Date.now();
+    const overlayIntents: { action: string; at: number }[] = [];
+    const recordIntent = (outgoing: import('@playwright/test').Request) => {
+      const action = /\/Preview\/(Start|Frame|Stop)(?:\?|$)/.exec(outgoing.url())?.[1];
+      if (outgoing.method() === 'POST' && action) overlayIntents.push({ action, at: Date.now() });
+    };
+    page.on('request', recordIntent);
+    const overlayCursor = await cursor(request);
+    const overlayReceiptStart = receipts().length;
+    await page.getByRole('button', { name: 'Overlay on' }).click();
+    await expect(page.getByRole('button', { name: 'Overlay off' })).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    );
+    await page.keyboard.press('v');
+    await expect(page.getByRole('button', { name: 'Overlay on' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    await expect(page.getByRole('switch', { name: 'Lights on', exact: true })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    );
+    const stable = await waitForObservation(control, {
+      after: overlayCursor,
+      bulbs: expected,
+      tolerance: 2,
+    });
+    page.off('request', recordIntent);
+    const overlayReceipts = receipts().slice(overlayReceiptStart);
+    expect(Date.now() - alignedAt).toBeLessThan(4000);
+    expect(overlayIntents).toEqual([]);
+    expect(overlayReceipts).toHaveLength(0);
+    await test.info().attach('ed2-025-overlay-stable.json', {
+      body: JSON.stringify({
+        sample: stable,
+        receipts: overlayReceipts,
+        overlayIntents,
+        keepaliveReceipts,
+      }),
+      contentType: 'application/json',
+    });
+
+    const stopCursor = await cursor(request);
+    const stopReceiptStart = receipts().length;
+    await page.getByRole('switch', { name: 'Lights on', exact: true }).click();
+    const restored = await waitForObservation(control, { after: stopCursor, bulbs: off });
+    await expect(page.getByRole('switch', { name: 'Lights', exact: true })).toHaveAttribute(
+      'aria-checked',
+      'false'
+    );
+    const stopReceipts = receipts().slice(stopReceiptStart);
+    for (const id of Object.keys(expected)) {
+      expect(
+        stopReceipts.some(
+          (event) => event.bulb_id === id && String(event.params.power).toLowerCase() === 'false'
+        )
+      ).toBe(true);
+    }
+    await test.info().attach('ed2-025-preview-restored.json', {
+      body: JSON.stringify({ sample: restored, receipts: stopReceipts }),
+      contentType: 'application/json',
+    });
+  }
+);
+
+requirement(
   'PREV-008 @fullstack Emby owns the room until a real takeover is accepted and Cancel leaves its rendered lights unchanged',
   async ({ page, request }) => {
     await create(page, 'Step 4 takeover');
@@ -753,7 +995,9 @@ requirement(
         exact: true,
       })
     ).toBeVisible();
+    await page.getByLabel('Track title', { exact: true }).fill('Step 4 eight effects saved');
     const saved = await save(page, request);
+    expect(saved.track.metadata.title).toBe('Step 4 eight effects saved');
     expect(saved.track.effects).toEqual(source.effects);
   }
 );

@@ -1,28 +1,84 @@
+import { EDITOR_COMMANDS } from '../studio/editor-commands';
+
 export interface ShortcutBinding {
   action: string;
   keys: string[];
   button: boolean;
 }
 
-/** L1 map from KEYB-001. Browser chrome chords are absent. */
-export const L1_SHORTCUTS: ShortcutBinding[] = [
-  { action: 'save', keys: ['Ctrl+S', 'Cmd+S'], button: true },
-  { action: 'undo', keys: ['Ctrl+Z', 'Cmd+Z'], button: true },
-  { action: 'redo', keys: ['Ctrl+Shift+Z', 'Cmd+Shift+Z'], button: true },
-  { action: 'play-pause', keys: ['Space'], button: true },
-  { action: 'add-keyframe', keys: ['K'], button: false },
-  { action: 'delete', keys: ['Delete', 'Backspace'], button: false },
-  { action: 'step-back', keys: ['Left'], button: true },
-  { action: 'step-forward', keys: ['Right'], button: true },
-  { action: 'skip-back', keys: ['Shift+Left'], button: true },
-  { action: 'skip-forward', keys: ['Shift+Right'], button: true },
-  { action: 'zoom-in', keys: [']'], button: true },
-  { action: 'zoom-out', keys: ['['], button: true },
-  { action: 'zoom-fit', keys: ['\\'], button: true },
-  { action: 'overlay', keys: ['V'], button: true },
-  { action: 'eyedropper', keys: ['I'], button: true },
-  { action: 'shortcut-help', keys: ['?'], button: true },
-];
+const legacyAction: Record<string, string> = {
+  'play-pause': 'play-pause',
+  'add-keyframe': 'add-keyframe',
+  delete: 'delete',
+  'step-back': 'step-back',
+  'step-forward': 'step-forward',
+  'skip-back': 'skip-back',
+  'skip-forward': 'skip-forward',
+  'previous-keyframe': 'previous-keyframe',
+  'next-keyframe': 'next-keyframe',
+  'movie-start': 'movie-start',
+  'movie-end': 'movie-end',
+  'zoom-in': 'zoom-in',
+  'zoom-out': 'zoom-out',
+  'zoom-fit': 'zoom-fit',
+  'overlay-toggle': 'overlay-toggle',
+  eyedropper: 'eyedropper',
+  'shortcut-help': 'shortcut-help',
+  save: 'save',
+  undo: 'undo',
+  redo: 'redo',
+};
+
+function legacyChords(chords: string[]): string[] {
+  return chords.flatMap((chord) => {
+    if (chord.startsWith('Ctrl/⌘ Shift ')) {
+      const key = chord.slice('Ctrl/⌘ Shift '.length);
+      return [`Ctrl+Shift+${key}`, `Cmd+Shift+${key}`];
+    }
+    if (chord.startsWith('Ctrl/⌘ ')) {
+      const key = chord.slice('Ctrl/⌘ '.length);
+      return [`Ctrl+${key}`, `Cmd+${key}`];
+    }
+    return [
+      chord === '←'
+        ? 'Left'
+        : chord === '→'
+          ? 'Right'
+          : chord.startsWith('Shift+←')
+            ? 'Shift+Left'
+            : chord.startsWith('Shift+→')
+              ? 'Shift+Right'
+              : chord,
+    ];
+  });
+}
+
+/** Compatibility view; editor-commands.ts is the authoritative registry. */
+export const L1_SHORTCUTS: ShortcutBinding[] = EDITOR_COMMANDS.filter(
+  (command) => command.chords.length
+).map((command) => ({
+  action: legacyAction[command.id] ?? command.id,
+  keys: legacyChords(command.chords),
+  button: [
+    'save',
+    'undo',
+    'redo',
+    'play-pause',
+    'step-back',
+    'step-forward',
+    'skip-back',
+    'skip-forward',
+    'previous-keyframe',
+    'next-keyframe',
+    'movie-start',
+    'movie-end',
+    'zoom-in',
+    'zoom-out',
+    'zoom-fit',
+    'eyedropper',
+    'shortcut-help',
+  ].includes(command.id),
+}));
 
 const FORBIDDEN = new Set([
   'Ctrl+L',
@@ -66,5 +122,5 @@ export function zoomChords(): string[] {
 }
 
 export function overlayChord(): string {
-  return 'V';
+  return EDITOR_COMMANDS.find((command) => command.id === 'overlay-toggle')?.chords[0] ?? '';
 }

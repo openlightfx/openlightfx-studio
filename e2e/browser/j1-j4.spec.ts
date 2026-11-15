@@ -11,6 +11,7 @@ import {
   reloadWithUnsaved,
 } from '../harness/browser';
 import { StudioPage } from '../pages/studio-page';
+import { DOCUMENT_ONLY_MEDIA, twoHourDocumentFixture } from '../fixtures/editor';
 
 // Keep transport/performance measurements sequential within each browser. A failure
 // still runs the remaining tests; this is not Playwright's skip-on-failure serial mode.
@@ -189,15 +190,14 @@ requirement(
     await expect.poll(async () => Math.abs((await time(page)) - 4)).toBeLessThanOrEqual(0.5);
   }
 );
-requirement(
-  'MEDIA-007 @browser 24 frame steps land on the specified 1008 ms grid',
-  async ({ page }) => {
-    await openFixtureEditor(page);
-    await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
-    for (let index = 0; index < 24; index++) await page.keyboard.press('ArrowRight');
-    await expect.poll(() => time(page)).toBeCloseTo(1.008, 3);
-  }
-);
+requirement('MEDIA-007 @browser 24 proxy frame steps land on 1000 ms', async ({ page }) => {
+  await openFixtureEditor(page);
+  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+  for (let index = 0; index < 24; index++) await page.keyboard.press('ArrowRight');
+  await expect.poll(() => time(page)).toBeCloseTo(1, 3);
+  for (let index = 0; index < 24; index++) await page.keyboard.press('ArrowLeft');
+  await expect.poll(() => time(page)).toBeCloseTo(0, 3);
+});
 requirement(
   'MEDIA-008 @browser keyboard skips five seconds and clamps at movie boundaries',
   async ({ page }) => {
@@ -408,7 +408,7 @@ requirement(
   async ({ page }) => {
     await openFixtureEditor(page);
     await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
-    await page.getByRole('button', { name: 'Fit', exact: true }).click();
+    await page.getByRole('button', { name: 'Fit movie', exact: true }).click();
     expect(
       (await page.getByRole('slider', { name: 'Timeline ruler' }).boundingBox())!.width
     ).toBeCloseTo(
@@ -867,10 +867,9 @@ requirement(
   'PERF-002 @browser five-channel two-hour 10000-keyframe zoom obeys the frame budget',
   async ({ page, browserName }) => {
     await openFixtureEditor(page, {
-      empty: true,
-      layout: 'LAYOUT_5_0',
-      durationMs: 7200000,
-      keyframeCount: 10000,
+      track: twoHourDocumentFixture(),
+      itemRuntimeMs: 0,
+      media: DOCUMENT_ONLY_MEDIA,
     });
     const canvases = page.locator('.lane-canvas');
     await expect(canvases).toHaveCount(5);

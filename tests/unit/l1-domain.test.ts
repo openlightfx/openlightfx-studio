@@ -21,6 +21,7 @@ import {
   blackKeyframe,
   canInsert,
   chooseLoadSource,
+  clampRecoveryPosition,
   clampKeyframeTime,
   clampRgbChannel,
   clampTransition,
@@ -36,6 +37,10 @@ import {
   flushOnPageHide,
   forbiddenChordsInRegistry,
   frameStepMs,
+  proxyFrameTimeMs,
+  proxyFrameIndex,
+  quantizeProxyFrameTime,
+  adjacentProxyFrameTime,
   importDurationWarning,
   importTrack,
   kelvinToRgb,
@@ -111,7 +116,27 @@ function track(partial: Partial<Track> = {}): Track {
 
 requirement('MEDIA-007 @unit frame step is round(1000/fps) via currentTime', () => {
   expect(frameStepMs(24)).toBe(42);
-  expect(stepPlayhead(0, 24, 24)).toEqual({ timeMs: 1008, method: 'currentTime' });
+  expect(stepPlayhead(0, 24, 24).timeMs).toBe(1000);
+  for (const fps of [24, 25, 30, 23.976, 29.97]) {
+    const total = 100_000;
+    const time = proxyFrameTimeMs(total, fps);
+    expect(Math.abs(time - (total * 1000) / fps)).toBeLessThanOrEqual(0.5);
+    expect(proxyFrameIndex(time, fps)).toBe(total);
+    expect(Math.abs(proxyFrameTimeMs(proxyFrameIndex(time, fps), fps) - time)).toBeLessThanOrEqual(
+      0.5
+    );
+  }
+  expect(proxyFrameTimeMs(24_000, 24)).toBe(1_000_000);
+  expect(quantizeProxyFrameTime(33, 30, 10_000)).toBe(33);
+  expect(adjacentProxyFrameTime(33, 1, 30, 10_000)).toBe(67);
+  expect(adjacentProxyFrameTime(33, -1, 30, 10_000)).toBe(0);
+  expect(adjacentProxyFrameTime(17, 1, 24, 10_000)).toBe(42);
+  expect(adjacentProxyFrameTime(17, -1, 24, 10_000)).toBe(0);
+  expect(adjacentProxyFrameTime(999, 1, 24, 1_000)).toBe(1_000);
+  expect(adjacentProxyFrameTime(1_000, 1, 24, 1_000)).toBe(1_000);
+  expect(adjacentProxyFrameTime(1_000, -1, 24, 1_000)).toBe(958);
+  expect(quantizeProxyFrameTime(-3, NaN, 100)).toBe(0);
+  expect(quantizeProxyFrameTime(200, 0, 100)).toBe(100);
 });
 
 requirement('MEDIA-014 @unit local H.264 MP4 plays and the bundle has no ffmpeg.wasm', () => {
@@ -192,6 +217,27 @@ requirement('TIME-010 @unit drag snaps to the second and stops at minimum spacin
   expect(blocked.timeMs).toBe(1200);
   expect(acceptSpacing(100) && acceptSpacing(200) && acceptSpacing(1000)).toBe(true);
   expect(acceptSpacing(50) || acceptSpacing(5000)).toBe(false);
+});
+
+requirement('ED2-017 @unit magnet threshold is pixel-stable and ties choose earlier time', () => {
+  expect(
+    snapTime({
+      timeMs: 1050,
+      fromMs: 0,
+      pxPerMs: 0.1,
+      durationMs: 10_000,
+      otherTimes: [1000, 1100],
+    }).timeMs
+  ).toBe(1000);
+  expect(
+    snapTime({
+      timeMs: 1050,
+      fromMs: 0,
+      pxPerMs: 0.01,
+      durationMs: 10_000,
+      otherTimes: [1000, 1100],
+    }).timeMs
+  ).toBe(1000);
 });
 
 requirement('TIME-012 @unit frame snap lands on the 24 fps grid', () => {
@@ -443,6 +489,9 @@ requirement(
     });
     const record = makeCrashRecord({
       key: crashKey('42', 'proxy-fixture'),
+      itemId: '42',
+      trackId: 'proxy-fixture',
+      revision: 'r1',
       track: track(),
       sidecar,
       playheadMs: 0,
@@ -464,20 +513,38 @@ requirement('KEYB-001 @unit the registry is the safe L1 map', () => {
     'redo',
     'play-pause',
     'add-keyframe',
+    'range-start',
+    'range-end',
+    'add-marker',
+    'nudge-earlier',
+    'nudge-later',
+    'nudge-earlier-ten',
+    'nudge-later-ten',
     'delete',
+    'copy',
+    'cut',
+    'paste',
+    'duplicate',
     'step-back',
     'step-forward',
     'skip-back',
     'skip-forward',
+    'previous-keyframe',
+    'next-keyframe',
+    'movie-start',
+    'movie-end',
     'zoom-in',
     'zoom-out',
     'zoom-fit',
-    'overlay',
+    'select-all',
+    'clear-selection',
+    'overlay-toggle',
     'eyedropper',
     'shortcut-help',
   ]);
   expect(L1_SHORTCUTS.find((binding) => binding.action === 'zoom-in')?.keys).toEqual([']']);
-  expect(L1_SHORTCUTS.find((binding) => binding.action === 'overlay')?.keys).toEqual(['V']);
+  expect(L1_SHORTCUTS.find((binding) => binding.action === 'eyedropper')?.keys).toEqual(['I']);
+  expect(L1_SHORTCUTS.find((binding) => binding.action === 'overlay-toggle')?.keys).toEqual(['V']);
 });
 
 requirement('KEYB-002 @unit browser chrome chords are not bound', () => {
@@ -645,6 +712,9 @@ requirement(
     expect(flushOnPageHide(true)).toBe(true);
     const record = makeCrashRecord({
       key: crashKey('42', 't'),
+      itemId: '42',
+      trackId: 't',
+      revision: 'r1',
       track: track(),
       sidecar: sidecarDocument({
         version: 1,
@@ -666,6 +736,9 @@ requirement(
 requirement('SAVE-006 @unit a successful save makes the next load use the server track', () => {
   const crash = makeCrashRecord({
     key: '42:t',
+    itemId: '42',
+    trackId: 't',
+    revision: 'r1',
     track: track(),
     sidecar: sidecarDocument({
       version: 1,
@@ -681,6 +754,54 @@ requirement('SAVE-006 @unit a successful save makes the next load use the server
   });
   expect(chooseLoadSource(10, crash)).toBe('server');
 });
+
+requirement(
+  'ED2-033 @unit recovery records require matching identity and clamp viewport state',
+  () => {
+    const sidecar = sidecarDocument({
+      version: 1,
+      itemId: '42',
+      trackId: 't',
+      sceneMarkers: [{ id: 'm', timeMs: 200, label: 'Cue', kind: 'manual' }],
+      channelGroups: [],
+    });
+    const crash = makeCrashRecord({
+      key: crashKey('42', 't'),
+      itemId: '42',
+      trackId: 't',
+      revision: 'revision-4',
+      track: track(),
+      sidecar,
+      playheadMs: 20000,
+      scrollX: 900,
+      savedAt: 20,
+      dirty: true,
+    });
+    expect(chooseLoadSource(10, crash, { itemId: '42', trackId: 't' })).toBe('crash');
+    expect(chooseLoadSource(10, crash, { itemId: '42', trackId: 'other' })).toBe('server');
+    expect(
+      chooseLoadSource(
+        10,
+        { ...crash, sidecar: { ...sidecar, trackId: 'other' } },
+        {
+          itemId: '42',
+          trackId: 't',
+        }
+      )
+    ).toBe('server');
+    expect(
+      clampRecoveryPosition({
+        playheadMs: 12000,
+        scrollX: 900,
+        durationMs: 10000,
+        pxPerMs: 0.1,
+        viewportWidth: 400,
+      })
+    ).toEqual({ playheadMs: 10000, scrollX: 600 });
+    expect(crash.sidecar.sceneMarkers).toEqual(sidecar.sceneMarkers);
+    expect(JSON.stringify(crash)).not.toContain('credential');
+  }
+);
 
 requirement(
   'MODEL-007 @unit legacy track layout is inferred and missing channels are added',

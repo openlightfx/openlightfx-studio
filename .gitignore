@@ -18,3 +18,6 @@ media/generated/
 docker/simulator-src/
 __pycache__/
 *.py[cod]
+
+# Local editor planning and progress records
+/planning/editor/

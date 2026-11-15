@@ -91,14 +91,24 @@ export function interpolate(previous: Keyframe | null, next: Keyframe, timeMs: n
  * PlaybackSession bracketing. Before the first keyframe the sample is black.
  * After the last keyframe the sample holds that keyframe.
  */
-export function sampleChannel(keyframes: Keyframe[], timeMs: number): Sample {
+export function createChannelSampler(keyframes: readonly Keyframe[]): (timeMs: number) => Sample {
   const sorted = [...keyframes].sort((a, b) => a.timestampMs - b.timestampMs);
-  if (sorted.length === 0) return { ...BLACK_SAMPLE };
-  const nextIdx = sorted.findIndex((kf) => kf.timestampMs > timeMs);
-  if (nextIdx === -1) return keyframeToSample(sorted[sorted.length - 1]);
-  const next = sorted[nextIdx];
-  const prev = nextIdx > 0 ? sorted[nextIdx - 1] : null;
-  return interpolate(prev, next, timeMs);
+  return (timeMs) => {
+    if (!sorted.length) return { ...BLACK_SAMPLE };
+    let low = 0;
+    let high = sorted.length;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      if (sorted[middle].timestampMs <= timeMs) low = middle + 1;
+      else high = middle;
+    }
+    if (low === sorted.length) return keyframeToSample(sorted[sorted.length - 1]);
+    return interpolate(low > 0 ? sorted[low - 1] : null, sorted[low], timeMs);
+  };
+}
+
+export function sampleChannel(keyframes: Keyframe[], timeMs: number): Sample {
+  return createChannelSampler(keyframes)(timeMs);
 }
 
 export function samplesEqual(actual: Sample, expected: Partial<Sample>): boolean {

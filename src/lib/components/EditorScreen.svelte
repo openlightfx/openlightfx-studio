@@ -1,9 +1,10 @@
 <script lang="ts">
   import StudioIcon from '$lib/components/shared/StudioIcon.svelte';
   import { onMount, untrack } from 'svelte';
-  import { L1_SHORTCUTS, sampleChannel, displayedRgb } from '$lib/domain';
+  import { sampleChannel } from '$lib/domain';
   import PluginFramePicker from './PluginFramePicker.svelte';
-  import TimelineLane from './TimelineLane.svelte';
+  import EditorInspector from './editor/EditorInspector.svelte';
+  import EditorTimeline from './editor/EditorTimeline.svelte';
   import type { Channel, EffectKeyframe, Keyframe, Track } from '$lib/domain';
   import { setActiveTrack } from '$lib/api/client';
   import {
@@ -15,8 +16,20 @@
     startRoomPreview,
     stopRoomPreview,
   } from '$lib/api/rooms';
-  import type { Room, RoomBulb, RoomRouting } from '$lib/api/rooms';
+  import type { PreviewChannelState, Room, RoomBulb, RoomRouting } from '$lib/api/rooms';
   import type { StudioSession } from '$lib/studio/session.svelte';
+  import { EDITOR_COMMANDS, commandEnabledReason } from '$lib/studio/editor-commands';
+  import WorkspaceSplitter from '$lib/components/layout/WorkspaceSplitter.svelte';
+  import {
+    WORKSPACE_BOUNDS,
+    WORKSPACE_DEFAULTS,
+    readWorkspacePreferences,
+    writeWorkspacePreferences,
+  } from '$lib/studio/workspace-preferences';
+  import { formatElapsedTime } from '$lib/domain';
+  import { readOverlayPreference, writeOverlayPreference } from '$lib/studio/overlay-preference';
+
+  type PreviewState = 'off' | 'starting' | 'on' | 'stopping' | 'error' | 'owned';
 
   let { session, bindVideo } = $props<{
     session: StudioSession;
@@ -25,7 +38,6 @@
   let menu = $state('');
   let video = $state<HTMLVideoElement | null>(null);
   let fileInput: HTMLInputElement;
-  let timelineContainer = $state<HTMLDivElement>();
   let rooms = $state<Room[]>([]);
   let bulbs = $state<RoomBulb[]>([]);
   let selectedRoomId = $state('');
@@ -33,8 +45,38 @@
   let routingError = $state('');
   let roomsLoaded = $state(false);
   let canManage = $state(false);
-  let lightsOn = $state(false);
+  let previewState = $state<PreviewState>('off');
   let previewError = $state('');
+  let previewDisabledReason = $derived(
+    !roomsLoaded
+      ? 'Loading rooms and preview permissions…'
+      : !rooms.length
+        ? 'Set up a room first'
+        : !session.track
+          ? 'No track is open'
+          : !canManage
+            ? 'Only an Emby administrator can preview on lights'
+            : routingError || (!routing ? 'Loading room routing…' : '')
+  );
+  let previewStatusText = $derived(
+    previewState === 'on'
+      ? `Preview on in ${rooms.find((room) => room.id === selectedRoomId)?.name ?? 'selected room'}`
+      : previewState === 'starting'
+        ? `Preview starting in ${rooms.find((room) => room.id === selectedRoomId)?.name ?? 'selected room'}`
+        : previewState === 'stopping'
+          ? 'Stopping room preview…'
+          : previewState === 'owned'
+            ? 'Preview cancelled; Emby playback owns the lights'
+            : previewState === 'error'
+              ? 'Room preview error'
+              : !roomsLoaded
+                ? 'Loading preview status…'
+                : rooms.length === 0
+                  ? 'Preview unavailable: set up a room'
+                  : !canManage
+                    ? 'Preview unavailable: administrator access required'
+                    : `Preview off${selectedRoomId ? ` · ${rooms.find((room) => room.id === selectedRoomId)?.name ?? 'selected room'}` : ''}`
+  );
   let watchConfirmation = $state('');
   let settingsOpen = $state(false);
   let aboutOpen = $state(false);
@@ -42,43 +84,94 @@
   let leaveAction: () => void = () => {};
   let leaveForFile = false;
   let routingRequest = 0;
-  let sendingFrame = false;
+  let previewAlive = true;
+  let previewDesiredOn = $state(false);
+  let previewDesiredRoom = '';
+  let previewDesiredSignature = '';
+  let previewTakeover = false;
+  let previewGeneration = 0;
+  let previewQueue: Promise<void> = Promise.resolve();
+  let serverPreviewRoom: string | null = null;
+  let serverPreviewSignature = '';
+  let frameWorkQueued = false;
+  let pendingFrame: {
+    generation: number;
+    roomId: string;
+    states: PreviewChannelState[];
+    signature: string;
+  } | null = null;
   let lastPreviewFrame = '';
   let lastPreviewSentAt = 0;
-  let activePreviewSignature = $state('');
-  let diamondDrag: { id: string; startX: number } | null = null;
+  let overlayPreferenceReady = false;
   let selectedEffectId = $state('');
-  let ruler: HTMLDivElement;
+  let inspectorWidth = $state<number>(WORKSPACE_DEFAULTS.inspectorWidth);
+  let timelineHeight = $state<number>(WORKSPACE_DEFAULTS.timelineHeight);
+  let workspaceElement = $state<HTMLElement>();
+  function persistWorkspace() {
+    writeWorkspacePreferences(localStorage, { version: 1, inspectorWidth, timelineHeight });
+  }
+  function resizeInspector(value: number) {
+    const max = Math.min(
+      WORKSPACE_BOUNDS.inspectorWidth.max,
+      Math.max(WORKSPACE_BOUNDS.inspectorWidth.min, (workspaceElement?.clientWidth ?? 1200) - 360)
+    );
+    inspectorWidth = Math.round(
+      Math.max(WORKSPACE_BOUNDS.inspectorWidth.min, Math.min(max, value))
+    );
+    persistWorkspace();
+  }
+  function resizeTimeline(value: number) {
+    const max = Math.min(
+      WORKSPACE_BOUNDS.timelineHeight.max,
+      Math.max(WORKSPACE_BOUNDS.timelineHeight.min, (workspaceElement?.clientHeight ?? 800) - 230)
+    );
+    timelineHeight = Math.round(
+      Math.max(WORKSPACE_BOUNDS.timelineHeight.min, Math.min(max, value))
+    );
+    persistWorkspace();
+  }
+  function resetWorkspace() {
+    inspectorWidth = WORKSPACE_DEFAULTS.inspectorWidth;
+    timelineHeight = WORKSPACE_DEFAULTS.timelineHeight;
+    persistWorkspace();
+  }
+  function clampWorkspaceToViewport() {
+    if (!workspaceElement || window.innerWidth <= 750) return;
+    resizeInspector(inspectorWidth);
+    resizeTimeline(timelineHeight);
+  }
   const duration = $derived(Math.max(session.durationMs(), 1));
-  const timelineWidth = $derived(Math.max(100, duration * session.pxPerMs));
   const roomCount = $derived(rooms.length);
   const safetyFlags = $derived(session.safetyLabel());
-  const selected = $derived(
-    session.track?.keyframes.find((keyframe: Keyframe) => session.selection.includes(keyframe.id))
-  );
+  const selected = $derived(session.primaryKeyframe);
   const selectedEffect = $derived(
-    session.track?.effects.find((effect: EffectKeyframe) => effect.id === selectedEffectId)
+    session.selection.length
+      ? undefined
+      : session.track?.effects.find((effect: EffectKeyframe) => effect.id === selectedEffectId)
   );
   const timeLabel = $derived(`${format(session.playheadMs)} / ${format(duration)}`);
+  function commandChord(id: string) {
+    return EDITOR_COMMANDS.find((command) => command.id === id)?.chords.join(' / ') ?? '';
+  }
+  function runCommand(id: string) {
+    const command = EDITOR_COMMANDS.find((candidate) => candidate.id === id);
+    if (!command) return;
+    void command.execute({
+      session,
+      target: document.activeElement as HTMLElement | null,
+      modal: false,
+      menu: false,
+      activeGesture: document.body.dataset.editorGesture === 'active',
+    });
+  }
+  function setEditorGesture(active: boolean) {
+    if (typeof document === 'undefined') return;
+    if (active) document.body.dataset.editorGesture = 'active';
+    else delete document.body.dataset.editorGesture;
+  }
 
   $effect(() => {
     if (video) bindVideo(video);
-  });
-  $effect(() => {
-    const container = timelineContainer;
-    if (!container) return;
-    const observer = new ResizeObserver(() => {
-      session.laneWidth = Math.max(1, container.clientWidth - 180);
-      if (session.fit && container.clientWidth) fitTimeline();
-    });
-    observer.observe(container);
-    return () => observer.disconnect();
-  });
-  $effect(() => {
-    if (session.fit && duration && timelineContainer) untrack(fitTimeline);
-  });
-  $effect(() => {
-    if (timelineContainer) timelineContainer.scrollLeft = session.scrollX;
   });
   $effect(() => {
     const route = session.pendingRoute;
@@ -91,11 +184,17 @@
 
   $effect(() => {
     const signature = JSON.stringify({ roomId: selectedRoomId, channels: trackChannels() });
-    if (!lightsOn || !session.track) return;
-    if (signature !== activePreviewSignature) {
-      activePreviewSignature = signature;
-      void restartPreviewForTrackChange();
-    }
+    if (!previewDesiredOn || !session.track || signature === previewDesiredSignature) return;
+    previewDesiredRoom = selectedRoomId;
+    previewDesiredSignature = signature;
+    previewGeneration++;
+    previewState = 'stopping';
+    void reconcilePreview();
+  });
+
+  $effect(() => {
+    const visible = session.overlayVisible;
+    if (overlayPreferenceReady) writeOverlayPreference(localStorage, visible);
   });
 
   $effect(() => {
@@ -113,15 +212,25 @@
     const requestId = ++routingRequest;
     void loadRoomRouting(roomId, channels)
       .then((result) => {
-        if (requestId === routingRequest) {
+        if (requestId === routingRequest && previewAlive && roomId === selectedRoomId) {
           routing = result;
           routingError = '';
+          if (previewState === 'error' && !previewDesiredOn) {
+            previewState = 'off';
+            previewError = '';
+          }
+          try {
+            sessionStorage.setItem('olfx-preview-room', roomId);
+          } catch {
+            // Room selection still works when browser storage is unavailable.
+          }
         }
       })
       .catch((error: unknown) => {
-        if (requestId === routingRequest) {
+        if (requestId === routingRequest && previewAlive && roomId === selectedRoomId) {
           routing = null;
           routingError = (error as Error).message || 'Lane routing could not be loaded.';
+          if (!previewDesiredOn) previewState = 'error';
         }
       });
     return () => {
@@ -130,32 +239,58 @@
   });
 
   onMount(() => {
-    let alive = true;
+    window.addEventListener('resize', clampWorkspaceToViewport);
+    try {
+      const preferences = readWorkspacePreferences(localStorage);
+      inspectorWidth = preferences.inspectorWidth;
+      timelineHeight = preferences.timelineHeight;
+    } catch {
+      /* Storage is optional. */
+    }
+    previewAlive = true;
+    session.overlayVisible = readOverlayPreference(localStorage);
+    overlayPreferenceReady = true;
     void Promise.all([loadRooms(), loadBulbs(), loadSetup()])
       .then(([nextRooms, nextBulbs, setup]) => {
-        if (!alive) return;
+        if (!previewAlive) return;
         rooms = nextRooms;
         bulbs = nextBulbs;
         canManage = setup.isAdmin && !session.nonAdmin;
         session.canManage = canManage;
-        const requestedRoom = sessionStorage.getItem('olfx-preview-room');
+        let requestedRoom = '';
+        try {
+          requestedRoom = sessionStorage.getItem('olfx-preview-room') ?? '';
+        } catch {
+          // Fall back to the first room when session storage is unavailable.
+        }
         selectedRoomId =
           nextRooms.find((room) => room.id === requestedRoom)?.id ?? nextRooms[0]?.id ?? '';
       })
       .catch((error: unknown) => {
-        if (alive) previewError = (error as Error).message || 'Rooms could not be loaded.';
+        if (previewAlive) {
+          previewError = (error as Error).message || 'Rooms could not be loaded.';
+          previewState = 'error';
+        }
       })
       .finally(() => {
-        if (alive) roomsLoaded = true;
+        if (previewAlive) roomsLoaded = true;
       });
-    const timer = window.setInterval(() => void pushPreviewFrame(), 100);
+    const timer = window.setInterval(() => pushPreviewFrame(), 100);
     return () => {
-      alive = false;
+      window.removeEventListener('resize', clampWorkspaceToViewport);
+      previewAlive = false;
+      routingRequest++;
       window.clearInterval(timer);
       session.cancelEyedrop();
-      if (lightsOn) void stopRoomPreview();
+      pendingFrame = null;
+      previewDesiredOn = false;
+      previewDesiredRoom = '';
+      previewDesiredSignature = '';
+      previewGeneration++;
+      void reconcilePreview();
     };
   });
+
   function trackChannels() {
     return ((session.track as Track | null)?.channels ?? []).map((channel: Channel) => ({
       id: channel.id,
@@ -164,91 +299,163 @@
     }));
   }
 
-  async function startPreview(takeover = false) {
-    if (!selectedRoomId || !trackChannels().length) return;
-    await startRoomPreview(selectedRoomId, trackChannels(), takeover);
-    lightsOn = true;
-    activePreviewSignature = JSON.stringify({ roomId: selectedRoomId, channels: trackChannels() });
-    previewError = '';
-    lastPreviewFrame = '';
-    lastPreviewSentAt = 0;
+  function enqueuePreviewTask(task: () => Promise<void>): Promise<void> {
+    previewQueue = previewQueue.then(task).catch((error: unknown) => {
+      if (!previewAlive) return;
+      previewState = 'error';
+      previewError = (error as Error).message || 'Room preview failed.';
+    });
+    return previewQueue;
+  }
+
+  function reconcilePreview(): Promise<void> {
+    return enqueuePreviewTask(async () => {
+      while (true) {
+        const shouldRun = previewDesiredOn;
+        const roomId = previewDesiredRoom;
+        const generation = previewGeneration;
+        const channels = trackChannels();
+        const signature = JSON.stringify({ roomId, channels });
+
+        if (
+          serverPreviewRoom &&
+          (!shouldRun || serverPreviewRoom !== roomId || serverPreviewSignature !== signature)
+        ) {
+          if (previewAlive) previewState = 'stopping';
+          try {
+            await stopRoomPreview();
+            serverPreviewRoom = null;
+            serverPreviewSignature = '';
+          } catch (error) {
+            if (previewAlive && generation === previewGeneration) {
+              previewState = 'error';
+              previewError = (error as Error).message || 'Preview could not be stopped.';
+              previewDesiredOn = false;
+              previewGeneration++;
+            }
+            return;
+          }
+          continue;
+        }
+
+        if (!shouldRun || !roomId || !previewAlive) {
+          if (
+            previewAlive &&
+            !serverPreviewRoom &&
+            previewState !== 'error' &&
+            previewState !== 'owned'
+          )
+            previewState = 'off';
+          return;
+        }
+        if (serverPreviewRoom === roomId && serverPreviewSignature === signature) {
+          if (generation === previewGeneration) previewState = 'on';
+          return;
+        }
+
+        if (generation === previewGeneration) {
+          previewState = 'starting';
+          previewError = '';
+        }
+        try {
+          await startRoomPreview(roomId, channels, previewTakeover);
+          previewTakeover = false;
+          serverPreviewRoom = roomId;
+          serverPreviewSignature = signature;
+          lastPreviewFrame = '';
+          lastPreviewSentAt = 0;
+          continue;
+        } catch (error) {
+          previewTakeover = false;
+          const message = (error as Error).message || 'Preview could not start.';
+          if (/playback_active/i.test(message)) {
+            if (generation !== previewGeneration) continue;
+            previewState = 'owned';
+            previewError = 'Emby playback currently owns the lights. Studio has not taken over.';
+            if (
+              previewAlive &&
+              window.confirm(
+                'Emby is playing with lighting. Take over the bulbs for Studio preview?'
+              )
+            ) {
+              if (generation === previewGeneration && previewDesiredOn) {
+                previewTakeover = true;
+                previewState = 'starting';
+                continue;
+              }
+              continue;
+            }
+            if (generation === previewGeneration) {
+              previewDesiredOn = false;
+              previewGeneration++;
+              previewError = 'Preview cancelled. Emby playback still owns the lights.';
+            }
+            return;
+          }
+          try {
+            await stopRoomPreview();
+            serverPreviewRoom = null;
+            serverPreviewSignature = '';
+          } catch (stopError) {
+            if (previewAlive) {
+              previewState = 'error';
+              previewError = (stopError as Error).message || 'Preview could not be stopped.';
+              previewDesiredOn = false;
+              previewGeneration++;
+            }
+            return;
+          }
+          if (generation !== previewGeneration) continue;
+          previewState = 'error';
+          previewError = message;
+          previewDesiredOn = false;
+          previewGeneration++;
+          return;
+        }
+      }
+    });
   }
 
   async function toggleLights() {
-    if (!canManage) {
-      previewError = 'Only an Emby administrator can preview on lights.';
+    if (previewDesiredOn) {
+      previewDesiredOn = false;
+      previewTakeover = false;
+      previewDesiredSignature = '';
+      previewGeneration++;
+      previewState = 'stopping';
+      previewError = '';
+      await reconcilePreview();
       return;
     }
-    if (lightsOn) {
-      lightsOn = false;
-      activePreviewSignature = '';
-      try {
-        await stopRoomPreview();
-        previewError = '';
-      } catch (error) {
-        previewError = (error as Error).message || 'Preview could not be stopped.';
-      }
-      return;
-    }
-    if (!selectedRoomId) return;
-    try {
-      await startPreview();
-    } catch (error) {
-      const message = (error as Error).message || 'Preview could not start.';
-      if (/playback_active/i.test(message)) {
-        if (
-          !window.confirm('Emby is playing with lighting. Take over the bulbs for Studio preview?')
-        )
-          return;
-        try {
-          await startPreview(true);
-        } catch (takeoverError) {
-          previewError = (takeoverError as Error).message || 'Preview could not start.';
-        }
-      } else {
-        previewError = message;
-      }
-    }
-  }
-
-  async function restartPreviewForTrackChange() {
-    lightsOn = false;
-    try {
-      await stopRoomPreview();
-      await startPreview();
-    } catch (error) {
-      lightsOn = false;
-      activePreviewSignature = '';
-      previewError = (error as Error).message || 'Preview could not restart for this track.';
-    }
+    if (!canManage || !selectedRoomId || !trackChannels().length || previewDisabledReason) return;
+    previewDesiredOn = true;
+    previewTakeover = false;
+    previewDesiredRoom = selectedRoomId;
+    previewDesiredSignature = JSON.stringify({ roomId: selectedRoomId, channels: trackChannels() });
+    previewGeneration++;
+    previewState = 'starting';
+    previewError = '';
+    await reconcilePreview();
   }
 
   async function changePreviewRoom(roomId: string) {
-    const restart = lightsOn;
-    if (restart) {
-      lightsOn = false;
-      try {
-        await stopRoomPreview();
-      } catch (error) {
-        previewError = (error as Error).message || 'The previous preview could not stop.';
-        return;
-      }
-    }
+    if (roomId === selectedRoomId || !rooms.some((room) => room.id === roomId)) return;
     selectedRoomId = roomId;
     routing = null;
+    routingError = '';
     lastPreviewFrame = '';
-    if (restart) {
-      try {
-        await startPreview();
-      } catch (error) {
-        previewError = (error as Error).message || 'Preview could not start in this room.';
-      }
+    if (previewDesiredOn) {
+      previewDesiredRoom = roomId;
+      previewDesiredSignature = JSON.stringify({ roomId, channels: trackChannels() });
+      previewGeneration++;
+      previewState = 'stopping';
+      void reconcilePreview();
     }
   }
 
-  function previewFailure(error: unknown): string {
+  function previewFailure(error: unknown, roomId: string): string {
     const message = (error as Error).message || 'The room bulbs did not answer.';
-    const room = rooms.find((room) => room.id === selectedRoomId);
+    const room = rooms.find((candidate) => candidate.id === roomId);
     if (!room) return message;
     const failed = bulbs.filter(
       (bulb) =>
@@ -260,11 +467,72 @@
       : `Preview in ${room.name} stopped: ${message}`;
   }
 
-  async function pushPreviewFrame() {
-    const track = session.track as Track | null;
-    if (!lightsOn || !track || sendingFrame) return;
+  function enqueueFrameDrain() {
+    if (frameWorkQueued || !pendingFrame) return;
+    frameWorkQueued = true;
+    void enqueuePreviewTask(async () => {
+      try {
+        while (pendingFrame) {
+          const frame = pendingFrame;
+          pendingFrame = null;
+          if (
+            !previewAlive ||
+            !previewDesiredOn ||
+            frame.generation !== previewGeneration ||
+            frame.roomId !== previewDesiredRoom ||
+            serverPreviewRoom !== frame.roomId
+          )
+            continue;
+          if (frame.signature === lastPreviewFrame && Date.now() - lastPreviewSentAt < 5000)
+            continue;
+          try {
+            const response = await sendRoomPreviewFrame(frame.states);
+            if (
+              !previewAlive ||
+              frame.generation !== previewGeneration ||
+              frame.roomId !== previewDesiredRoom
+            )
+              continue;
+            if (response.active === false) {
+              serverPreviewRoom = null;
+              serverPreviewSignature = '';
+              previewDesiredOn = false;
+              previewGeneration++;
+              previewState = 'error';
+              previewError = 'Preview stopped because no frames were received.';
+              break;
+            }
+            lastPreviewFrame = frame.signature;
+            lastPreviewSentAt = Date.now();
+          } catch (error) {
+            if (previewAlive && frame.generation === previewGeneration) {
+              previewState = 'error';
+              previewError = previewFailure(error, frame.roomId);
+              previewDesiredOn = false;
+              previewGeneration++;
+              try {
+                await stopRoomPreview();
+              } catch {
+                // The plugin may already have stopped and restored its preview session.
+              }
+              serverPreviewRoom = null;
+              serverPreviewSignature = '';
+            }
+            break;
+          }
+        }
+      } finally {
+        frameWorkQueued = false;
+        if (pendingFrame && previewAlive) enqueueFrameDrain();
+      }
+    });
+  }
+
+  function pushPreviewFrame() {
+    const track = (session.draftTrack ?? session.track) as Track | null;
+    if (!previewAlive || !previewDesiredOn || !track) return;
     const hasSolo = Object.values(session.solo).some(Boolean);
-    const states = track.channels.map((channel) => {
+    const states: PreviewChannelState[] = track.channels.map((channel) => {
       const sample = sampleChannel(
         track.keyframes.filter((keyframe: Keyframe) => keyframe.channelId === channel.id),
         session.playheadMs
@@ -281,48 +549,13 @@
     });
     const signature = JSON.stringify(states);
     if (signature === lastPreviewFrame && Date.now() - lastPreviewSentAt < 5000) return;
-    sendingFrame = true;
-    try {
-      const response = await sendRoomPreviewFrame(states);
-      if (response.active === false) {
-        lightsOn = false;
-        previewError = 'Preview stopped because no frames were received.';
-        return;
-      }
-      lastPreviewFrame = signature;
-      lastPreviewSentAt = Date.now();
-    } catch (error) {
-      lightsOn = false;
-      previewError = previewFailure(error);
-      try {
-        await stopRoomPreview();
-      } catch {
-        // The plugin may already have stopped and restored its preview session.
-      }
-    } finally {
-      sendingFrame = false;
-    }
-  }
-
-  function setColorComponent(component: 'r' | 'g' | 'b', raw: string) {
-    const value = Number(raw);
-    if (!Number.isInteger(value) || value < 0 || value > 255) return;
-    if (selected) {
-      const color = { ...selected.color, [component]: value };
-      session.setHex(
-        [color.r, color.g, color.b].map((part) => part.toString(16).padStart(2, '0')).join('')
-      );
-    } else if (session.activeChannelId) {
-      const channel = session.channels.find(
-        (candidate: Channel) => candidate.id === session.activeChannelId
-      );
-      if (!channel) return;
-      const color = { ...channel.defaultColor, [component]: value };
-      session.setDefaultColor(
-        channel.id,
-        [color.r, color.g, color.b].map((part) => part.toString(16).padStart(2, '0')).join('')
-      );
-    }
+    pendingFrame = {
+      generation: previewGeneration,
+      roomId: previewDesiredRoom,
+      states,
+      signature,
+    };
+    enqueueFrameDrain();
   }
 
   function positionLabel(value: string | null | undefined): string {
@@ -377,46 +610,7 @@
   }
 
   function format(ms: number) {
-    const value = Math.max(0, Math.round(ms));
-    const h = Math.floor(value / 3_600_000);
-    const m = Math.floor((value % 3_600_000) / 60_000);
-    const s = Math.floor((value % 60_000) / 1000);
-    const milli = value % 1000;
-    return `${h ? `${h}:` : ''}${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(milli).padStart(3, '0')}`;
-  }
-
-  function scrub(event: PointerEvent) {
-    if (!ruler) return;
-    const bounds = ruler.getBoundingClientRect();
-    session.seek(((event.clientX - bounds.left) / bounds.width) * duration);
-  }
-
-  function laneClick(event: MouseEvent, channelId: string) {
-    const target = event.currentTarget as HTMLElement;
-    const lane = target.closest('.lane') ?? target;
-    const bounds = lane.getBoundingClientRect();
-    const time = ((event.clientX - bounds.left) / bounds.width) * duration;
-    selectedEffectId = '';
-    session.activeChannelId = channelId;
-    session.insertAt(time, channelId);
-  }
-
-  function chooseKeyframe(
-    event: MouseEvent | KeyboardEvent,
-    keyframeId: string,
-    channelId: string
-  ) {
-    selectedEffectId = '';
-    session.selectKeyframe(
-      keyframeId,
-      event.shiftKey ? 'extend' : event.ctrlKey || event.metaKey ? 'toggle' : 'replace'
-    );
-    session.activeChannelId = channelId;
-  }
-
-  function beginDiamond(event: PointerEvent, keyframeId: string) {
-    diamondDrag = { id: keyframeId, startX: event.clientX };
-    (event.currentTarget as HTMLButtonElement).setPointerCapture(event.pointerId);
+    return formatElapsedTime(Math.max(0, Math.round(ms)), true);
   }
 
   function changeLayout(event: Event) {
@@ -425,23 +619,6 @@
     session.setLayout(select.value);
     if ((session.track?.metadata.channelLayout ?? 'LAYOUT_2_0') === previous)
       select.value = previous;
-  }
-
-  function fitTimeline() {
-    if (timelineContainer?.clientWidth) {
-      session.laneWidth = Math.max(1, timelineContainer.clientWidth - 180);
-      session.zoomFit();
-    }
-  }
-
-  function moveDiamond(event: PointerEvent, keyframeId: string) {
-    const drag = diamondDrag;
-    diamondDrag = null;
-    if (!drag || drag.id !== keyframeId || Math.abs(event.clientX - drag.startX) < 4) return;
-    const lane = (event.currentTarget as HTMLElement).closest('.lane');
-    if (!lane) return;
-    const bounds = lane.getBoundingClientRect();
-    session.moveKeyframe(keyframeId, ((event.clientX - bounds.left) / bounds.width) * duration);
   }
 
   function requestLeave(action: () => void, forFile = false) {
@@ -470,27 +647,6 @@
     leavePrompt = false;
     leaveAction();
   }
-  function timelineWheel(event: WheelEvent) {
-    if (event.ctrlKey || event.metaKey) {
-      event.preventDefault();
-      session.zoomKey(event.deltaY < 0 ? ']' : '[', false);
-    } else if (event.shiftKey && timelineContainer) {
-      event.preventDefault();
-      timelineContainer.scrollLeft += event.deltaY + event.deltaX;
-    }
-  }
-  function laneFill(keyframes: Keyframe[], frame: Keyframe, next?: Keyframe): string {
-    const color = displayedRgb(sampleChannel(keyframes, frame.timestampMs));
-    if (!next || next.interpolation === 'STEP' || !next.transitionMs) return `rgb(${color})`;
-    const stop = Math.max(
-      0,
-      (100 * (next.timestampMs - next.transitionMs - frame.timestampMs)) /
-        (next.timestampMs - frame.timestampMs)
-    );
-    const end = displayedRgb(sampleChannel(keyframes, next.timestampMs));
-    return `linear-gradient(to right, rgb(${color}) ${stop}%, rgb(${end}) 100%)`;
-  }
-
   async function watchInEmby() {
     if (!session.track || !session.item || !canManage) return;
     const tab = window.open('about:blank', '_blank');
@@ -565,7 +721,12 @@
 </script>
 
 <svelte:window
+  onkeyup={(event) => {
+    if ([',', '.', '<', '>', 'Shift'].includes(event.key)) session.finishNudgeRun();
+  }}
+  onblur={() => session.finishNudgeRun()}
   onkeydown={(event) => {
+    if (event.key === 'Escape') session.finishNudgeRun(true);
     if (event.key === 'Escape' && session.menuChannel) {
       session.menuChannel = null;
       event.preventDefault();
@@ -640,20 +801,23 @@
                   disabled={!session.track ||
                     !canManage ||
                     session.saving ||
-                    !session.durationKnown}
+                    !session.durationKnown ||
+                    Boolean(session.hostedSaveBlockedReason)}
                   title={!canManage
                     ? 'Only an Emby administrator can save'
                     : !session.track
                       ? 'No track is open'
-                      : !session.durationKnown
-                        ? 'The movie duration is unknown'
-                        : session.saving
-                          ? 'Saving…'
-                          : ''}
+                      : session.hostedSaveBlockedReason
+                        ? session.hostedSaveBlockedReason
+                        : !session.durationKnown
+                          ? 'The movie duration is unknown'
+                          : session.saving
+                            ? 'Saving…'
+                            : ''}
                   onclick={() => {
                     menu = '';
-                    void session.save();
-                  }}>Save <span>Ctrl/⌘ S</span></button
+                    runCommand('save');
+                  }}>Save <span>{commandChord('save')}</span></button
                 >
                 <button
                   role="menuitem"
@@ -677,8 +841,8 @@
                   title={!session.canUndo ? 'Nothing to undo' : ''}
                   onclick={() => {
                     menu = '';
-                    session.undo();
-                  }}>Undo <span>Ctrl/⌘ Z</span></button
+                    runCommand('undo');
+                  }}>Undo <span>{commandChord('undo')}</span></button
                 >
                 <button
                   role="menuitem"
@@ -686,17 +850,34 @@
                   title={!session.canRedo ? 'Nothing to redo' : ''}
                   onclick={() => {
                     menu = '';
-                    session.redo();
-                  }}>Redo</button
+                    runCommand('redo');
+                  }}>Redo <span>{commandChord('redo')}</span></button
                 >
+                {#each EDITOR_COMMANDS.filter( (command) => ['copy', 'cut', 'paste', 'duplicate'].includes(command.id) ) as command (command.id)}
+                  {@const reason = commandEnabledReason(command, {
+                    session,
+                    target: null,
+                    modal: false,
+                    menu: false,
+                  })}
+                  <button
+                    role="menuitem"
+                    disabled={Boolean(reason)}
+                    title={reason ?? command.label}
+                    onclick={() => {
+                      menu = '';
+                      runCommand(command.id);
+                    }}>{command.label} <span>{commandChord(command.id)}</span></button
+                  >
+                {/each}
                 <button
                   role="menuitem"
                   disabled={!session.selection.length}
                   title={!session.selection.length ? 'Select a keyframe first' : ''}
                   onclick={() => {
                     menu = '';
-                    session.deleteSelection();
-                  }}>Delete keyframe <span>Delete</span></button
+                    runCommand('delete');
+                  }}>Delete keyframe <span>{commandChord('delete')}</span></button
                 >
                 <button
                   role="menuitem"
@@ -729,28 +910,36 @@
     <button
       class="quick-action"
       aria-label="Save"
-      disabled={!session.track || !canManage || session.saving || !session.durationKnown}
+      disabled={!session.track ||
+        !canManage ||
+        session.saving ||
+        !session.durationKnown ||
+        Boolean(session.hostedSaveBlockedReason)}
       title={!canManage
         ? 'Only an Emby administrator can save'
-        : !session.durationKnown
-          ? 'The movie duration is unknown'
-          : 'Save (Ctrl/⌘ S)'}
-      onclick={() => void session.save()}
+        : !session.track
+          ? 'No track is open'
+          : session.hostedSaveBlockedReason
+            ? session.hostedSaveBlockedReason
+            : !session.durationKnown
+              ? 'The movie duration is unknown'
+              : 'Save (Ctrl/⌘ S)'}
+      onclick={() => runCommand('save')}
       ><StudioIcon name="save" size={16} /><span>Save</span></button
     >
     <button
       class="quick-action"
       aria-label="Undo"
       disabled={!session.canUndo}
-      title={session.canUndo ? 'Undo (Ctrl/⌘ Z)' : 'Nothing to undo'}
-      onclick={() => session.undo()}><StudioIcon name="undo" size={16} /></button
+      title={session.canUndo ? `Undo (${commandChord('undo')})` : 'Nothing to undo'}
+      onclick={() => runCommand('undo')}><StudioIcon name="undo" size={16} /></button
     >
     <button
       class="quick-action"
       aria-label="Redo"
       disabled={!session.canRedo}
-      title={session.canRedo ? 'Redo (Ctrl/⌘ Shift Z)' : 'Nothing to redo'}
-      onclick={() => session.redo()}><StudioIcon name="redo" size={16} /></button
+      title={session.canRedo ? `Redo (${commandChord('redo')})` : 'Nothing to redo'}
+      onclick={() => runCommand('redo')}><StudioIcon name="redo" size={16} /></button
     >
     <input
       id="track-title"
@@ -770,6 +959,13 @@
     {#if safetyFlags.flashing}<span class="safety-badge">Flashing</span>{/if}
     {#if safetyFlags.strobing}<span class="safety-badge">Strobing</span>{/if}
     <span class="spacer"></span>
+    <button
+      class="overlay-toggle"
+      aria-pressed={session.overlayVisible}
+      title={`Toggle visual overlay (${commandChord('overlay-toggle')})`}
+      onclick={() => runCommand('overlay-toggle')}
+      >Overlay {session.overlayVisible ? 'on' : 'off'}</button
+    >
     {#if rooms.length > 0}
       <label class="room-picker"
         >Preview on
@@ -790,18 +986,21 @@
     <button
       class="lights-switch"
       role="switch"
-      aria-checked={lightsOn}
-      disabled={!roomCount || !session.track || !canManage || Boolean(routingError)}
-      title={!canManage
-        ? 'Only an Emby administrator can preview on lights'
-        : !roomCount
-          ? 'Set up a room first'
-          : routingError || ''}
+      aria-checked={previewDesiredOn || previewState === 'on'}
+      aria-describedby="preview-status preview-switch-reason"
+      disabled={!previewDesiredOn && Boolean(previewDisabledReason)}
+      title={previewDesiredOn ? 'Stop preview and restore the room lights' : previewDisabledReason}
       onclick={() => void toggleLights()}
-      ><span class="switch-track" aria-hidden="true"></span>{lightsOn
+      ><span class="switch-track" aria-hidden="true"></span>{previewDesiredOn
         ? 'Lights on'
         : 'Lights'}</button
     >
+    <span id="preview-status" class="preview-status" role="status" aria-live="polite"
+      >{previewStatusText}</span
+    >
+    {#if previewDisabledReason && !previewDesiredOn}
+      <span id="preview-switch-reason" class="preview-reason">{previewDisabledReason}</span>
+    {:else}<span id="preview-switch-reason" class="sr-only"></span>{/if}
     <button
       class="primary"
       disabled={!canManage || !session.track}
@@ -833,7 +1032,11 @@
       >
     </div>
   {/if}
-  <main class="workspace">
+  <main
+    class="workspace"
+    bind:this={workspaceElement}
+    style={`--inspector-width:${inspectorWidth}px;--timeline-height:${timelineHeight}px`}
+  >
     <section class="movie-column" aria-label="Movie preview">
       <div class="video-stage">
         {#if session.videoError}
@@ -879,7 +1082,7 @@
             class={`region ${channel.spatialHint}`}
             data-region={channel.spatialHint}
             data-overlay-rgb={session.sampleRgb(channel.id)}
-            hidden={session.regionHidden(channel.id)}
+            hidden={!session.overlayVisible || session.regionHidden(channel.id)}
             style={`background:rgba(${session.sampleRgb(channel.id)},.75)`}
             aria-hidden="true"
           ></div>
@@ -894,19 +1097,25 @@
         >
         <button
           aria-label="Previous frame"
-          title="Previous frame (←)"
+          title={Number.isFinite(session.media?.proxy.fps) && session.media!.proxy.fps > 0
+            ? 'Previous frame (←)'
+            : 'Previous frame (←; using 24 fps fallback because proxy frame rate is unavailable)'}
           onclick={() => session.step(-1)}><StudioIcon name="previous" size={17} /></button
         >
         <button
           class="play-button"
           aria-label={session.playing ? 'Pause' : 'Play'}
-          title={session.playing ? 'Pause (Space)' : 'Play (Space)'}
+          title={`${session.playing ? 'Pause' : 'Play'} (${commandChord('play-pause')})`}
           disabled={!session.canPlay}
-          onclick={() => session.togglePlay()}
+          onclick={() => runCommand('play-pause')}
           ><StudioIcon name={session.playing ? 'pause' : 'play'} size={20} /></button
         >
-        <button aria-label="Next frame" title="Next frame (→)" onclick={() => session.step(1)}
-          ><StudioIcon name="next" size={17} /></button
+        <button
+          aria-label="Next frame"
+          title={Number.isFinite(session.media?.proxy.fps) && session.media!.proxy.fps > 0
+            ? 'Next frame (→)'
+            : 'Next frame (→; using 24 fps fallback because proxy frame rate is unavailable)'}
+          onclick={() => session.step(1)}><StudioIcon name="next" size={17} /></button
         >
         <button
           aria-label="Skip forward 5 seconds"
@@ -917,361 +1126,56 @@
         <time>{timeLabel}</time>
       </div>
     </section>
-    <aside class="inspector" aria-label="Inspector">
-      {#if selectedEffect}
-        <h2>{selectedEffect.effectType}</h2>
-        <p>Effect editing comes in a later version. This effect is kept as is.</p>
-      {:else if selected}
-        <h2>
-          {session.selection.length > 1
-            ? `${session.selection.length} selected keyframes`
-            : 'Keyframe'}
-        </h2>
-        {#if session.hexError}<p class="error" role="alert">{session.hexError}</p>{/if}
-        {#if session.kelvinError}<p class="error" role="alert">{session.kelvinError}</p>{/if}
-        <label
-          >Time <input
-            aria-label="Keyframe time"
-            value={format(selected.timestampMs)}
-            onchange={(event) =>
-              session.setKeyframeTime((event.currentTarget as HTMLInputElement).value)}
-          /></label
-        >
-        <label
-          >Color <input
-            type="color"
-            aria-label="Color"
-            value={'#' +
-              [selected.color.r, selected.color.g, selected.color.b]
-                .map((x) => x.toString(16).padStart(2, '0'))
-                .join('')}
-            oninput={(event) =>
-              session.setHex((event.currentTarget as HTMLInputElement).value.slice(1))}
-          /></label
-        >
-        <label
-          >Hex <input
-            aria-label="Hex"
-            value={session.hex}
-            oninput={(event) => session.setHex((event.currentTarget as HTMLInputElement).value)}
-          /></label
-        >
-        <div class="rgb-fields" aria-label="RGB color">
-          {#each ['r', 'g', 'b'] as const as component}
-            <label
-              >{component.toUpperCase()}
-              <input
-                type="number"
-                min="0"
-                max="255"
-                aria-label={component.toUpperCase()}
-                value={selected.color[component]}
-                oninput={(event) =>
-                  setColorComponent(component, (event.currentTarget as HTMLInputElement).value)}
-              /></label
-            >
-          {/each}
-        </div>
-        <label
-          ><input
-            type="radio"
-            name="color-mode"
-            checked={!session.kelvinOn}
-            onchange={() => {
-              session.setKelvinMode(false);
-              session.setHex(session.hex);
-            }}
-          /> RGB</label
-        >
-        <label
-          ><input
-            type="radio"
-            name="color-mode"
-            checked={session.kelvinOn}
-            onchange={() => {
-              session.setKelvinMode(true);
-              session.setKelvinValue(session.kelvin);
-            }}
-          /> Kelvin</label
-        >
-        {#if session.kelvinOn}
-          <label
-            >Color temperature <input
-              aria-label="Kelvin"
-              type="number"
-              min="1000"
-              max="10000"
-              value={session.kelvin}
-              oninput={(event) =>
-                session.setKelvinValue((event.currentTarget as HTMLInputElement).value)}
-            /> K</label
-          >
-        {/if}
-        <button
-          disabled={!session.item || session.frameLoading}
-          title={!session.item
-            ? 'Open a movie first'
-            : session.frameLoading
-              ? 'Loading source frame…'
-              : ''}
-          onclick={() => void session.eyedrop()}>Pick color from movie</button
-        >
-        <div class="history-swatches" aria-label="Recent colors">
-          {#each session.historyColors as color, index (index)}
-            <button
-              type="button"
-              aria-label={`Recent color ${index + 1}`}
-              title={color}
-              style={`background:${color}`}
-              onclick={() => session.setHex(color.slice(1))}
-            ></button>
-          {/each}
-        </div>
-        <label
-          >Brightness <input
-            type="range"
-            aria-label="Brightness"
-            min="0"
-            max="100"
-            value={selected.brightness}
-            oninput={(event) =>
-              session.setBrightness((event.currentTarget as HTMLInputElement).value)}
-          /><input
-            type="text"
-            inputmode="decimal"
-            aria-label="Brightness value"
-            value={session.brightnessText}
-            oninput={(event) =>
-              session.setBrightness((event.currentTarget as HTMLInputElement).value)}
-          /></label
-        >
-        <label
-          >Fade <select
-            aria-label="Fade type"
-            value={selected.interpolation === 'STEP' ? 'STEP' : 'LINEAR'}
-            onchange={(event) =>
-              session.setInterpolation(
-                (event.currentTarget as HTMLSelectElement).value as 'STEP' | 'LINEAR'
-              )}><option value="STEP">Step</option><option value="LINEAR">Linear</option></select
-          ></label
-        >
-        <label
-          >Fade length <input
-            aria-label="Fade length"
-            type="number"
-            min="0"
-            value={selected.transitionMs}
-            onchange={(event) =>
-              session.setTransition((event.currentTarget as HTMLInputElement).value)}
-          /> ms</label
-        >
-        <button class="danger" onclick={() => session.deleteSelection()}>Delete</button>
-      {:else if session.activeChannelId}
-        {@const channel = session.channels.find(
-          (candidate: Channel) => candidate.id === session.activeChannelId
-        )}
-        <h2>{channel?.displayName}</h2>
-        {#if channel}
-          <dl aria-label="Channel identity">
-            <dt>Channel</dt>
-            <dd>{channel.id}</dd>
-            <dt>Position</dt>
-            <dd>{positionLabel(channel.spatialHint)}</dd>
-          </dl>
-          <label
-            >Default color <input
-              type="color"
-              aria-label="Channel default color"
-              value={'#' +
-                [channel.defaultColor.r, channel.defaultColor.g, channel.defaultColor.b]
-                  .map((x) => x.toString(16).padStart(2, '0'))
-                  .join('')}
-              oninput={(event) =>
-                session.setDefaultColor(
-                  channel.id,
-                  (event.currentTarget as HTMLInputElement).value.slice(1)
-                )}
-            /></label
-          >
-          <label
-            >Default brightness <input
-              type="range"
-              aria-label="Channel default brightness"
-              min="0"
-              max="100"
-              value={channel.defaultBrightness}
-              oninput={(event) =>
-                session.setDefaultBrightness(
-                  channel.id,
-                  (event.currentTarget as HTMLInputElement).value
-                )}
-            /></label
-          >
-          {#if selectedRoomId}<p>{laneDescription(channel)}</p>{/if}
-        {/if}
-        <p>Click a lane to add a keyframe at that time.</p>
-      {:else}
-        <p>Click a lane to add a keyframe at that time.</p>
-      {/if}
-    </aside>
-    <section class="timeline" aria-label="Timeline">
-      <div class="timeline-tools">
-        <label class="layout-picker"
-          >Layout
-          <select
-            aria-label="Track layout"
-            value={session.track?.metadata.channelLayout ?? 'LAYOUT_2_0'}
-            onchange={changeLayout}
-          >
-            <option value="LAYOUT_AMBIENT">Ambient</option><option value="LAYOUT_2_0">2.0</option
-            ><option value="LAYOUT_3_0">3.0</option><option value="LAYOUT_5_0">5.0</option>
-          </select>
-        </label>
-        <button aria-label="Zoom out" onclick={() => session.zoomKey('[', false)}>−</button>
-        <button aria-label="Zoom in" onclick={() => session.zoomKey(']', false)}>+</button>
-        <button onclick={fitTimeline}>Fit</button>
-      </div>
-      <div
-        class="timeline-scroll"
-        bind:this={timelineContainer}
-        onwheel={timelineWheel}
-        onscroll={() => {
-          if (timelineContainer) session.scrollX = timelineContainer.scrollLeft;
-        }}
-      >
-        <div
-          class="ruler"
-          style={`width:${timelineWidth}px`}
-          bind:this={ruler}
-          role="slider"
-          aria-label="Timeline ruler"
-          aria-valuemin="0"
-          aria-valuemax={duration}
-          aria-valuenow={Math.round(session.playheadMs)}
-          tabindex="0"
-          onpointerdown={(event) => {
-            (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-            scrub(event);
-          }}
-          onpointermove={(event) => {
-            if (event.buttons) scrub(event);
-          }}
-          onkeydown={(event) => {
-            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-              event.preventDefault();
-              event.stopPropagation();
-              if (event.shiftKey) session.skip(event.key === 'ArrowLeft' ? -1 : 1);
-              else session.step(event.key === 'ArrowLeft' ? -1 : 1);
-            }
-          }}
-        >
-          <span>{format(0)}</span><span>{format(duration / 4)}</span><span
-            >{format(duration / 2)}</span
-          ><span>{format((duration * 3) / 4)}</span><span>{format(duration)}</span>
-          <i class="playhead" style={`left:${(session.playheadMs / duration) * 100}%`}></i>
-        </div>
-        {#each session.channels as channel (channel.id)}
-          {@const laneKeyframes =
-            session.track?.keyframes
-              .filter((keyframe: Keyframe) => keyframe.channelId === channel.id)
-              .toSorted((a: Keyframe, b: Keyframe) => a.timestampMs - b.timestampMs) ?? []}
-          <div class="lane-row" style={`width:${timelineWidth + 180}px`}>
-            <div
-              class="lane-header"
-              role="group"
-              aria-label={`${channel.displayName} channel controls`}
-            >
-              <button
-                class="lane-name"
-                oncontextmenu={(event) => {
-                  event.preventDefault();
-                  menu = '';
-                  session.menuChannel = channel.id;
-                }}
-                onkeydown={(event) => {
-                  if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
-                    event.preventDefault();
-                    session.menuChannel = channel.id;
-                  }
-                }}
-                title={laneDescription(channel)}
-                onclick={() => {
-                  session.selection = [];
-                  selectedEffectId = '';
-                  session.activeChannelId = channel.id;
-                }}>{laneDescription(channel)}</button
-              >
-              <button
-                type="button"
-                aria-label={`Solo ${channel.displayName}`}
-                aria-pressed={Boolean(session.solo[channel.id])}
-                onclick={() => session.toggleSolo(channel.id)}>S</button
-              >
-              <button
-                type="button"
-                aria-label={`Mute ${channel.displayName}`}
-                aria-pressed={Boolean(session.mute[channel.id])}
-                onclick={() => session.toggleMute(channel.id)}>M</button
-              >
-            </div>
-            <div class="lane" role="presentation" onclick={(event) => laneClick(event, channel.id)}>
-              <TimelineLane
-                frames={laneKeyframes}
-                scale={session.pxPerMs}
-                scroll={session.scrollX}
-                width={session.laneWidth}
-                selected={session.selection}
-                label={channel.displayName}
-                defaultRgb={displayedRgb({
-                  ...channel.defaultColor,
-                  brightness: channel.defaultBrightness,
-                })}
-                choose={(event, id) => chooseKeyframe(event, id, channel.id)}
-                begin={beginDiamond}
-                finish={moveDiamond}
-                empty={(event) => laneClick(event, channel.id)}
-              />
-              {#if session.track?.keyframes.length === 0}
-                <span class="lane-empty">Click to add a keyframe</span>
-              {/if}
-              {#each session.track?.effects.filter((effect: EffectKeyframe) => effect.channelId === channel.id) ?? [] as effect (effect.id)}
-                <button
-                  class="effect-block"
-                  aria-label={`${effect.effectType} effect, editing comes later`}
-                  title="Effect editing comes in a later version. This effect is kept as is."
-                  style={`left:${(effect.timestampMs / duration) * 100}%;width:${Math.max(1, (effect.durationMs / duration) * 100)}%`}
-                  onclick={(event) => {
-                    event.stopPropagation();
-                    selectedEffectId = effect.id;
-                    session.selection = [];
-                    session.activeChannelId = channel.id;
-                  }}>{effect.effectType}</button
-                >
-              {/each}
-              <!-- Only the focused selection gets a DOM focus target; all marks are canvas pixels. -->
-              {#each laneKeyframes
-                .filter((frame: Keyframe) => session.selection.includes(frame.id))
-                .slice(0, 1) as keyframe (keyframe.id)}
-                <button
-                  class="diamond"
-                  aria-label={`${channel.displayName} keyframe at ${format(keyframe.timestampMs)}`}
-                  class:selected={session.selection.includes(keyframe.id)}
-                  style={`left:${(keyframe.timestampMs / duration) * 100}%;background:transparent`}
-                  onpointerdown={(event) => beginDiamond(event, keyframe.id)}
-                  onpointerup={(event) => moveDiamond(event, keyframe.id)}
-                  onclick={(event) => {
-                    event.stopPropagation();
-                    chooseKeyframe(event, keyframe.id, channel.id);
-                  }}
-                ></button>
-              {/each}
-            </div>
-          </div>
-        {/each}
-      </div>
-    </section>
+    <WorkspaceSplitter
+      label="Inspector width"
+      orientation="vertical"
+      value={inspectorWidth}
+      min={WORKSPACE_BOUNDS.inspectorWidth.min}
+      max={Math.min(
+        WORKSPACE_BOUNDS.inspectorWidth.max,
+        Math.max(WORKSPACE_BOUNDS.inspectorWidth.min, (workspaceElement?.clientWidth ?? 1200) - 360)
+      )}
+      onresize={resizeInspector}
+    />
+    <EditorInspector
+      {session}
+      {selected}
+      {selectedEffect}
+      channel={session.channels.find(
+        (candidate: Channel) => candidate.id === session.activeChannelId
+      )}
+      routedDescription={session.activeChannelId && selectedRoomId
+        ? laneDescription(
+            session.channels.find((candidate: Channel) => candidate.id === session.activeChannelId)!
+          )
+        : ''}
+      {format}
+      {positionLabel}
+      onPickSource={() => void session.eyedrop()}
+    />
+    <WorkspaceSplitter
+      label="Timeline height"
+      orientation="horizontal"
+      value={timelineHeight}
+      min={WORKSPACE_BOUNDS.timelineHeight.min}
+      max={Math.min(
+        WORKSPACE_BOUNDS.timelineHeight.max,
+        Math.max(WORKSPACE_BOUNDS.timelineHeight.min, (workspaceElement?.clientHeight ?? 800) - 230)
+      )}
+      onresize={resizeTimeline}
+    />
+    <EditorTimeline
+      {session}
+      {laneDescription}
+      {format}
+      onLayout={changeLayout}
+      onEffectSelected={(id) => (selectedEffectId = id)}
+      onCloseMenus={() => (menu = '')}
+      onGestureChange={setEditorGesture}
+    />
+    <button class="workspace-reset" onclick={resetWorkspace}>Reset workspace</button>
   </main>
-  {#if lightsOn && session.photosensitivity}<p
+  {#if previewState === 'on' && session.photosensitivity}<p
       class="photosensitivity-notice"
       role="status"
       aria-label="Photosensitivity"
@@ -1300,6 +1204,20 @@
         >Mute {session.channels.find((channel: Channel) => channel.id === session.menuChannel)
           ?.displayName}</button
       >
+    </div>
+  {/if}
+  {#if session.sidecarLoadError}
+    <div class="alert" role="alert" aria-label="Project sidecar unavailable">
+      Project notes could not be loaded ({session.sidecarLoadError}). Saving is blocked to protect
+      existing project data; track editing and export remain available.
+      <button onclick={() => void session.retryProjectSidecarLoad()}>Retry project load</button>
+    </div>
+  {/if}
+  {#if session.recoveryUnavailable}
+    <div class="alert" role="alert" aria-label="Local recovery unavailable">
+      Local recovery unavailable. Your edits and exports still work, but this browser cannot save a
+      recovery copy.
+      <button onclick={() => void session.retryLocalRecovery()}>Retry</button>
     </div>
   {/if}
   {#if session.restored}<p class="crash-recovery" role="status" aria-label="Crash recovery">
@@ -1347,8 +1265,8 @@
       >
         <h2 id="shortcut-title">Keyboard shortcuts</h2>
         <ul>
-          {#each L1_SHORTCUTS as binding (binding.action)}
-            <li>{binding.action}: {binding.keys.join(' / ')}</li>
+          {#each EDITOR_COMMANDS.filter((command) => command.chords.length) as command (command.id)}
+            <li>{command.label}: {command.chords.join(' / ')}</li>
           {/each}
         </ul>
         <button onclick={() => (session.helpOpen = false)}>Close</button>
@@ -1655,9 +1573,26 @@
   .spacer {
     flex: 1;
   }
-  .lights-switch {
+  .lights-switch,
+  .overlay-toggle {
     border-color: transparent;
     background: transparent;
+    white-space: nowrap;
+  }
+  .preview-status,
+  .preview-reason {
+    max-width: 190px;
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.3;
+  }
+  .preview-status {
+    white-space: nowrap;
+  }
+  .preview-reason {
+    flex-basis: 100%;
+    margin-left: auto;
+    text-align: right;
   }
   .switch-track {
     display: inline-flex;
@@ -1695,13 +1630,17 @@
     margin-left: 6px;
   }
   .workspace {
+    position: relative;
     grid-row: 3;
     min-height: 0;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) clamp(280px, 28vw, 380px);
-    grid-template-rows: minmax(0, 1fr) minmax(210px, 38vh);
+    grid-template-columns: minmax(0, 1fr) 7px var(--inspector-width);
+    grid-template-rows: minmax(0, 1fr) 7px var(--timeline-height);
+    grid-template-areas: 'movie vsplit inspector' 'hsplit hsplit hsplit' 'timeline timeline timeline';
   }
   .movie-column {
+    grid-area: movie;
+    min-width: 0;
     min-height: 0;
     display: flex;
     flex-direction: column;
@@ -1807,208 +1746,6 @@
   .transport .play-button:hover:not(:disabled) {
     background: var(--accent);
   }
-  .inspector {
-    padding: var(--space-5);
-    border-left: 1px solid var(--border);
-    overflow: auto;
-    background: var(--surface);
-  }
-  .inspector h2 {
-    font-size: 16px;
-    padding-bottom: var(--space-4);
-    border-bottom: 1px solid var(--border);
-    margin-bottom: var(--space-5);
-  }
-  .inspector p {
-    color: var(--text-muted);
-    font-size: 12px;
-    line-height: 1.6;
-    margin-top: var(--space-5);
-  }
-  .inspector label {
-    display: grid;
-    grid-template-columns: 90px minmax(0, 1fr);
-    align-items: center;
-    gap: var(--space-2);
-    margin: var(--space-4) 0;
-    color: var(--text-muted);
-    font-size: 12px;
-  }
-  .inspector label input,
-  .inspector label select {
-    color: var(--text);
-  }
-  .inspector label input[type='range'] + input {
-    grid-column: 2;
-  }
-  .inspector label:has(input[type='radio']) {
-    display: inline-flex;
-    margin: var(--space-2) var(--space-4) var(--space-2) 0;
-  }
-  .inspector dl {
-    display: grid;
-    grid-template-columns: 90px minmax(0, 1fr);
-    gap: var(--space-2);
-    font-size: 12px;
-  }
-  .inspector dt {
-    color: var(--text-muted);
-  }
-  .inspector dd {
-    margin: 0;
-    overflow-wrap: anywhere;
-  }
-  .inspector input[type='radio'] {
-    min-height: 0;
-    accent-color: var(--accent);
-  }
-  .inspector input[type='color'] {
-    width: 100%;
-    height: 36px;
-    padding: 3px;
-  }
-  .timeline {
-    grid-column: 1 / -1;
-    min-width: 0;
-    min-height: 0;
-    border-top: 1px solid var(--border-strong);
-    background: var(--surface);
-    padding: 8px 16px;
-  }
-  .timeline-tools {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    height: 36px;
-  }
-  .layout-picker {
-    margin-right: auto;
-  }
-  .timeline-scroll {
-    overflow: auto;
-    height: calc(100% - 38px);
-  }
-  .ruler {
-    margin-left: 180px;
-    height: 30px;
-    display: flex;
-    justify-content: space-between;
-    position: relative;
-    align-items: center;
-    border-bottom: 1px solid var(--border-strong);
-    background: var(--timeline-ruler-bg);
-    cursor: ew-resize;
-    touch-action: none;
-  }
-  .ruler span {
-    font-size: 11px;
-    color: var(--text-muted);
-    font-family: var(--font-mono);
-    pointer-events: none;
-  }
-  .playhead {
-    position: absolute;
-    top: 0;
-    bottom: -500px;
-    width: 2px;
-    background: var(--timeline-playhead);
-    pointer-events: none;
-  }
-  .lane-row {
-    height: 40px;
-    display: grid;
-    grid-template-columns: 180px minmax(0, 1fr);
-    border-bottom: 1px solid var(--border);
-  }
-  .lane-header {
-    position: sticky;
-    left: 0;
-    z-index: 2;
-    background: var(--surface);
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 2px;
-  }
-  .lane-name {
-    display: block;
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-align: left;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    border: 0;
-    background: transparent;
-  }
-  .lane-header button[aria-pressed='true'] {
-    color: var(--accent-text);
-    border-color: var(--accent);
-    background: var(--accent-soft);
-    font-weight: 700;
-  }
-  .history-swatches {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-  }
-  .history-swatches button {
-    width: 22px;
-    height: 22px;
-    min-height: 22px;
-    padding: 0;
-  }
-  .rgb-fields {
-    display: flex;
-    gap: 6px;
-  }
-  .rgb-fields label {
-    min-width: 0;
-    flex: 1;
-    grid-template-columns: 1fr;
-    margin-top: 0;
-  }
-  .rgb-fields input {
-    width: 100%;
-  }
-  .lane {
-    position: relative;
-    background: var(--timeline-lane-bg);
-    cursor: crosshair;
-  }
-  .lane-empty {
-    position: absolute;
-    left: 12px;
-    top: 10px;
-    color: var(--text-subtle);
-    font-size: 11px;
-    pointer-events: none;
-  }
-  .diamond {
-    position: absolute;
-    top: 12px;
-    width: 14px;
-    height: 14px;
-    padding: 0;
-    transform: translateX(-50%) rotate(45deg);
-    min-height: 0;
-    border: 2px solid var(--bg);
-  }
-  .diamond.selected {
-    outline: 2px solid var(--on-video);
-  }
-  .effect-block {
-    position: absolute;
-    top: 5px;
-    bottom: 5px;
-    min-width: 24px;
-    padding: 0;
-    overflow: hidden;
-    min-height: 0;
-    background: var(--effect-bg);
-    border-color: var(--effect-border);
-    border-radius: 4px;
-  }
   .safety-badge {
     padding: 3px 6px;
     color: var(--warning);
@@ -2024,6 +1761,29 @@
     color: var(--text);
     background: var(--surface2);
     font-size: 12px;
+  }
+  .workspace :global(.inspector) {
+    grid-area: inspector;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+  }
+  .workspace :global(.timeline) {
+    grid-area: timeline;
+    min-width: 0;
+    min-height: 0;
+  }
+  .workspace > :global(.splitter.vertical) {
+    grid-area: vsplit;
+  }
+  .workspace > :global(.splitter:not(.vertical)) {
+    grid-area: hsplit;
+  }
+  .workspace-reset {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    z-index: 4;
   }
   .quick-action {
     min-width: 28px;
@@ -2066,6 +1826,7 @@
   }
   .alert {
     position: fixed;
+    z-index: 15;
     right: 12px;
     bottom: 12px;
     padding: 10px;
@@ -2119,9 +1880,6 @@
     margin: 0;
   }
   @media (max-width: 500px) {
-    .ruler span:not(:first-child):not(:nth-child(5)) {
-      display: none;
-    }
     .settings-dialog {
       grid-template-columns: minmax(0, 1fr);
     }
@@ -2129,15 +1887,17 @@
   @media (max-width: 750px) {
     .workspace {
       grid-template-columns: minmax(0, 1fr);
-      grid-template-rows: minmax(260px, 1fr) auto minmax(200px, 38vh);
+      grid-template-rows: minmax(260px, 1fr) auto minmax(210px, var(--timeline-height));
+      grid-template-areas: 'movie' 'inspector' 'timeline';
       overflow: auto;
     }
-    .inspector {
-      border: 0;
-      border-top: 1px solid var(--border);
+    .workspace > :global(.splitter) {
+      display: none;
     }
-    .timeline {
-      grid-column: 1;
+    .workspace-reset {
+      position: static;
+      justify-self: end;
+      grid-row: 4;
     }
     .track-title {
       display: none;

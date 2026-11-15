@@ -5,9 +5,40 @@ import {
   lowerBoundLanePoints,
   hitLanePoint,
   displayedRgb,
+  clientXToTimelineTime,
+  timelineTimeToClientX,
 } from '$lib/domain';
 import { requirement } from '../harness/requirement';
 
+requirement(
+  'ED2-002 @unit timeline geometry round-trips scroll, origin, fractional scale and clamps duration',
+  () => {
+    for (const scale of [0.037, 0.125, 1.7]) {
+      const geometry = {
+        originClientX: 213.5,
+        scrollX: 481.25,
+        pxPerMs: scale,
+        durationMs: 7200000,
+      };
+      for (const time of [0, 1000.25, 3600000, 7200000]) {
+        const clientX = timelineTimeToClientX(time, geometry)!;
+        expect(clientXToTimelineTime(clientX, geometry)).toBeCloseTo(time, 7);
+      }
+      expect(clientXToTimelineTime(-5000, geometry)).toBe(0);
+      expect(clientXToTimelineTime(1e9, geometry)).toBe(7200000);
+    }
+  }
+);
+requirement('ED2-002 @unit invalid timeline geometry scales return null', () => {
+  for (const scale of [0, -1, NaN, Infinity]) {
+    const geometry = { originClientX: 180, scrollX: 0, pxPerMs: scale, durationMs: 10000 };
+    expect(clientXToTimelineTime(200, geometry)).toBeNull();
+    expect(timelineTimeToClientX(1000, geometry)).toBeNull();
+  }
+  expect(
+    clientXToTimelineTime(NaN, { originClientX: 0, scrollX: 0, pxPerMs: 1, durationMs: 10 })
+  ).toBeNull();
+});
 requirement(
   'TIME-001 @unit canvas paint caches retain exact colors and apply authored brightness only to the strip',
   () => {

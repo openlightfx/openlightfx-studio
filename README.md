@@ -21,6 +21,10 @@ OpenLightFX Studio lets you load a movie, create lighting channels mapped to sma
 
 <!-- TODO: Add screenshot -->
 
+## Editor improvement initiative
+
+The editor improvements are still in progress and are not release-ready. Full-browser acceptance, the Chromium performance budget, and final integrated lab coverage remain outstanding. For the current architecture and supported journey, read [AGENTS.md](AGENTS.md); some feature descriptions below predate the current editor.
+
 ## Features
 
 - **Runs in the browser** — no server required; saves files via the File System Access API

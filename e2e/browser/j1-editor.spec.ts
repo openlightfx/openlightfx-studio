@@ -69,7 +69,11 @@ async function openEditor(page, rooms: unknown[] = [], bulbs: unknown[] = []) {
     });
     return route.fulfill({ json: { channels, bulbs: [] } });
   });
-  await page.route('**/OpenLightFX/Studio/Projects/*', (route) => route.fulfill({ json: {} }));
+  await page.route('**/OpenLightFX/Studio/Projects/*', (route) =>
+    route.request().method() === 'GET'
+      ? route.fulfill({ status: 404, body: 'Project sidecar not found' })
+      : route.fulfill({ status: 204 })
+  );
   await page.route('**/OpenLightFX/Studio/Tracks/*', async (route) => {
     if (route.request().method() === 'PUT') return route.fulfill({ status: 204, body: '' });
     return route.fulfill({ status: 404, body: 'not found' });
@@ -96,6 +100,242 @@ async function addKeyframe(page, channel = 'Left') {
     page.getByRole('button', { name: new RegExp(`${channel} keyframe at`) })
   ).toBeVisible();
 }
+
+requirement(
+  'ED2-022 @browser a continuous brightness gesture previews and commits one undo action',
+  async ({ page }) => {
+    await openEditor(page);
+    await addKeyframe(page);
+    const initial = await page.getByLabel('Brightness value').inputValue();
+    const slider = page.getByRole('slider', { name: 'Brightness', exact: true });
+    await slider.focus();
+    await slider.evaluate((node) => {
+      const input = node as HTMLInputElement;
+      for (let value = 0; value < 100; value++) {
+        input.value = String(value);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
+    await expect(page.getByLabel('Brightness value')).toHaveValue('99');
+    await slider.blur();
+    await page.keyboard.press('Control+z');
+    await expect(page.getByLabel('Brightness value')).toHaveValue(initial);
+    await expect(page.getByRole('heading', { name: 'Keyframe', exact: true })).toBeVisible();
+  }
+);
+
+requirement(
+  'ED2-022 @browser invalid brightness draft cannot serialize and Escape restores the committed value',
+  async ({ page }) => {
+    await openEditor(page);
+    await addKeyframe(page);
+    const field = page.getByLabel('Brightness value');
+    const before = await field.inputValue();
+    await field.fill('12.5');
+    await expect(field).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.getByRole('alert')).toContainText('whole number');
+    await field.press('Escape');
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    await expect(field).toHaveValue(before);
+  }
+);
+
+requirement(
+  'ED2-021 @browser mixed RGB and Kelvin selection brightness edit preserves unrelated properties',
+  async ({ page }) => {
+    await openEditor(page);
+    await addKeyframe(page);
+    await page.getByLabel('Hex', { exact: true }).fill('ff0011');
+    await page.getByLabel('Hex', { exact: true }).blur();
+    await addKeyframe(page, 'Right');
+    await page.getByRole('radio', { name: 'Kelvin', exact: true }).check();
+    await page.getByRole('spinbutton', { name: 'Kelvin', exact: true }).fill('4100');
+    await page.getByRole('spinbutton', { name: 'Kelvin', exact: true }).blur();
+    await page.locator('.diamond.selected').focus();
+    await page.keyboard.press('Control+a');
+    await expect(page.getByRole('heading', { name: '2 selected keyframes' })).toBeVisible();
+    await expect(page.getByLabel('Keyframe time')).toBeDisabled();
+    await expect(page.getByText('Mixed RGB and Kelvin modes')).toBeVisible();
+    await page.getByLabel('Brightness value').fill('37');
+    await page.getByLabel('Brightness value').blur();
+    const downloaded = page.waitForEvent('download');
+    await fileMenu(page, '^Export');
+    const file = await downloaded;
+    const track = decodeTrack(fs.readFileSync((await file.path())!));
+    expect(track.keyframes).toHaveLength(2);
+    expect(track.keyframes.find((key) => key.channelId === 'left')).toMatchObject({
+      brightness: 37,
+      colorMode: 'RGB',
+      color: { r: 255, g: 0, b: 17 },
+    });
+    expect(track.keyframes.find((key) => key.channelId === 'right')).toMatchObject({
+      brightness: 37,
+      colorMode: 'COLOR_TEMPERATURE',
+      colorTemperature: 4100,
+    });
+  }
+);
+
+requirement(
+  'ED2-018 @browser repeated nudge is one undoable action with unchanged values',
+  async ({ page }) => {
+    await openEditor(page);
+    await addKeyframe(page);
+    const before = await page.getByLabel('Keyframe time').inputValue();
+    await page.locator('.diamond.selected').focus();
+    await page.keyboard.down('.');
+    await page.keyboard.down('.');
+    await page.keyboard.down('.');
+    await page.keyboard.up('.');
+    await expect(page.getByLabel('Keyframe time')).not.toHaveValue(before);
+    await page.keyboard.press('Control+z');
+    await expect(page.getByLabel('Keyframe time')).toHaveValue(before);
+    await expect(page.locator('.diamond.selected')).toHaveCount(1);
+  }
+);
+
+requirement(
+  'ED2-018 @browser Add at an occupied playhead selects the existing key instead of searching another gap',
+  async ({ page }) => {
+    await openEditor(page);
+    await addKeyframe(page);
+    const time = await page.getByLabel('Keyframe time').inputValue();
+    await page.getByLabel('Go to time').fill(`00:${time}`);
+    await page.getByLabel('Go to time').press('Enter');
+    await expect(page.getByRole('slider', { name: 'Timeline ruler' })).toHaveAttribute(
+      'aria-valuenow',
+      '3000'
+    );
+    await expect
+      .poll(() => page.locator('video').evaluate((node) => (node as HTMLVideoElement).currentTime))
+      .toBeCloseTo(3, 2);
+    await page.getByRole('button', { name: 'Add keyframe', exact: true }).click();
+    const downloaded = page.waitForEvent('download');
+    await fileMenu(page, '^Export');
+    const file = await downloaded;
+    const track = decodeTrack(fs.readFileSync((await file.path())!));
+    expect(track.keyframes).toHaveLength(1);
+    await expect(page.locator('.diamond.selected')).toHaveCount(1);
+  }
+);
+
+requirement(
+  'ED2-028 @browser manual marker add rename time and delete use sidecar history',
+  async ({ page }) => {
+    await openEditor(page);
+    await page.getByRole('slider', { name: 'Timeline ruler' }).focus();
+    await page.keyboard.press('m');
+    await page.getByText('Scene markers (1)', { exact: true }).click();
+    const name = page.getByRole('textbox', { name: /^Marker name/ });
+    await name.fill('Opening');
+    await name.blur();
+    const time = page.getByRole('textbox', { name: /^Marker time/ });
+    await time.fill('00:00:02.500');
+    await time.blur();
+    await expect(
+      page.getByRole('button', { name: 'Marker Opening at 00:02.500', exact: true })
+    ).toBeVisible();
+    let sidecar: any;
+    await page.route('**/OpenLightFX/Studio/Projects/*', async (route) => {
+      if (route.request().method() === 'PUT') {
+        sidecar = route.request().postDataJSON();
+        return route.fulfill({ status: 204 });
+      }
+      return route.fulfill({ status: 404 });
+    });
+    await fileMenu(page, '^Save');
+    await expect.poll(() => sidecar?.sceneMarkers?.length).toBe(1);
+    expect(sidecar.sceneMarkers[0]).toMatchObject({
+      label: 'Opening',
+      timeMs: 2500,
+      kind: 'manual',
+    });
+    await page.getByRole('button', { name: 'Delete marker Opening', exact: true }).click();
+    await expect(page.getByText('Scene markers (0)', { exact: true })).toBeVisible();
+    await page.getByRole('slider', { name: 'Timeline ruler' }).focus();
+    await page.keyboard.press('Control+z');
+    await expect(
+      page.getByRole('button', { name: 'Marker Opening at 00:02.500', exact: true })
+    ).toBeVisible();
+  }
+);
+
+requirement(
+  'ED2-029 @browser audition range validates boundaries loops decoded playback and stays paused after stepping',
+  async ({ page }) => {
+    await openEditor(page);
+    await expect(page.getByRole('button', { name: 'Loop', exact: true })).toBeDisabled();
+    await page.getByLabel('Range start', { exact: true }).fill('00:00:01.000');
+    await page.getByLabel('Range start', { exact: true }).blur();
+    await page.getByLabel('Range end', { exact: true }).fill('00:00:00.500');
+    await page.getByLabel('Range end', { exact: true }).blur();
+    await expect(page.getByRole('button', { name: 'Loop', exact: true })).toBeDisabled();
+    await page.getByLabel('Range end', { exact: true }).fill('00:00:01.500');
+    await page.getByLabel('Range end', { exact: true }).blur();
+    await page.getByRole('button', { name: 'Loop', exact: true }).click();
+    await page.getByLabel('Go to time').fill('00:00:01.000');
+    await page.getByLabel('Go to time').press('Enter');
+    await expect
+      .poll(() => page.locator('video').evaluate((node) => (node as HTMLVideoElement).currentTime))
+      .toBeCloseTo(1, 2);
+    await page.locator('video').evaluate((node) => {
+      (window as any).__loopReturns = 0;
+      node.addEventListener('seeked', () => {
+        if (
+          (node as HTMLVideoElement).currentTime >= 0.99 &&
+          (node as HTMLVideoElement).currentTime < 1.15
+        )
+          (window as any).__loopReturns++;
+      });
+    });
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await expect
+      .poll(() => page.evaluate(() => (window as any).__loopReturns), { timeout: 10000 })
+      .toBeGreaterThanOrEqual(2);
+    await page.getByRole('button', { name: 'Pause', exact: true }).click();
+    await page.getByRole('button', { name: 'Next frame', exact: true }).click();
+    await expect
+      .poll(() => page.locator('video').evaluate((node) => (node as HTMLVideoElement).paused))
+      .toBe(true);
+    await page.getByRole('button', { name: 'Clear range', exact: true }).click();
+    await expect(page.getByLabel('Range start', { exact: true })).toHaveValue('');
+    await expect(page.getByRole('button', { name: 'Loop', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    );
+  }
+);
+
+requirement(
+  'ED2-024 @browser incoming fade handle previews duration preserves arrival and supports Undo and Escape',
+  async ({ page }) => {
+    await openEditor(page);
+    await addKeyframe(page);
+    await page.getByLabel('Fade type').selectOption('LINEAR');
+    await page.getByLabel('Fade length').fill('500');
+    await page.getByLabel('Fade length').blur();
+    const arrival = await page.getByLabel('Keyframe time').inputValue();
+    const ruler = await page.getByRole('slider', { name: 'Timeline ruler' }).boundingBox();
+    const handle = page.getByRole('button', { name: 'Incoming fade start', exact: true });
+    let box = await handle.boundingBox();
+    await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(ruler!.x + ruler!.width * 0.2, box!.y + box!.height / 2, { steps: 4 });
+    await expect(page.getByLabel('Fade length')).toHaveValue('1000');
+    await expect(page.getByLabel('Keyframe time')).toHaveValue(arrival);
+    await page.mouse.up();
+    await handle.focus();
+    await page.keyboard.press('Control+z');
+    await expect(page.getByLabel('Fade length')).toHaveValue('500');
+    box = await handle.boundingBox();
+    await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(ruler!.x + ruler!.width * 0.2, box!.y + box!.height / 2);
+    await page.keyboard.press('Escape');
+    await page.mouse.up();
+    await expect(page.getByLabel('Fade length')).toHaveValue('500');
+  }
+);
 
 requirement(
   'EDIT-001 @browser the timeline ruler is the only time slider and moves the playhead',
@@ -199,10 +439,10 @@ requirement(
     await expect
       .poll(() => video.evaluate((node) => (node as HTMLVideoElement).currentTime))
       .toBeGreaterThan(5);
-    await page.getByRole('button', { name: 'Play' }).click();
-    await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible();
-    await page.getByRole('button', { name: 'Pause' }).click();
-    await expect(page.getByRole('button', { name: 'Play' })).toBeVisible();
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Pause', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
   }
 );
 
@@ -221,7 +461,9 @@ requirement(
   'EDIT-010 @browser without a room authoring and saving remain available while preview is disabled',
   async ({ page }) => {
     await openEditor(page);
-    await expect(page.getByRole('status')).toContainText('Set up a room to preview on your lights');
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Set up a room to preview on your lights' })
+    ).toBeVisible();
     await expect(page.getByRole('button', { name: 'Preview on ▾' })).toBeDisabled();
     await expect(page.getByRole('switch', { name: 'Lights' })).toBeDisabled();
     await addKeyframe(page);
@@ -362,11 +604,13 @@ requirement(
       await route.fulfill({ json: { updatedAt: `v${writes}` } });
     });
     let sidecars = 0;
-    await page.route('**/OpenLightFX/Studio/Projects/*', (route) =>
-      sidecars++ === 0
+    await page.route('**/OpenLightFX/Studio/Projects/*', (route) => {
+      if (route.request().method() === 'GET')
+        return route.fulfill({ status: 404, body: 'Project sidecar not found' });
+      return sidecars++ === 0
         ? route.fulfill({ status: 500, body: 'Sidecar disk full' })
-        : route.fulfill({ status: 204 })
-    );
+        : route.fulfill({ status: 204 });
+    });
     await fileMenu(page, '^Save');
     await expect(page.getByRole('alert')).toContainText('Sidecar disk full');
     await expect(page.getByText('Saving…', { exact: true })).toHaveCount(0);
@@ -548,20 +792,30 @@ requirement(
     const bounds = (await ruler.boundingBox())!;
     await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
     const startX = (await page.locator('.playhead').boundingBox())!.x;
-    await page
-      .locator('.timeline-scroll')
-      .dispatchEvent('wheel', { ctrlKey: true, deltaY: -100, bubbles: true, cancelable: true });
+    await ruler.dispatchEvent('wheel', {
+      clientX: bounds.x + bounds.width / 2,
+      clientY: bounds.y + bounds.height / 2,
+      ctrlKey: true,
+      deltaY: -100,
+      bubbles: true,
+      cancelable: true,
+    });
     await expect.poll(async () => (await ruler.boundingBox())!.width).toBeGreaterThan(bounds.width);
     await expect
       .poll(async () => Math.abs((await page.locator('.playhead').boundingBox())!.x - startX))
       .toBeLessThan(2);
-    await page
-      .locator('.timeline-scroll')
-      .dispatchEvent('wheel', { shiftKey: true, deltaY: 20, bubbles: true, cancelable: true });
+    await ruler.dispatchEvent('wheel', {
+      clientX: bounds.x + bounds.width / 2,
+      clientY: bounds.y + bounds.height / 2,
+      shiftKey: true,
+      deltaY: 20,
+      bubbles: true,
+      cancelable: true,
+    });
     await expect
       .poll(() => page.locator('.timeline-scroll').evaluate((node) => node.scrollLeft))
       .toBeGreaterThan(0);
-    await page.getByRole('button', { name: 'Fit', exact: true }).click();
+    await page.getByRole('button', { name: 'Fit movie', exact: true }).click();
     await expect
       .poll(() => page.locator('.timeline-scroll').evaluate((node) => node.scrollLeft))
       .toBe(0);
@@ -575,7 +829,7 @@ requirement(
 );
 
 requirement(
-  'TIME-010 @browser dragging refuses crossing in both directions and a valid move is undoable',
+  'TIME-010 @browser dragging clamps before unselected neighbors in both directions and is undoable',
   async ({ page }) => {
     await openEditor(page);
     const lane = page.locator('.lane').first();
@@ -599,11 +853,15 @@ requirement(
       await page.mouse.up();
     }
     await drag(0.2, 0.8);
+    expect(await positions()).toEqual([3792, 4000]);
+    await page.getByRole('button', { name: 'Undo', exact: true }).click();
     expect(await positions()).toEqual(before);
     await drag(0.4, 0.1);
+    expect(await positions()).toEqual([2000, 2208]);
+    await page.getByRole('button', { name: 'Undo', exact: true }).click();
     expect(await positions()).toEqual(before);
     await drag(0.2, 0.3);
-    expect(await positions()).not.toEqual(before);
+    expect(await positions()).toEqual([3000, 4000]);
     await page.getByRole('button', { name: 'Edit', exact: true }).click();
     await page.getByRole('menuitem', { name: /^Undo/ }).click();
     expect(await positions()).toEqual(before);
@@ -685,20 +943,21 @@ requirement(
 );
 
 requirement(
-  'SAVE-004 @browser validation selects the faulty keyframe and never sends invalid bytes',
+  'SAVE-004 @browser invalid incoming fade drafts block Save and preserve authored values',
   async ({ page }) => {
     await openEditor(page);
     await addKeyframe(page);
+    const before = await page.getByLabel('Fade length').inputValue();
     await page.getByLabel('Fade length').fill('999999');
-    await page.getByLabel('Fade length').blur();
-    await addKeyframe(page, 'Right');
     let writes = 0;
     page.on('request', (request) => {
       if (request.method() === 'PUT') writes++;
     });
-    await fileMenu(page, '^Save');
-    await expect(page.getByRole('alert')).toContainText('V-012');
+    await page.getByLabel('Fade length').press('Control+s');
+    await expect(page.getByRole('alert')).toContainText('arrival time');
     await expect(page.getByLabel('Fade length')).toHaveValue('999999');
+    await page.getByLabel('Fade length').press('Escape');
+    await expect(page.getByLabel('Fade length')).toHaveValue(before);
     await expect(
       page.locator('.lane-row').filter({ hasText: 'Left' }).locator('.diamond.selected')
     ).toHaveCount(1);

@@ -1,41 +1,67 @@
 import {
   acceptSpacing,
   anchoredScroll,
+  anchoredScrollAt,
+  boundedTimelineScale,
   displayedRgb,
-  dragKeepsOrder,
   MAX_TRACK_BYTES,
+  applyKeyframeMovePlan,
+  copyKeyframes,
+  planKeyframePaste,
+  materializeKeyframePaste,
+  type KeyframeClipboard,
+  type PasteRejection,
+  indexKeyframesForMove,
+  planAbsoluteKeyframeTime,
+  planSharedKeyframeMove,
   validateTrack,
   addChannel,
   applyZoomChord,
   AUTOSAVE_INTERVAL_MS,
   canInsert,
   chooseLoadSource,
+  clampRecoveryPosition,
   classifyLocalFile,
   computeSafety,
   crashKey,
   createHistory,
+  createEditTransaction,
+  createIdAllocator,
   decodeTrack,
   encodeTrack,
   frameStepMs,
+  adjacentProxyFrameTime,
+  quantizeProxyFrameTime,
   importDurationWarning,
   importTrack,
   makeCrashRecord,
   newKeyframe,
   newTrackFromMovie,
   overlaySample,
+  adjacentKeyframeTime,
   parseHex,
   patchKeyframes,
   photosensitivityNotice,
   planHostedSave,
+  matchesSaveCheckpoint,
   resolveDuration,
   setKelvin,
   sidecarDocument,
   type Channel,
+  type CrashRecord,
   type Keyframe,
   type ProjectSidecar,
+  type SaveCheckpoint,
   type Track,
   type TrackMetadata,
   type LayoutChangePlan,
+  type EditorSelection,
+  emptyEditorSelection,
+  pruneEditorSelection,
+  selectAllEditorKeyframes,
+  selectEditorKeyframe,
+  selectEditorMarquee,
+  keyframesInMarquee,
   changeTrackLayout,
   upgradeLegacyTrackLayout,
 } from '$lib/domain';
@@ -45,6 +71,8 @@ import {
   fetchFrame,
   fetchItems,
   fetchMediaInfo,
+  fetchProjectSidecar,
+  ProjectSidecarLoadError,
   restartProxy,
   fetchSettings,
   fetchTrackBytes,
@@ -60,11 +88,31 @@ import {
 import { failedProxyMessage, proxyPlayReason, seekPastHorizon } from '$lib/studio/proxy-playback';
 import { setPendingImport, takePendingImport } from '$lib/studio/pending-import';
 import { framePosition } from '$lib/studio/frame-position';
+import { LatestSeekScheduler } from '$lib/studio/latest-seek';
+import {
+  AuditionLoop,
+  emptyAuditionRange,
+  restoreAuditionRange,
+  rangeReason,
+} from '$lib/domain/audition-range';
 
 const DB_NAME = 'openlightfx-studio';
 const STORE = 'crash';
 const FPS = 24;
 export const INITIAL_PX_PER_MS = 0.032;
+
+// Internal lighting clipboard: shared by editor instances in this tab, never persisted.
+let lightingClipboard = $state<KeyframeClipboard | null>(null);
+const pasteRejectionMessage: Record<PasteRejection, string> = {
+  'invalid-payload': 'The lighting clipboard is not valid. Copy the keyframes again.',
+  'invalid-anchor': 'Choose a time inside the movie before pasting.',
+  'missing-active-channel': 'Select a destination lane before pasting.',
+  'missing-position':
+    'This track does not have every copied lighting position. Nothing was pasted.',
+  'out-of-bounds': 'The copied passage would extend beyond the movie. Nothing was pasted.',
+  'fade-before-start': 'An incoming fade would begin before the movie. Nothing was pasted.',
+  'spacing-collision': 'The copied passage is too close to existing keyframes. Nothing was pasted.',
+};
 
 export function formatClock(ms: number): string {
   const abs = Math.max(0, Math.round(ms));
@@ -75,19 +123,18 @@ export function formatClock(ms: number): string {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(millis).padStart(3, '0')}`;
 }
 
-interface CrashRecord {
-  key: string;
-  track: Track;
-  sidecar: ProjectSidecar;
-  playheadMs: number;
-  scrollX: number;
-  savedAt: number;
-  dirty: boolean;
-  storage: 'indexeddb';
-}
-
 /** How often a building edit proxy is re-read. */
 const PROXY_POLL_MS = 1000;
+
+interface AuthoredSnapshot {
+  track: Track | null;
+  sidecar: ProjectSidecar;
+  revision: string;
+  selection: string[];
+  selectionAnchorId: string | null;
+  primarySelectionId: string | null;
+  activeChannelId: string | null;
+}
 
 export class StudioSession {
   hosted = $state(false);
@@ -104,6 +151,7 @@ export class StudioSession {
   private frameRequest = 0;
   private frameAbort: AbortController | null = null;
   private appliedSeekMs: number | null = null;
+  private seekScheduler = new LatestSeekScheduler((target) => this.dispatchScrubbedSeek(target));
   private frameSelection: string[] = [];
   private wasGrowing = false;
   private resumeProxy = false;
@@ -117,6 +165,9 @@ export class StudioSession {
   editorLoadError = $state('');
   trackChoices = $state<TrackSummary[]>([]);
   track = $state<Track | null>(null);
+  /** Transient authoring state; export, recovery and persistence continue to use `track`. */
+  draftTrack = $state<Track | null>(null);
+  draftLabel = $state('');
   trackId = $state('track');
   serverUpdatedAt = $state(0);
   trackUpdatedAt = $state('');
@@ -127,25 +178,37 @@ export class StudioSession {
   canRedo = $state(false);
   playheadMs = $state(0);
   playing = $state(false);
+  auditionRange = $state(emptyAuditionRange());
+  private auditionLoop = new AuditionLoop();
+  private loopSuspendedForNavigation = false;
   videoReady = $state(false);
   pxPerMs = $state(INITIAL_PX_PER_MS);
   scrollX = $state(0);
   fit = $state(false);
+  followPlayhead = $state(true);
+  manualFollowSuspended = $state(false);
   laneWidth = $state(600);
   selection = $state<string[]>([]);
+  selectionAnchorId = $state<string | null>(null);
+  primarySelectionId = $state<string | null>(null);
+  pendingPointerSelectionId = $state<string | null>(null);
   activeChannelId = $state<string | null>(null);
+  selectedMarkerId = $state<string | null>(null);
   minSpacingMs = $state(200);
-  snapToSpacing = $state(true);
+  /** Workspace preference: magnetic targets never alter authored cue spacing. */
+  snapEnabled = $state(true);
   spacingError = $state('');
   status = $state('');
   alert = $state('');
   notice = $state('');
   localError = $state('');
+  recoveryUnavailable = $state(false);
   videoError = $state('');
   videoSrc = $state('');
   pendingSeekMs = $state<number | null>(null);
   hex = $state('000000');
   hexError = $state('');
+  propertyDraftError = $state('');
   green = $state('0');
   kelvinOn = $state(false);
   kelvin = $state('2700');
@@ -163,17 +226,59 @@ export class StudioSession {
   photosensitivity = $state<string | null>(null);
   solo = $state<Record<string, boolean>>({});
   mute = $state<Record<string, boolean>>({});
+  overlayVisible = $state(true);
   order = $state('');
   menuChannel = $state<string | null>(null);
-  historyColors = $state<string[]>(Array.from({ length: 16 }, () => '#000000'));
+  historyColors = $state<string[]>([]);
+  private draftRecentColor: { r: number; g: number; b: number } | null = null;
   frameP95 = $state(8);
-  private history = createHistory<Track | null>(null);
+  private sidecarState = $state<ProjectSidecar | null>(null);
+  sidecarLoadError = $state('');
+  sidecarReady = $state(false);
+  private sidecarLoadAbort: AbortController | null = null;
+  private adoptionSequence = 0;
+  private revisionSequence = 0;
+  private savedCheckpoint: SaveCheckpoint | null = null;
+  private history = createHistory<AuthoredSnapshot | null>(null);
+  private transaction = createEditTransaction<AuthoredSnapshot>(
+    (snapshot, label) => this.commitSnapshot(snapshot, label),
+    (draft, label) => {
+      this.draftTrack = draft?.track ?? null;
+      this.draftLabel = draft ? label : '';
+    },
+    (left, right) =>
+      JSON.stringify([left.track, left.sidecar]) === JSON.stringify([right.track, right.sidecar])
+  );
+  private allocateId = createIdAllocator(() => [
+    ...(this.track?.keyframes.map((keyframe) => keyframe.id) ?? []),
+    ...(this.track?.effects.map((effect) => effect.id) ?? []),
+    ...(this.sidecarState?.sceneMarkers.map((marker) => marker.id) ?? []),
+    ...(this.draftTrack?.keyframes.map((keyframe) => keyframe.id) ?? []),
+    ...(this.draftTrack?.effects.map((effect) => effect.id) ?? []),
+  ]);
   private video: HTMLVideoElement | null = null;
   private db: IDBDatabase | null = null;
+  private recoveryQueue = new Map<string, CrashRecord>();
+  private recoveryWaiters: (() => void)[] = [];
+  private recoveryWriting = false;
   private bootToken = 0;
 
   get channels(): Channel[] {
     return this.track?.channels ?? [];
+  }
+
+  get selectionState(): EditorSelection {
+    return {
+      selectedIds: [...this.selection],
+      anchorId: this.selectionAnchorId,
+      primaryId: this.primarySelectionId,
+    };
+  }
+
+  get primaryKeyframe(): Keyframe | undefined {
+    return (this.draftTrack ?? this.track)?.keyframes.find(
+      (frame) => frame.id === this.primarySelectionId
+    );
   }
 
   get playReason(): string {
@@ -198,6 +303,7 @@ export class StudioSession {
   }
 
   async boot(): Promise<void> {
+    this.restoreWorkspacePreferences();
     const token = ++this.bootToken;
     const params = new URLSearchParams(location.search);
     const path = location.pathname;
@@ -220,8 +326,18 @@ export class StudioSession {
     this.movieMs = null;
     this.durationKnown = false;
     this.pendingSeekMs = null;
+    this.seekScheduler.dispose();
     this.dirty = false;
-    this.selection = [];
+    this.savedCheckpoint = null;
+    this.cancelEdit();
+    this.sidecarLoadAbort?.abort();
+    this.sidecarLoadAbort = null;
+    this.adoptionSequence++;
+    this.sidecarLoadError = '';
+    this.sidecarReady = false;
+    this.sidecarState = null;
+    this.setSelectionState(emptyEditorSelection());
+    this.pendingPointerSelectionId = null;
     this.playheadMs = 0;
     this.status = '';
     this.resetHistory(null);
@@ -288,6 +404,10 @@ export class StudioSession {
 
   cancelBoot(): void {
     this.bootToken++;
+    this.seekScheduler.dispose();
+    this.sidecarLoadAbort?.abort();
+    this.sidecarLoadAbort = null;
+    this.adoptionSequence++;
   }
 
   bindVideo(video: HTMLVideoElement): void {
@@ -326,7 +446,8 @@ export class StudioSession {
     this.localError = '';
     this.importWarning = false;
     this.alert = '';
-    this.selection = [];
+    this.setSelectionState(emptyEditorSelection());
+    this.pendingPointerSelectionId = null;
     this.menuChannel = null;
     let info: MediaInfo | null = null;
     try {
@@ -452,8 +573,6 @@ export class StudioSession {
       info.proxy.state === 'ready' && Number.isFinite(this.video.duration)
         ? Math.min(target / 1000, this.video.duration)
         : target / 1000;
-    // Duration/progress can run ahead of a growing Range resource's seekable bytes.
-    // Do not turn a queued target into a native seek that will simply clamp early.
     let reachable = Math.abs(this.video.currentTime - reachableTarget) < 0.000001;
     for (let i = 0; i < this.video.seekable.length; i++) {
       if (
@@ -569,73 +688,397 @@ export class StudioSession {
     token = this.bootToken,
     forceServer = false
   ): Promise<void> {
+    const adoption = ++this.adoptionSequence;
+    this.sidecarLoadAbort?.abort();
+    this.sidecarLoadAbort = null;
+    this.sidecarLoadError = '';
+    this.sidecarReady = false;
     const crash = await this.readCrash(crashKey(itemId, trackId));
-    if (token !== this.bootToken) return;
-    const source = forceServer ? 'server' : chooseLoadSource(this.serverUpdatedAt, crash);
+    if (token !== this.bootToken || adoption !== this.adoptionSequence) return;
+    const source = forceServer
+      ? 'server'
+      : chooseLoadSource(this.serverUpdatedAt, crash, { itemId, trackId });
+    let loadedSidecar: ProjectSidecar | null = null;
+    let sidecarError = '';
+    if (source === 'crash' && crash) {
+      loadedSidecar = crash.sidecar;
+    } else if (!dirty) {
+      const controller = new AbortController();
+      this.sidecarLoadAbort = controller;
+      try {
+        loadedSidecar = await fetchProjectSidecar(itemId, trackId, controller.signal);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        sidecarError =
+          error instanceof ProjectSidecarLoadError
+            ? error.message
+            : (error as Error).message || 'Project sidecar could not be loaded';
+      }
+      if (
+        token !== this.bootToken ||
+        adoption !== this.adoptionSequence ||
+        this.item?.itemId !== itemId ||
+        this.trackId !== trackId
+      )
+        return;
+      if (this.sidecarLoadAbort === controller) this.sidecarLoadAbort = null;
+    }
     const chosen = source === 'crash' && crash ? crash.track : track;
+    this.cancelEdit();
     this.cancelEyedrop();
     this.saveConflict = false;
-    this.fit = true;
-    this.track = chosen;
-    this.playheadMs = source === 'crash' && crash ? crash.playheadMs : 0;
-    this.scrollX = source === 'crash' && crash ? crash.scrollX : 0;
-    this.dirty = source === 'crash';
-    this.resetHistory(chosen);
-    this.order = chosen.channels.map((channel) => channel.id).join(',');
+    this.fit = source !== 'crash';
+    this.track = this.normalizedTrack(chosen);
+    this.restoreAuditionRange();
+    this.sidecarState = loadedSidecar ?? {
+      version: 1,
+      itemId,
+      trackId,
+      sceneMarkers: [],
+      channelGroups: [],
+    };
+    this.sidecarLoadError = sidecarError;
+    this.sidecarReady = !sidecarError;
+    this.setSelectionState(emptyEditorSelection());
+    this.pendingPointerSelectionId = null;
     this.activeChannelId = chosen.channels[0]?.id ?? null;
+    this.sidecarState = this.sidecar();
+    const restoredPosition =
+      source === 'crash' && crash
+        ? clampRecoveryPosition({
+            playheadMs: crash.playheadMs,
+            scrollX: crash.scrollX,
+            durationMs: chosen.metadata.durationMs || this.movieMs || 0,
+            pxPerMs: this.pxPerMs,
+            viewportWidth: this.laneWidth,
+          })
+        : { playheadMs: 0, scrollX: 0 };
+    this.playheadMs = restoredPosition.playheadMs;
+    this.scrollX = restoredPosition.scrollX;
+    this.resetHistory({ ...this.authoredSnapshot(), revision: this.newRevision() });
+    this.savedCheckpoint = dirty || source === 'crash' ? null : this.currentCheckpoint();
+    this.updateDirty();
+    this.order = chosen.channels.map((channel) => channel.id).join(',');
     this.syncPropertyFields();
     this.restored = source === 'crash' ? 'Unsaved edits were restored' : '';
-    if (dirty) {
-      this.dirty = true;
-      await this.persist(true);
-    }
+    if (this.dirty) await this.persist(true);
     // Assigning videoSrc already loads a remote URL. load() aborts that request,
     // and a growing proxy does not survive the restart.
     if (this.video && this.videoSrc.startsWith('blob:')) this.video.load();
   }
 
-  private resetHistory(track: Track | null): void {
-    this.history = createHistory(track);
+  private resetHistory(snapshot: AuthoredSnapshot | null): void {
+    this.history = createHistory(snapshot);
     this.canUndo = false;
     this.canRedo = false;
   }
 
-  edit(next: Track, message = ''): void {
-    next = {
-      ...next,
-      keyframes: next.keyframes.toSorted(
+  private newRevision(): string {
+    return `revision-${++this.revisionSequence}`;
+  }
+
+  private currentCheckpoint(revision = this.history.current?.revision): SaveCheckpoint | null {
+    if (!this.item || !revision) return null;
+    return { itemId: this.item.itemId, trackId: this.trackId, revision };
+  }
+
+  private updateDirty(): void {
+    this.dirty = !matchesSaveCheckpoint(this.currentCheckpoint(), this.savedCheckpoint);
+  }
+
+  private authoredSnapshot(track = this.track): AuthoredSnapshot {
+    return {
+      track,
+      sidecar: this.sidecar(),
+      revision: this.history.current?.revision ?? this.newRevision(),
+      selection: [...this.selection],
+      selectionAnchorId: this.selectionAnchorId,
+      primarySelectionId: this.primarySelectionId,
+      activeChannelId: this.activeChannelId,
+    };
+  }
+
+  private normalizedTrack(track: Track): Track {
+    return {
+      ...track,
+      keyframes: track.keyframes.toSorted(
         (a, b) => a.channelId.localeCompare(b.channelId) || a.timestampMs - b.timestampMs
       ),
     };
+  }
+
+  private commitSnapshot(snapshot: AuthoredSnapshot, message = ''): void {
+    if (!snapshot.track) return;
+    const next = {
+      ...snapshot,
+      track: this.normalizedTrack(snapshot.track),
+      revision: this.newRevision(),
+    };
     this.history.edit(next);
-    this.track = this.history.current;
+    this.applyHistorySnapshot(this.history.current);
     this.canUndo = this.history.canUndo;
     this.canRedo = this.history.canRedo;
-    this.dirty = true;
-    this.order = next.channels.map((channel) => channel.id).join(',');
+    this.updateDirty();
+    this.order = next.track.channels.map((channel) => channel.id).join(',');
     if (message) this.status = message;
     this.syncPropertyFields();
     void this.persist(true);
   }
 
+  private applyHistorySnapshot(snapshot: AuthoredSnapshot | null): void {
+    this.pendingPointerSelectionId = null;
+    this.track = snapshot?.track ?? null;
+    this.sidecarState = snapshot?.sidecar ?? null;
+    this.updateDirty();
+    const nextSelection = pruneEditorSelection(
+      {
+        selectedIds: snapshot?.selection ?? [],
+        anchorId: snapshot?.selectionAnchorId ?? null,
+        primaryId: snapshot?.primarySelectionId ?? null,
+      },
+      this.track?.keyframes ?? []
+    );
+    this.setSelectionState(nextSelection);
+    this.activeChannelId =
+      snapshot?.activeChannelId === null
+        ? null
+        : this.track?.channels.some((channel) => channel.id === snapshot?.activeChannelId)
+          ? (snapshot?.activeChannelId ?? null)
+          : (this.track?.channels[0]?.id ?? null);
+    this.order = this.track?.channels.map((channel) => channel.id).join(',') ?? '';
+    this.syncPropertyFields();
+  }
+
+  /** Refresh non-authored context in the current snapshot without creating an action. */
+  private syncHistoryContext(): void {
+    const current = this.history.current;
+    if (!current) return;
+    this.history.replaceCurrent({
+      ...current,
+      selection: [...this.selection],
+      selectionAnchorId: this.selectionAnchorId,
+      primarySelectionId: this.primarySelectionId,
+      activeChannelId: this.activeChannelId,
+    });
+  }
+
+  /** Current v1 project document for marker/group editors; it shares authored history. */
+  get projectSidecar(): ProjectSidecar {
+    return this.sidecar();
+  }
+
+  addMarker(): void {
+    if (!this.track) return;
+    const timeMs = Math.max(0, Math.min(this.durationMs(), Math.round(this.playheadMs)));
+    const marker = {
+      id: this.allocateId('marker'),
+      timeMs,
+      label: 'Scene marker',
+      kind: 'manual' as const,
+    };
+    const sidecar = this.projectSidecar;
+    if (
+      this.editSidecar(
+        {
+          ...sidecar,
+          sceneMarkers: [...sidecar.sceneMarkers, marker].sort(
+            (a, b) => a.timeMs - b.timeMs || a.id.localeCompare(b.id)
+          ),
+        },
+        'Add scene marker'
+      )
+    )
+      this.selectedMarkerId = marker.id;
+  }
+
+  updateMarker(id: string, patch: { label?: string; timeMs?: number }): boolean {
+    if (
+      patch.timeMs != null &&
+      (!Number.isSafeInteger(patch.timeMs) || patch.timeMs < 0 || patch.timeMs > this.durationMs())
+    ) {
+      this.status = 'Marker time must be inside the movie';
+      return false;
+    }
+    const sidecar = this.projectSidecar;
+    return this.editSidecar(
+      {
+        ...sidecar,
+        sceneMarkers: sidecar.sceneMarkers
+          .map((marker) => (marker.id === id ? { ...marker, ...patch } : marker))
+          .sort((a, b) => a.timeMs - b.timeMs || a.id.localeCompare(b.id)),
+      },
+      'Edit scene marker'
+    );
+  }
+
+  deleteMarker(id: string): void {
+    const sidecar = this.projectSidecar;
+    if (
+      this.editSidecar(
+        { ...sidecar, sceneMarkers: sidecar.sceneMarkers.filter((marker) => marker.id !== id) },
+        'Delete scene marker'
+      ) &&
+      this.selectedMarkerId === id
+    )
+      this.selectedMarkerId = null;
+  }
+
+  navigateMarker(direction: -1 | 1): void {
+    const time = adjacentKeyframeTime(
+      this.projectSidecar.sceneMarkers.map((marker) => ({ timestampMs: marker.timeMs })),
+      this.playheadMs,
+      direction
+    );
+    if (time == null) {
+      this.status = direction < 0 ? 'No earlier marker' : 'No later marker';
+      return;
+    }
+    this.seek(time);
+    this.revealNavigationPosition(time);
+  }
+
+  /** Hosted sidecar edits are safe only after a matching project document has loaded (or 404). */
+  get hostedSaveBlockedReason(): string {
+    if (this.propertyDraftError) return this.propertyDraftError;
+    if (!this.hosted) return '';
+    if (this.sidecarLoadError)
+      return 'Project sidecar could not be loaded. Retry loading the project before saving.';
+    if (!this.sidecarReady) return 'Project sidecar is still loading.';
+    return '';
+  }
+
+  /** Commit a discrete sidecar-only action as one authored checkpoint. */
+  editSidecar(next: ProjectSidecar, message = 'Project updated'): boolean {
+    if (!this.track || (this.hosted && !this.sidecarReady)) return false;
+    const sidecar = sidecarDocument({
+      ...next,
+      itemId: this.item?.itemId ?? '',
+      trackId: this.trackId,
+    });
+    if (JSON.stringify(sidecar) === JSON.stringify(this.sidecar())) return false;
+    this.commitSnapshot({ ...this.authoredSnapshot(), sidecar }, message);
+    return true;
+  }
+
+  /** Begin one labeled authored action without changing committed track/export/recovery state. */
+  beginEdit(label: string): void {
+    if (!this.track) return;
+    this.transaction.begin(this.authoredSnapshot(), label);
+  }
+
+  /** Replace the transient authored draft. Repeated updates remain one pending action. */
+  updateEdit(next: Track, sidecar?: ProjectSidecar): boolean {
+    if (!this.transaction.active || (sidecar && this.hosted && !this.sidecarReady)) return false;
+    return this.transaction.update({
+      ...this.authoredSnapshot(),
+      // Draft moves preserve lane order. Normalize once at commit, not on every motion.
+      track: next,
+      sidecar: sidecar ?? this.sidecar(),
+    });
+  }
+
+  commitEdit(): boolean {
+    const committed = this.transaction.commit();
+    if (committed && this.draftRecentColor) this.rememberColor(this.draftRecentColor);
+    this.draftRecentColor = null;
+    return committed;
+  }
+
+  cancelEdit(): void {
+    this.nudgeRun = false;
+    this.transaction.cancel();
+    this.draftRecentColor = null;
+    this.syncPropertyFields();
+  }
+
+  edit(next: Track, message = ''): void {
+    if (this.transaction.active) {
+      this.updateEdit(next);
+      return;
+    }
+    this.commitSnapshot(
+      {
+        ...this.authoredSnapshot(next),
+        track: this.normalizedTrack(next),
+      },
+      message
+    );
+  }
+
   undo(): void {
-    this.track = this.history.undo();
+    if (!this.history.canUndo) return;
+    this.applyHistorySnapshot(this.history.undo());
     this.canUndo = this.history.canUndo;
     this.canRedo = this.history.canRedo;
-    this.dirty = true;
+    this.updateDirty();
     this.status = 'Undone';
-    this.selection = [];
-    this.syncPropertyFields();
-    void this.persist(true);
+    void this.persist(this.dirty);
   }
 
   redo(): void {
-    this.track = this.history.redo();
+    if (!this.history.canRedo) return;
+    this.applyHistorySnapshot(this.history.redo());
     this.canUndo = this.history.canUndo;
     this.canRedo = this.history.canRedo;
-    this.dirty = true;
+    this.updateDirty();
     this.status = 'Redone';
-    this.syncPropertyFields();
+    void this.persist(this.dirty);
+  }
+
+  private rangeStorageKey(): string {
+    return `openlightfx.editor.range:${this.item?.itemId ?? 'local'}:${this.trackId}`;
+  }
+
+  private restoreAuditionRange(): void {
+    this.auditionLoop.cancel();
+    this.auditionRange = emptyAuditionRange();
+    try {
+      this.auditionRange = restoreAuditionRange(
+        localStorage.getItem(this.rangeStorageKey()),
+        this.durationMs()
+      );
+    } catch {
+      /* Local workspace state is optional. */
+    }
+  }
+
+  setRangeBoundary(boundary: 'startMs' | 'endMs', timeMs = Math.round(this.playheadMs)): void {
+    if (!Number.isSafeInteger(timeMs) || timeMs < 0 || timeMs > this.durationMs()) {
+      this.status = 'Range boundary must be inside the movie';
+      return;
+    }
+    this.auditionRange = { ...this.auditionRange, [boundary]: timeMs };
+    if (rangeReason(this.auditionRange, this.durationMs())) this.auditionRange.loop = false;
+    this.auditionLoop.cancel();
+    this.persistAuditionRange();
+  }
+
+  get loopReason(): string {
+    return rangeReason(this.auditionRange, this.durationMs());
+  }
+
+  toggleLoop(): void {
+    if (this.loopReason) {
+      this.status = this.loopReason;
+      return;
+    }
+    this.auditionRange = { ...this.auditionRange, loop: !this.auditionRange.loop };
+    this.auditionLoop.cancel();
+    this.persistAuditionRange();
+  }
+
+  clearRange(): void {
+    this.auditionRange = emptyAuditionRange();
+    this.auditionLoop.cancel();
+    this.persistAuditionRange();
+  }
+
+  private persistAuditionRange(): void {
+    try {
+      localStorage.setItem(this.rangeStorageKey(), JSON.stringify(this.auditionRange));
+    } catch {
+      /* Never turn a preference failure into an authored save failure. */
+    }
   }
 
   togglePlay(): void {
@@ -645,30 +1088,74 @@ export class StudioSession {
       return;
     }
     if (video.paused) {
+      this.manualFollowSuspended = false;
       this.cancelEyedrop();
       void video.play();
       this.playing = true;
     } else {
+      this.auditionLoop.cancel();
       video.pause();
       this.playing = false;
     }
   }
 
   pause(): void {
+    this.auditionLoop.cancel();
     this.video?.pause();
     this.playing = false;
   }
 
   step(direction: 1 | -1): void {
-    const delta = frameStepMs(this.media?.proxy.fps || FPS) * direction;
-    this.seek(Math.min(Math.max(0, this.playheadMs + delta), this.durationMs()));
+    const fps = this.media?.proxy.fps;
+    this.seek(adjacentProxyFrameTime(this.playheadMs, direction, fps ?? FPS, this.durationMs()));
+  }
+
+  canNavigateKeyframe(direction: 1 | -1): boolean {
+    if (!this.track) return false;
+    const frames = this.activeChannelId
+      ? this.track.keyframes.filter((frame) => frame.channelId === this.activeChannelId)
+      : this.track.keyframes;
+    return adjacentKeyframeTime(frames, this.playheadMs, direction) != null;
+  }
+
+  navigateKeyframe(direction: 1 | -1): void {
+    if (!this.track) return;
+    const active = this.activeChannelId
+      ? this.track.keyframes.filter((frame) => frame.channelId === this.activeChannelId)
+      : this.track.keyframes;
+    const time = adjacentKeyframeTime(active, this.playheadMs, direction);
+    if (time != null) {
+      this.seek(time);
+      this.revealNavigationPosition(time);
+    }
+  }
+
+  revealNavigationPosition(timeMs: number): void {
+    const position = timeMs * this.pxPerMs;
+    const viewport = Math.max(1, this.laneWidth);
+    if (position < this.scrollX || position > this.scrollX + viewport) {
+      this.scrollX = Math.max(
+        0,
+        Math.min(this.durationMs() * this.pxPerMs - viewport, position - viewport / 2)
+      );
+    }
   }
 
   skip(direction: 1 | -1): void {
     this.seek(Math.min(Math.max(0, this.playheadMs + direction * 5000), this.durationMs()));
   }
 
-  seek(ms: number): void {
+  seekBoundary(end: boolean): void {
+    const time = end ? this.durationMs() : 0;
+    this.seek(time);
+    this.revealNavigationPosition(time);
+  }
+
+  seek(ms: number, fromLoop = false): void {
+    if (!fromLoop) {
+      this.loopSuspendedForNavigation = true;
+      this.auditionLoop.cancel();
+    }
     const time = Math.min(Math.max(0, ms), this.durationMs() || ms);
     this.cancelEyedrop();
     this.appliedSeekMs = null;
@@ -689,6 +1176,33 @@ export class StudioSession {
     else this.dispatchSeek(time);
   }
 
+  private dispatchScrubbedSeek(target: number): boolean {
+    if (!this.video || !this.videoSrc || this.video.readyState < 1) return false;
+    const building = this.media?.proxy.state === 'building';
+    if (
+      this.media?.proxy.state === 'missing' ||
+      seekPastHorizon(target, this.media?.proxy.encodedThroughMs ?? 0, Boolean(building))
+    )
+      return false;
+    if (this.media) this.releasePendingSeek(this.media);
+    else this.dispatchSeek(target);
+    return this.appliedSeekMs === target || Math.abs(this.video.currentTime * 1000 - target) < 1;
+  }
+
+  scrub(ms: number, final = false): void {
+    this.loopSuspendedForNavigation = true;
+    this.auditionLoop.cancel();
+    const time = Math.min(Math.max(0, ms), this.durationMs() || ms);
+    this.cancelEyedrop();
+    this.playheadMs = time;
+    this.pendingSeekMs = time;
+    this.seekScheduler.request(time, final);
+  }
+
+  flushSeek(): void {
+    if (this.pendingSeekMs != null) this.seekScheduler.request(this.pendingSeekMs, true);
+  }
+
   onVideoMetadata(): void {
     if (this.media) {
       this.refreshCompletedProxy(this.media);
@@ -707,6 +1221,7 @@ export class StudioSession {
 
   onVideoSeeked(): void {
     if (!this.video || this.video.seeking) return;
+    queueMicrotask(() => this.seekScheduler.complete());
     // Native completion is authoritative even if the browser adjusted the time.
     // A newer target still queued past the encoding horizon is not completed by
     // an older native event (seek() invalidates appliedSeekMs).
@@ -730,8 +1245,18 @@ export class StudioSession {
   onVideoTimeUpdate(): void {
     if (!this.video) return;
     this.playing = !this.video.paused;
+    const nativeTime = this.video.currentTime * 1000;
+    if (this.loopSuspendedForNavigation && nativeTime < (this.auditionRange.endMs ?? 0))
+      this.loopSuspendedForNavigation = false;
+    const loopTarget = this.loopSuspendedForNavigation
+      ? null
+      : this.auditionLoop.sample(nativeTime, this.playing, this.auditionRange, this.durationMs());
+    if (loopTarget != null) {
+      this.seek(loopTarget, true);
+      return;
+    }
     if (this.pendingSeekMs != null && this.media?.proxy.state === 'ready')
-      this.releasePendingSeek(this.media);
+      this.seekScheduler.retry();
     if (this.pendingSeekMs != null || this.video.seeking || this.video.readyState < 2) return;
     this.playheadMs = this.video.currentTime * 1000;
   }
@@ -739,7 +1264,7 @@ export class StudioSession {
   syncFromVideo(): void {
     if (!this.video || this.video.paused) return;
     this.onVideoTimeUpdate();
-    if (this.pendingSeekMs != null) return;
+    if (this.pendingSeekMs != null || !this.followPlayhead || this.manualFollowSuspended) return;
     const position = this.playheadMs * this.pxPerMs;
     if (position - this.scrollX >= this.laneWidth * 0.75) {
       this.scrollX = Math.max(
@@ -836,9 +1361,7 @@ export class StudioSession {
       return;
     }
     const duration = this.durationMs() || timeMs;
-    const frameMs = frameStepMs(this.media?.proxy.fps || FPS);
-    const snappedTime = Math.round(timeMs / frameMs) * frameMs;
-    const time = Math.min(Math.max(0, Math.round(snappedTime)), duration);
+    const time = quantizeProxyFrameTime(timeMs, this.media?.proxy.fps ?? FPS, duration);
     const own = this.track.keyframes.filter((kf) => kf.channelId === channel);
     if (!canInsert(own, time, this.spacingLimit())) {
       this.status = 'No keyframe: that time is too close on this channel';
@@ -846,7 +1369,7 @@ export class StudioSession {
     }
     const sampled = overlaySample(own, time);
     const created = {
-      ...newKeyframe(own, time),
+      ...newKeyframe(own, time, this.allocateId('kf')),
       channelId: channel,
       colorMode: sampled.mode,
       color: { r: sampled.r, g: sampled.g, b: sampled.b },
@@ -854,39 +1377,48 @@ export class StudioSession {
       brightness: sampled.brightness,
       powerOn: sampled.powerOn,
     };
+    this.setSelectionState({
+      selectedIds: [created.id],
+      anchorId: created.id,
+      primaryId: created.id,
+    });
+    this.activeChannelId = channel;
     this.edit(
       { ...this.track, keyframes: [...this.track.keyframes, created] },
       `Keyframe at ${time} ms on channel ${channel}`
     );
-    this.selection = [created.id];
-    this.activeChannelId = channel;
+  }
+
+  clearActiveChannel(): void {
+    this.activeChannelId = null;
   }
 
   addAtPlayhead(): void {
-    if (!this.track) {
-      this.status = 'Choose a channel before adding a keyframe';
+    if (!this.track || !this.activeChannelId) {
+      this.status = 'Select a lane before adding a keyframe';
       return;
     }
-    const channel = this.activeChannelId ?? this.track.channels[0]?.id ?? null;
+    const channel = this.activeChannelId;
     if (!channel) {
       this.status = 'Choose a channel before adding a keyframe';
       return;
     }
     const own = this.track.keyframes.filter((kf) => kf.channelId === channel);
-    let time = Math.round(this.playheadMs);
-    const spacing = this.spacingLimit();
-    if (!canInsert(own, time, spacing)) {
-      const duration = this.durationMs() || time;
-      const gap = own
-        .map((kf) => kf.timestampMs)
-        .concat([0, duration])
-        .sort((a, b) => a - b)
-        .find((candidate) => canInsert(own, candidate, spacing));
-      if (gap === undefined) {
-        this.status = 'No keyframe: that time is too close on this channel';
-        return;
-      }
-      time = gap;
+    const duration = this.durationMs() || Math.round(this.playheadMs);
+    const time = quantizeProxyFrameTime(this.playheadMs, this.media?.proxy.fps ?? FPS, duration);
+    const existing = own.find((keyframe) => keyframe.timestampMs === time);
+    if (existing) {
+      this.setSelectionState({
+        selectedIds: [existing.id],
+        anchorId: existing.id,
+        primaryId: existing.id,
+      });
+      this.status = 'Selected the keyframe at the playhead';
+      return;
+    }
+    if (!canInsert(own, time, this.spacingLimit())) {
+      this.status = 'No keyframe: that time is too close on this channel';
+      return;
     }
     this.insertAt(time, channel);
   }
@@ -903,32 +1435,109 @@ export class StudioSession {
       .map((kf) => ({ kf, dx: Math.abs(kf.timestampMs * this.pxPerMs - this.scrollX - x) }))
       .sort((a, b) => a.dx - b.dx)[0];
     if (hit && hit.dx <= 12) {
-      this.selection = [hit.kf.id];
+      this.setSelectionState({
+        selectedIds: [hit.kf.id],
+        anchorId: hit.kf.id,
+        primaryId: hit.kf.id,
+      });
       this.status = '1 selected';
     } else {
-      this.selection = [];
+      this.setSelectionState(emptyEditorSelection());
       this.status = '0 selected';
     }
     this.syncPropertyFields();
+    this.syncHistoryContext();
   }
 
-  marquee(x0: number, y0: number, x1: number, y1: number, laneHeight: number): void {
-    if (!this.track) return;
-    const left = Math.min(x0, x1);
-    const right = Math.max(x0, x1);
-    const top = Math.min(y0, y1);
-    const bottom = Math.max(y0, y1);
-    const ids = this.track.keyframes
-      .filter((kf) => {
-        const index = this.track!.channels.findIndex((channel) => channel.id === kf.channelId);
-        const x = kf.timestampMs * this.pxPerMs - this.scrollX;
-        const y = index * laneHeight + laneHeight / 2;
-        return x >= left && x <= right && y >= top && y <= bottom;
-      })
-      .map((kf) => kf.id);
-    this.selection = ids;
-    this.status = `${ids.length} selected`;
+  restoreSelection(state: EditorSelection, activeChannelId = this.activeChannelId): void {
+    this.setSelectionState(pruneEditorSelection(state, this.track?.keyframes ?? []));
+    this.activeChannelId = activeChannelId;
+    this.cancelPendingPointerSelection();
     this.syncPropertyFields();
+    this.syncHistoryContext();
+  }
+
+  marquee(
+    initial: EditorSelection,
+    bounds: { x0: number; y0: number; x1: number; y1: number },
+    mode: 'replace' | 'union' | 'toggle'
+  ): void {
+    if (!this.track) return;
+    const hits = keyframesInMarquee(
+      this.track.keyframes,
+      this.channels.map((channel) => channel.id),
+      bounds,
+      this.pxPerMs
+    );
+    this.restoreSelection(selectEditorMarquee(initial, this.track.keyframes, hits, mode));
+    this.status = `${this.selection.length} selected`;
+  }
+
+  get clipboardAvailable(): boolean {
+    return lightingClipboard != null;
+  }
+
+  copySelection(): void {
+    const payload = this.track && copyKeyframes(this.track, this.selection);
+    if (!payload) {
+      this.status = 'Select keyframes to copy';
+      return;
+    }
+    lightingClipboard = payload;
+    this.status = `${payload.keyframes.length} keyframes copied`;
+  }
+
+  cutSelection(): void {
+    const payload = this.track && copyKeyframes(this.track, this.selection);
+    if (!payload) {
+      this.status = 'Select keyframes to cut';
+      return;
+    }
+    lightingClipboard = payload;
+    this.deleteSelection();
+    this.status = `${payload.keyframes.length} keyframes cut`;
+  }
+
+  pasteSelection(): void {
+    if (!lightingClipboard) {
+      this.status = 'Copy keyframes before pasting';
+      return;
+    }
+    this.placeClipboard(lightingClipboard, 'Pasted');
+  }
+
+  duplicateSelection(): void {
+    const payload = this.track && copyKeyframes(this.track, this.selection);
+    if (payload) this.placeClipboard(payload, 'Duplicated');
+    else this.status = 'Select keyframes to duplicate';
+  }
+
+  private placeClipboard(payload: KeyframeClipboard, label: string): void {
+    if (!this.track) return;
+    const plan = planKeyframePaste(
+      this.track,
+      payload,
+      Math.round(this.playheadMs),
+      this.activeChannelId,
+      this.spacingLimit()
+    );
+    if (!plan.accepted) {
+      this.status = pasteRejectionMessage[plan.reason];
+      return;
+    }
+    const frames = materializeKeyframePaste(plan, this.allocateId)!;
+    const primary = frames.at(-1)!;
+    this.setSelectionState({
+      selectedIds: frames.map((frame) => frame.id),
+      anchorId: frames[0].id,
+      primaryId: primary.id,
+    });
+    this.activeChannelId = primary.channelId;
+    this.edit(
+      { ...this.track, keyframes: [...this.track.keyframes, ...frames] },
+      `${label} ${frames.length} keyframes at ${formatClock(Math.round(this.playheadMs))}`
+    );
+    this.revealNavigationPosition(primary.timestampMs);
   }
 
   deleteSelection(): void {
@@ -941,12 +1550,20 @@ export class StudioSession {
       { ...this.track, keyframes: this.track.keyframes.filter((kf) => !remove.has(kf.id)) },
       'Deleted keyframes'
     );
-    this.selection = [];
+    this.setSelectionState(emptyEditorSelection());
+    this.syncHistoryContext();
   }
 
   zoomKey(key: string, modifier: boolean): void {
-    const oldScale = this.pxPerMs;
-    const next = applyZoomChord(oldScale, key, modifier, this.durationMs() || 1, this.laneWidth);
+    const oldScale = boundedTimelineScale(this.pxPerMs, this.durationMs(), this.laneWidth);
+    const requested = applyZoomChord(
+      oldScale,
+      key,
+      modifier,
+      this.durationMs() || 1,
+      this.laneWidth
+    );
+    const next = boundedTimelineScale(requested, this.durationMs(), this.laneWidth);
     this.pxPerMs = next;
     this.scrollX =
       key === '\\'
@@ -962,22 +1579,112 @@ export class StudioSession {
     this.fit = key === '\\';
   }
 
+  zoomAt(anchorX: number, direction: 1 | -1): void {
+    const oldScale = boundedTimelineScale(this.pxPerMs, this.durationMs(), this.laneWidth);
+    const next = boundedTimelineScale(
+      oldScale * (direction > 0 ? 1.25 : 0.8),
+      this.durationMs(),
+      this.laneWidth
+    );
+    this.scrollX = anchoredScrollAt(
+      oldScale,
+      next,
+      this.scrollX,
+      this.durationMs(),
+      this.laneWidth,
+      anchorX
+    );
+    this.pxPerMs = next;
+    this.fit = false;
+  }
+
   zoomFit(): void {
     this.zoomKey('\\', false);
   }
 
+  zoomFitSelection(): boolean {
+    const selected =
+      this.track?.keyframes.filter((frame) => this.selection.includes(frame.id)) ?? [];
+    if (!selected.length) return false;
+    const start = Math.min(...selected.map((frame) => frame.timestampMs));
+    const end = Math.max(...selected.map((frame) => frame.timestampMs));
+    const duration = Math.max(1, this.durationMs());
+    const span = Math.max(end - start, Math.min(500, duration));
+    const padding = Math.max(250, span * 0.15);
+    const windowStart = Math.max(0, start - padding);
+    const windowEnd = Math.min(duration, Math.max(end + padding, windowStart + span + 2 * padding));
+    const width = Math.max(1, this.laneWidth);
+    this.pxPerMs = boundedTimelineScale(
+      width / Math.max(1, windowEnd - windowStart),
+      duration,
+      width
+    );
+    this.scrollX = Math.max(
+      0,
+      Math.min(duration * this.pxPerMs - width, windowStart * this.pxPerMs)
+    );
+    this.fit = false;
+    return true;
+  }
+
+  zoomFrameDetail(): void {
+    const oldScale = boundedTimelineScale(this.pxPerMs, this.durationMs(), this.laneWidth);
+    const fps = this.media?.proxy.fps;
+    const next = boundedTimelineScale(
+      (Number.isFinite(fps) && fps! > 0 ? fps! : FPS) / 1000,
+      this.durationMs(),
+      this.laneWidth
+    );
+    this.pxPerMs = next;
+    this.scrollX = anchoredScroll(
+      this.playheadMs,
+      oldScale,
+      next,
+      this.scrollX,
+      this.durationMs(),
+      this.laneWidth
+    );
+    this.fit = false;
+  }
+
   setSpacing(raw: string): void {
     const value = Number(raw);
-    if (!acceptSpacing(value)) {
-      this.spacingError = 'Use 100, 200, or 1000';
+    if (value !== 0 && !acceptSpacing(value)) {
+      this.spacingError = 'Use no extra spacing, 100, 200, or 1000';
       return;
     }
     this.spacingError = '';
     this.minSpacingMs = value;
+    try {
+      localStorage.setItem('openlightfx.editor.min-spacing-ms', String(value));
+    } catch {
+      // A workspace preference is not an authored write.
+    }
   }
 
   spacingLimit(): number {
-    return this.snapToSpacing ? this.minSpacingMs : 0;
+    return this.minSpacingMs;
+  }
+
+  setSnapEnabled(enabled: boolean): void {
+    this.snapEnabled = enabled;
+    try {
+      localStorage.setItem('openlightfx.editor.snap-enabled', String(enabled));
+    } catch {
+      // Local workspace preferences are best-effort and must not affect authoring.
+    }
+  }
+
+  restoreWorkspacePreferences(): void {
+    try {
+      const saved = localStorage.getItem('openlightfx.editor.snap-enabled');
+      if (saved === 'true' || saved === 'false') this.snapEnabled = saved === 'true';
+      const spacing = localStorage.getItem('openlightfx.editor.min-spacing-ms');
+      if (spacing != null && [0, 100, 200, 1000].includes(Number(spacing)))
+        this.minSpacingMs = Number(spacing);
+    } catch {
+      // Storage can be unavailable in private or embedded browsers.
+    }
   }
 
   setDefaultColor(channelId: string, raw: string): void {
@@ -1003,6 +1710,18 @@ export class StudioSession {
       ...this.track,
       channels: this.track.channels.map((channel) =>
         channel.id === channelId ? { ...channel, defaultBrightness: brightness } : channel
+      ),
+    });
+  }
+
+  setColorComponent(component: 'r' | 'g' | 'b', value: number): void {
+    if (!this.track || !Number.isInteger(value) || value < 0 || value > 255) return;
+    const ids = new Set(this.selection);
+    if (!ids.size) return;
+    this.edit({
+      ...(this.draftTrack ?? this.track),
+      keyframes: (this.draftTrack ?? this.track).keyframes.map((key) =>
+        ids.has(key.id) ? { ...key, color: { ...key.color, [component]: value } } : key
       ),
     });
   }
@@ -1036,7 +1755,7 @@ export class StudioSession {
     const ids = new Set(this.selection);
     if (ids.size === 0) return;
     this.edit(
-      patchKeyframes(this.track, [...ids], {
+      patchKeyframes(this.draftTrack ?? this.track, [...ids], {
         colorMode: 'COLOR_TEMPERATURE',
         colorTemperature: parsed.kelvin,
       })
@@ -1054,50 +1773,100 @@ export class StudioSession {
 
   setBrightness(raw: string): void {
     const brightness = Number(raw);
-    if (!this.track || !Number.isFinite(brightness) || brightness < 0 || brightness > 100) return;
+    if (
+      !raw.trim() ||
+      !this.track ||
+      !Number.isInteger(brightness) ||
+      brightness < 0 ||
+      brightness > 100
+    )
+      return;
     const ids = new Set(this.selection);
     if (!ids.size) return;
-    this.edit(patchKeyframes(this.track, [...ids], { brightness }));
+    this.edit(patchKeyframes(this.draftTrack ?? this.track, [...ids], { brightness }));
   }
 
   setTransition(raw: string): void {
     const transitionMs = Number(raw);
-    if (!this.track || !Number.isInteger(transitionMs) || transitionMs < 0) return;
+    if (!raw.trim() || !this.track || !Number.isInteger(transitionMs) || transitionMs < 0) return;
     const ids = new Set(this.selection);
     if (!ids.size) return;
-    this.edit(patchKeyframes(this.track, [...ids], { transitionMs }));
+    if (this.track.keyframes.some((key) => ids.has(key.id) && transitionMs > key.timestampMs))
+      return;
+    this.edit(patchKeyframes(this.draftTrack ?? this.track, [...ids], { transitionMs }));
   }
 
   setInterpolation(interpolation: 'STEP' | 'LINEAR'): void {
     if (!this.track || !this.selection.length) return;
     const ids = new Set(this.selection);
-    this.edit(patchKeyframes(this.track, this.selection, { interpolation }));
+    this.edit(patchKeyframes(this.draftTrack ?? this.track, this.selection, { interpolation }));
+  }
+
+  private nudgeRun = false;
+
+  finishNudgeRun(cancel = false): void {
+    if (!this.nudgeRun) return;
+    this.nudgeRun = false;
+    if (cancel) this.cancelEdit();
+    else this.commitEdit();
+  }
+
+  nudgeSelection(direction: -1 | 1, frames = 1, grouped = false): void {
+    if (!this.track || !this.selection.length) {
+      this.status = 'Select one or more keyframes to nudge';
+      return;
+    }
+    if (grouped && !this.nudgeRun) {
+      this.beginEdit('Nudge keyframes');
+      this.nudgeRun = true;
+    }
+    const base = this.draftTrack ?? this.track;
+    const fps = this.media?.proxy.fps ?? FPS;
+    const move = planSharedKeyframeMove(indexKeyframesForMove(base.keyframes), {
+      ids: this.selection,
+      deltaMs: Math.round((1000 / fps) * frames * direction),
+      durationMs: this.durationMs(),
+      spacingMs: this.spacingLimit(),
+      framePolicy: { kind: 'proxy-frame', fps, anchorId: this.primarySelectionId ?? undefined },
+    });
+    if (move.status === 'blocked' || move.status === 'no-op') {
+      this.status = move.reason || 'Nudge blocked';
+      return;
+    }
+    this.edit(applyKeyframeMovePlan(base, move), 'Nudge keyframes');
   }
 
   moveKeyframe(id: string, requestedTimeMs: number): void {
     if (!this.track || !Number.isFinite(requestedTimeMs)) return;
     const current = this.track.keyframes.find((keyframe) => keyframe.id === id);
     if (!current) return;
-    const frameMs = frameStepMs(this.media?.proxy.fps || FPS);
-    let timestampMs = Math.round(requestedTimeMs / frameMs) * frameMs;
-    if (Math.abs(timestampMs - this.playheadMs) <= 100)
-      timestampMs = Math.round(this.playheadMs / frameMs) * frameMs;
-    timestampMs = Math.min(Math.max(0, Math.round(timestampMs)), this.durationMs());
-    const sameChannel = this.track.keyframes.filter(
-      (keyframe) => keyframe.channelId === current.channelId && keyframe.id !== id
+    let timestampMs = quantizeProxyFrameTime(
+      requestedTimeMs,
+      this.media?.proxy.fps ?? FPS,
+      this.durationMs()
     );
-    if (!dragKeepsOrder(current, sameChannel, timestampMs, this.spacingLimit())) {
+    if (Math.abs(timestampMs - this.playheadMs) <= 100)
+      timestampMs = quantizeProxyFrameTime(
+        this.playheadMs,
+        this.media?.proxy.fps ?? FPS,
+        this.durationMs()
+      );
+    const move = planSharedKeyframeMove(indexKeyframesForMove(this.track.keyframes), {
+      ids: [id],
+      deltaMs: timestampMs - current.timestampMs,
+      durationMs: this.durationMs(),
+      spacingMs: this.spacingLimit(),
+      framePolicy: { kind: 'proxy-frame', fps: this.media?.proxy.fps ?? FPS, anchorId: id },
+    });
+    // Legacy pointer commands rejected a crossing request instead of showing a clamped draft.
+    if (move.status === 'blocked' || move.status === 'clamped') {
       this.status = 'Keyframes cannot cross or overlap on the same lane';
       return;
     }
-    this.edit({
-      ...this.track,
-      keyframes: this.track.keyframes.map((keyframe) =>
-        keyframe.id === id ? { ...keyframe, timestampMs } : keyframe
-      ),
-    });
-    this.selection = [id];
+    if (move.status === 'no-op') return;
+    this.edit(applyKeyframeMovePlan(this.track, move));
     this.activeChannelId = current.channelId;
+    this.syncHistoryContext();
   }
 
   setKeyframeTime(raw: string): void {
@@ -1119,19 +1888,18 @@ export class StudioSession {
       this.status = 'Keyframe time must be inside the movie';
       return;
     }
-    const sameChannel = this.track.keyframes.filter(
-      (keyframe) => keyframe.channelId === current.channelId && keyframe.id !== id
-    );
-    if (!canInsert(sameChannel, timestampMs, this.spacingLimit())) {
-      this.status = 'That time is too close to another keyframe on this channel';
+    const move = planAbsoluteKeyframeTime(indexKeyframesForMove(this.track.keyframes), {
+      id,
+      timeMs: timestampMs,
+      durationMs: this.durationMs(),
+      spacingMs: this.spacingLimit(),
+    });
+    if (move.status === 'blocked') {
+      this.status = move.reason;
       return;
     }
-    this.edit({
-      ...this.track,
-      keyframes: this.track.keyframes.map((keyframe) =>
-        keyframe.id === id ? { ...keyframe, timestampMs } : keyframe
-      ),
-    });
+    if (move.status === 'no-op') return;
+    this.edit(applyKeyframeMovePlan(this.track, move));
   }
 
   setLayout(layout: string): void {
@@ -1153,9 +1921,8 @@ export class StudioSession {
     )
       return;
     this.edit(plan.track);
-    this.selection = this.selection.filter((id) =>
-      this.track!.keyframes.some((keyframe) => keyframe.id === id)
-    );
+    this.pruneSelection();
+    this.syncHistoryContext();
   }
 
   addChannelById(id: string): void {
@@ -1181,6 +1948,10 @@ export class StudioSession {
     this.edit({ ...this.track, channels });
   }
 
+  toggleOverlay(): void {
+    this.overlayVisible = !this.overlayVisible;
+  }
+
   toggleSolo(channelId: string): void {
     this.solo = { ...this.solo, [channelId]: !this.solo[channelId] };
   }
@@ -1197,9 +1968,10 @@ export class StudioSession {
   }
 
   sampleRgb(channelId: string): string {
-    if (!this.track) return '0,0,0';
+    const track = this.draftTrack ?? this.track;
+    if (!track) return '0,0,0';
     const sample = overlaySample(
-      this.track.keyframes.filter((kf) => kf.channelId === channelId),
+      track.keyframes.filter((kf) => kf.channelId === channelId),
       this.playheadMs
     );
     return displayedRgb(sample);
@@ -1253,9 +2025,17 @@ export class StudioSession {
   }
 
   pickFrameColor(color: { r: number; g: number; b: number }): void {
-    this.selection = this.frameSelection.filter((id) =>
-      this.track?.keyframes.some((frame) => frame.id === id)
+    this.setSelectionState(
+      pruneEditorSelection(
+        {
+          selectedIds: this.frameSelection,
+          anchorId: this.selectionAnchorId,
+          primaryId: this.primarySelectionId,
+        },
+        this.track?.keyframes ?? []
+      )
     );
+    this.syncHistoryContext();
     this.applyColor(color);
     this.cancelEyedrop();
     this.status = 'Picked color from movie';
@@ -1292,7 +2072,8 @@ export class StudioSession {
   }
 
   async discardEdits(): Promise<void> {
-    this.dirty = false;
+    this.savedCheckpoint = this.currentCheckpoint();
+    this.updateDirty();
     await this.persist(false);
   }
 
@@ -1316,23 +2097,30 @@ export class StudioSession {
 
   async saveAsNewTrack(): Promise<void> {
     if (!this.track || this.saving || !this.canManage) return;
+    // Retire recovery under the conflicted identity before moving this document to a new track.
+    await this.persist(false);
     this.trackId = `${slug(this.track.metadata.title).slice(0, 48)}-${crypto.randomUUID().slice(0, 8)}`;
     this.trackUpdatedAt = '';
     this.saveConflict = false;
-    this.dirty = true;
+    this.updateDirty();
     await this.save();
   }
 
-  private saveError(message: string): void {
+  private saveError(message: string, partiallySaved = false): void {
     this.alert = message;
-    this.status = 'Save failed';
+    this.status = partiallySaved ? 'Partially saved' : 'Save failed';
     const faulty = this.track?.keyframes
       .toSorted((a, b) => b.id.length - a.id.length)
       .find((frame) => message.includes(frame.id));
     if (faulty) {
-      this.selection = [faulty.id];
+      this.setSelectionState({
+        selectedIds: [faulty.id],
+        anchorId: faulty.id,
+        primaryId: faulty.id,
+      });
       this.activeChannelId = faulty.channelId;
       this.syncPropertyFields();
+      this.syncHistoryContext();
     }
   }
 
@@ -1342,8 +2130,23 @@ export class StudioSession {
     this.importWarning = false;
   }
 
+  private normalizeCurrentForSave(): Track {
+    const upgraded = upgradeLegacyTrackLayout(this.track!);
+    const track = { ...upgraded, safety: computeSafety(upgraded) };
+    const current = this.history.current;
+    if (current) this.history.replaceCurrent({ ...current, track });
+    this.track = track;
+    this.syncPropertyFields();
+    this.updateDirty();
+    return track;
+  }
+
   async save(): Promise<void> {
     if (this.saving) return;
+    if (this.hosted && this.hostedSaveBlockedReason) {
+      this.saveError(this.hostedSaveBlockedReason);
+      return;
+    }
     if (this.hosted && !this.canManage) {
       this.saveError('Only an Emby administrator can save');
       return;
@@ -1352,18 +2155,27 @@ export class StudioSession {
       this.saveError('The movie duration is unknown');
       return;
     }
+    if (this.hosted && !this.dirty) {
+      this.status = 'Saved';
+      return;
+    }
+
     this.saving = true;
     this.status = 'Saving…';
+    let trackWritten = false;
     try {
-      const upgraded = upgradeLegacyTrackLayout(this.track);
-      if (upgraded !== this.track) this.track = upgraded;
-      const source = this.track;
-      const withSafety = { ...source, safety: computeSafety(source) };
+      const itemId = this.item?.itemId ?? '';
+      const trackId = this.trackId;
+      const revision = this.history.current?.revision ?? this.newRevision();
+      const withSafety = this.normalizeCurrentForSave();
+      const trackSnapshot = JSON.parse(JSON.stringify(withSafety)) as Track;
+      const sidecarSnapshot = JSON.parse(JSON.stringify(this.sidecar())) as ProjectSidecar;
+      const checkpoint: SaveCheckpoint = { itemId, trackId, revision };
       const plan = planHostedSave({
-        track: withSafety,
-        sidecar: this.sidecar(),
-        itemId: this.item?.itemId ?? '',
-        trackId: this.trackId,
+        track: trackSnapshot,
+        sidecar: sidecarSnapshot,
+        itemId,
+        trackId,
         durationKnown: this.durationKnown,
       });
       if (plan.blocked) {
@@ -1371,17 +2183,17 @@ export class StudioSession {
         return;
       }
       if (!this.hosted) {
-        this.download(withSafety);
+        this.download(trackSnapshot);
       } else {
         for (const request of plan.requests) {
           const isTrack = request.path.includes('/Tracks/');
           const response = isTrack
             ? await putBytes(
                 request.path,
-                encodeTrack(withSafety),
+                encodeTrack(trackSnapshot),
                 this.trackUpdatedAt ? { 'If-Match': this.trackUpdatedAt } : {}
               )
-            : await putJson(request.path, sidecarDocument(this.sidecar()));
+            : await putJson(request.path, sidecarDocument(sidecarSnapshot));
           if (!response.ok) {
             const raw = await response.text();
             let message = raw;
@@ -1392,36 +2204,43 @@ export class StudioSession {
               /* Plain-text plugin errors are valid. */
             }
             this.saveConflict = response.status === 409;
-            this.saveError(message || `Save failed (${response.status})`);
+            this.saveError(message || `Save failed (${response.status})`, trackWritten);
             return;
           }
           if (isTrack) {
-            // The plugin returns a fresh concurrency token after every successful write.
+            trackWritten = true;
+            // Keep the new token even if the subsequent sidecar write fails.
             const body = await response.text();
-            if (body)
-              this.trackUpdatedAt =
-                JSON.parse(body).updatedAt ?? JSON.parse(body).UpdatedAt ?? this.trackUpdatedAt;
+            if (body) {
+              try {
+                const result = JSON.parse(body);
+                this.trackUpdatedAt = result.updatedAt ?? result.UpdatedAt ?? this.trackUpdatedAt;
+                const savedAt = Date.parse(this.trackUpdatedAt);
+                if (Number.isFinite(savedAt)) this.serverUpdatedAt = savedAt;
+              } catch {
+                // An empty or unrecognized response does not invalidate a successful write.
+              }
+            }
           }
         }
-      }
-      if (this.track === source) {
-        this.track = withSafety;
-        this.dirty = false;
+        this.savedCheckpoint = checkpoint;
+        this.updateDirty();
       }
       this.saveConflict = false;
       this.alert = '';
       this.status = 'Saved';
       await this.persist(this.dirty);
-      if (this.item) {
-        history.replaceState(
-          null,
-          '',
-          `#/edit/${encodeURIComponent(this.item.itemId)}/${encodeURIComponent(this.trackId)}`
-        );
-        window.dispatchEvent(new Event('olfx-editor-route-replaced'));
-      }
+      history.replaceState(
+        null,
+        '',
+        `#/edit/${encodeURIComponent(itemId)}/${encodeURIComponent(trackId)}`
+      );
+      window.dispatchEvent(new Event('olfx-editor-route-replaced'));
     } catch (error) {
-      this.saveError((error as Error).message || 'Save could not reach Emby. Try again.');
+      this.saveError(
+        (error as Error).message || 'Save could not reach Emby. Try again.',
+        trackWritten
+      );
     } finally {
       this.saving = false;
     }
@@ -1465,13 +2284,59 @@ export class StudioSession {
     };
   }
 
+  async retryProjectSidecarLoad(): Promise<void> {
+    if (!this.item || !this.track || !this.sidecarLoadError || this.saving) return;
+    this.sidecarReady = false;
+    const itemId = this.item.itemId;
+    const trackId = this.trackId;
+    const adoption = this.adoptionSequence;
+    this.sidecarLoadAbort?.abort();
+    const controller = new AbortController();
+    this.sidecarLoadAbort = controller;
+    try {
+      const loaded = await fetchProjectSidecar(itemId, trackId, controller.signal);
+      if (
+        controller.signal.aborted ||
+        adoption !== this.adoptionSequence ||
+        this.item?.itemId !== itemId ||
+        this.trackId !== trackId
+      )
+        return;
+      this.history.mapSnapshots((snapshot) =>
+        snapshot ? { ...snapshot, sidecar: loaded } : snapshot
+      );
+      this.transaction.mapSnapshots((snapshot) => ({ ...snapshot, sidecar: loaded }));
+      this.sidecarState = loaded;
+      this.sidecarLoadError = '';
+      this.sidecarReady = true;
+      this.alert = '';
+      this.status = 'Project loaded';
+      this.updateDirty();
+      await this.persist(this.dirty);
+    } catch (error) {
+      if (!controller.signal.aborted && adoption === this.adoptionSequence) {
+        this.sidecarReady = false;
+        this.sidecarLoadError =
+          error instanceof ProjectSidecarLoadError
+            ? error.message
+            : (error as Error).message || 'Project sidecar could not be loaded';
+      }
+    } finally {
+      if (this.sidecarLoadAbort === controller) this.sidecarLoadAbort = null;
+    }
+  }
+
   private sidecar(): ProjectSidecar {
     return sidecarDocument({
-      version: 1,
+      ...(this.sidecarState ?? {
+        version: 1 as const,
+        itemId: this.item?.itemId ?? '',
+        trackId: this.trackId,
+        sceneMarkers: [],
+        channelGroups: [],
+      }),
       itemId: this.item?.itemId ?? '',
       trackId: this.trackId,
-      sceneMarkers: [],
-      channelGroups: [],
     });
   }
 
@@ -1481,20 +2346,31 @@ export class StudioSession {
   }
 
   private selectedKeyframes(): Keyframe[] {
-    const ids = new Set(this.selection);
-    return this.track?.keyframes.filter((kf) => ids.has(kf.id)) ?? [];
+    const byId = new Map((this.track?.keyframes ?? []).map((frame) => [frame.id, frame]));
+    const primary = this.primarySelectionId ? byId.get(this.primarySelectionId) : undefined;
+    return [
+      ...(primary ? [primary] : []),
+      ...this.selection
+        .filter((id) => id !== this.primarySelectionId)
+        .flatMap((id) => {
+          const frame = byId.get(id);
+          return frame ? [frame] : [];
+        }),
+    ];
   }
 
   private applyColor(color: { r: number; g: number; b: number }): void {
     if (!this.track || this.selection.length === 0) return;
     const ids = new Set(this.selection);
+    const base = this.draftTrack ?? this.track;
     this.edit({
-      ...this.track,
-      keyframes: this.track.keyframes.map((kf) =>
+      ...base,
+      keyframes: base.keyframes.map((kf) =>
         ids.has(kf.id) ? { ...kf, colorMode: 'RGB', color } : kf
       ),
     });
-    this.rememberColor(color);
+    if (this.transaction.active) this.draftRecentColor = color;
+    else this.rememberColor(color);
   }
 
   private rememberColor(color: { r: number; g: number; b: number }): void {
@@ -1503,21 +2379,82 @@ export class StudioSession {
       0,
       16
     );
-    while (this.historyColors.length < 16) this.historyColors.push('#000000');
+  }
+
+  private setSelectionState(state: EditorSelection): void {
+    this.selection = [...state.selectedIds];
+    this.selectionAnchorId = state.anchorId;
+    this.primarySelectionId = state.primaryId;
+  }
+
+  private pruneSelection(): void {
+    this.setSelectionState(pruneEditorSelection(this.selectionState, this.track?.keyframes ?? []));
+    this.pendingPointerSelectionId = null;
+    this.syncPropertyFields();
   }
 
   selectKeyframe(id: string, mode: 'replace' | 'extend' | 'toggle' = 'replace'): void {
-    const frame = this.track?.keyframes.find((frame) => frame.id === id);
+    const frame = this.track?.keyframes.find((candidate) => candidate.id === id);
     if (!frame) return;
-    this.selection =
-      mode === 'replace'
-        ? [id]
-        : mode === 'toggle' && this.selection.includes(id)
-          ? this.selection.filter((value) => value !== id)
-          : [...new Set([...this.selection, id])];
+    this.pendingPointerSelectionId = null;
+    this.setSelectionState(
+      selectEditorKeyframe(
+        this.selectionState,
+        this.track?.keyframes ?? [],
+        id,
+        mode === 'extend' ? 'range' : mode
+      )
+    );
     this.activeChannelId = frame.channelId;
+    this.syncHistoryContext();
     this.hexError = '';
     this.kelvinError = '';
+    this.syncPropertyFields();
+  }
+
+  beginPointerSelection(id: string, mode: 'replace' | 'extend' | 'toggle' = 'replace'): void {
+    if (mode === 'replace' && this.selection.length > 1 && this.selection.includes(id)) {
+      this.pendingPointerSelectionId = id;
+      return;
+    }
+    this.selectKeyframe(id, mode);
+  }
+
+  resolvePendingPointerSelection(id: string, dragged: boolean): void {
+    if (this.pendingPointerSelectionId !== id) return;
+    this.pendingPointerSelectionId = null;
+    if (!dragged) {
+      this.selectKeyframe(id, 'replace');
+      return;
+    }
+    this.setSelectionState({
+      selectedIds: [...this.selection],
+      anchorId: id,
+      primaryId: id,
+    });
+    this.activeChannelId =
+      this.track?.keyframes.find((frame) => frame.id === id)?.channelId ?? this.activeChannelId;
+    this.syncHistoryContext();
+    this.syncPropertyFields();
+  }
+
+  cancelPendingPointerSelection(): void {
+    this.pendingPointerSelectionId = null;
+  }
+
+  selectAllKeyframes(): void {
+    this.pendingPointerSelectionId = null;
+    this.setSelectionState(
+      selectAllEditorKeyframes(this.selectionState, this.track?.keyframes ?? [])
+    );
+    this.syncHistoryContext();
+    this.syncPropertyFields();
+  }
+
+  clearSelection(): void {
+    this.pendingPointerSelectionId = null;
+    this.setSelectionState(emptyEditorSelection());
+    this.syncHistoryContext();
     this.syncPropertyFields();
   }
 
@@ -1545,50 +2482,129 @@ export class StudioSession {
       : '—';
   }
 
-  private async openDb(): Promise<void> {
-    this.db = await new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, 1);
-      request.onupgradeneeded = () => {
-        const db = request.result;
-        if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
-      };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
+  private async openDb(): Promise<boolean> {
+    if (this.db) return true;
+    try {
+      this.db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, 1);
+        request.onupgradeneeded = () => {
+          const db = request.result;
+          if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+        request.onblocked = () => reject(new Error('IndexedDB open was blocked'));
+      });
+      return true;
+    } catch {
+      this.recoveryUnavailable = true;
+      return false;
+    }
   }
 
   private async persist(dirty: boolean): Promise<void> {
-    if (!this.db || !this.track || !this.item) return;
+    if (!this.track || !this.item) return;
+    const itemId = this.item.itemId;
+    const trackId = this.trackId;
     const record = makeCrashRecord({
-      key: crashKey(this.item.itemId, this.trackId),
+      key: crashKey(itemId, trackId),
+      itemId,
+      trackId,
+      revision: this.history.current?.revision ?? this.newRevision(),
       track: JSON.parse(JSON.stringify(this.track)),
-      sidecar: this.sidecar(),
+      sidecar: JSON.parse(JSON.stringify(this.sidecar())) as ProjectSidecar,
       playheadMs: this.playheadMs,
       scrollX: this.scrollX,
       savedAt: Date.now(),
       dirty,
     });
+    this.recoveryQueue.set(record.key, record);
+    const finished = new Promise<void>((resolve) => this.recoveryWaiters.push(resolve));
+    void this.flushRecoveryQueue();
+    await finished;
+  }
+
+  private async flushRecoveryQueue(): Promise<void> {
+    if (this.recoveryWriting) return;
+    if (!this.db) {
+      this.recoveryWaiters.splice(0).forEach((resolve) => resolve());
+      return;
+    }
+    this.recoveryWriting = true;
     try {
-      await new Promise<void>((resolve, reject) => {
-        const tx = this.db!.transaction(STORE, 'readwrite');
-        tx.objectStore(STORE).put(record, record.key);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-      });
-      document.body.dataset.autosave = dirty ? 'dirty' : 'clean';
-    } catch (error) {
-      document.body.dataset.autosave = error instanceof Error ? error.message : 'error';
+      while (this.recoveryQueue.size > 0) {
+        const [key, record] = this.recoveryQueue.entries().next().value as [string, CrashRecord];
+        this.recoveryQueue.delete(key);
+        try {
+          await new Promise<void>((resolve, reject) => {
+            const tx = this.db!.transaction(STORE, 'readwrite');
+            tx.objectStore(STORE).put(record, record.key);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+            tx.onabort = () => reject(tx.error ?? new Error('Recovery write aborted'));
+          });
+          document.body.dataset.autosave = record.dirty ? 'dirty' : 'clean';
+        } catch {
+          if (!this.recoveryQueue.has(key)) this.recoveryQueue.set(key, record);
+          this.db?.close();
+          this.db = null;
+          this.recoveryUnavailable = true;
+          document.body.dataset.autosave = 'error';
+          break;
+        }
+      }
+    } finally {
+      this.recoveryWriting = false;
+      const waiters = this.recoveryWaiters.splice(0);
+      waiters.forEach((resolve) => resolve());
     }
   }
 
   private async readCrash(key: string): Promise<CrashRecord | null> {
     if (!this.db) return null;
-    return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(STORE, 'readonly');
-      const request = tx.objectStore(STORE).get(key);
-      request.onsuccess = () => resolve((request.result as CrashRecord | undefined) ?? null);
-      request.onerror = () => reject(request.error);
-    });
+    try {
+      return await new Promise((resolve, reject) => {
+        const tx = this.db!.transaction(STORE, 'readonly');
+        const request = tx.objectStore(STORE).get(key);
+        request.onsuccess = () => resolve((request.result as CrashRecord | undefined) ?? null);
+        request.onerror = () => reject(request.error);
+        tx.onabort = () => reject(tx.error ?? new Error('Recovery read aborted'));
+      });
+    } catch {
+      this.db?.close();
+      this.db = null;
+      this.recoveryUnavailable = true;
+      return null;
+    }
+  }
+
+  async retryLocalRecovery(): Promise<void> {
+    if (!(await this.openDb())) return;
+    // A prior failure remains visible until this retry proves reads and writes work.
+    this.recoveryUnavailable = false;
+    try {
+      if (this.item && this.track) {
+        const key = crashKey(this.item.itemId, this.trackId);
+        const crash = await this.readCrash(key);
+        if (this.recoveryUnavailable) return;
+        if (
+          !this.dirty &&
+          chooseLoadSource(this.serverUpdatedAt, crash, {
+            itemId: this.item.itemId,
+            trackId: this.trackId,
+          }) === 'crash'
+        ) {
+          await this.adopt(this.track, this.item.itemId, this.trackId, false, this.bootToken);
+          if (this.recoveryUnavailable) return;
+        }
+        await this.persist(this.dirty);
+      } else {
+        await this.flushRecoveryQueue();
+      }
+      if (this.recoveryQueue.size === 0) this.recoveryUnavailable = false;
+    } catch {
+      this.recoveryUnavailable = true;
+    }
   }
 
   private measureFrames(): void {

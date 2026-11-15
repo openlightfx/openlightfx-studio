@@ -1,4 +1,6 @@
 import { libraryItemFromApi } from './items';
+import { parseProjectSidecar } from '$lib/domain/save';
+import type { ProjectSidecar } from '$lib/domain/types';
 import type {
   Bulb,
   LibraryItem,
@@ -128,6 +130,61 @@ async function resolveStudioToken(): Promise<string | null> {
 export async function studioAuthHeaders(): Promise<Record<string, string>> {
   const key = await resolveStudioToken();
   return key ? { 'X-Emby-Token': key } : {};
+}
+
+export class ProjectSidecarLoadError extends Error {
+  constructor(
+    message: string,
+    readonly status: number | null,
+    readonly invalid = false
+  ) {
+    super(message);
+    this.name = 'ProjectSidecarLoadError';
+  }
+}
+
+export async function fetchProjectSidecar(
+  itemId: string,
+  trackId: string,
+  signal?: AbortSignal
+): Promise<ProjectSidecar> {
+  const query = new URLSearchParams({ itemId });
+  const response = await send(
+    `/OpenLightFX/Studio/Projects/${encodeURIComponent(trackId)}?${query}`,
+    { signal }
+  );
+  if (response.status === 404)
+    return {
+      version: 1,
+      itemId,
+      trackId,
+      sceneMarkers: [],
+      channelGroups: [],
+    };
+  if (!response.ok)
+    throw new ProjectSidecarLoadError(
+      `Project sidecar could not be loaded (${response.status})`,
+      response.status
+    );
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    throw new ProjectSidecarLoadError(
+      'Project sidecar response is not valid JSON',
+      response.status,
+      true
+    );
+  }
+  try {
+    return parseProjectSidecar(body, { itemId, trackId });
+  } catch (error) {
+    throw new ProjectSidecarLoadError(
+      (error as Error).message || 'Project sidecar is invalid',
+      response.status,
+      true
+    );
+  }
 }
 
 async function send(path: string, init: RequestInit = {}): Promise<Response> {

@@ -1,4 +1,6 @@
 import { expect, type Page } from '@playwright/test';
+import fs from 'node:fs';
+import { decodeTrack } from '../../src/lib/domain';
 import { requirement } from '../harness/requirement';
 import { installBackend, openFixtureEditor, lanePoint, menu } from '../harness/browser';
 
@@ -111,15 +113,30 @@ for (const screen of ['bulbs', 'rooms', 'library', 'movie/42']) {
 }
 
 requirement(
-  'SHELL-004 @browser editor selection menus and dialogs share the neutral foundation',
+  'ED2-003 @browser SHELL-004 editor selection menus and dialogs share the neutral foundation',
   async ({ page }) => {
     await openFixtureEditor(page);
     await lanePoint(page, 'Left', 0.3);
-    await expect(page.getByLabel('Hex', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('Hex', { exact: true })).toHaveValue('ff0000');
+    await expect(page.getByLabel('Keyframe time', { exact: true })).toHaveValue('00:03.000');
+    await expect(page.getByLabel('RGB color')).toBeVisible();
+    await expect(page.getByLabel('R', { exact: true })).toHaveValue('255');
+    await expect(page.getByLabel('G', { exact: true })).toHaveValue('0');
+    await expect(page.getByLabel('B', { exact: true })).toHaveValue('0');
     await expect(page).toHaveScreenshot('foundation-keyframe.png', {
       animations: 'disabled',
       mask: [page.locator('video')],
     });
+    await page.getByRole('button', { name: 'File', exact: true }).click();
+    const download = page.waitForEvent('download');
+    await page.getByRole('menuitem', { name: /Export/ }).click();
+    const file = await download;
+    expect(decodeTrack(fs.readFileSync((await file.path())!)).keyframes).toContainEqual(
+      expect.objectContaining({
+        timestampMs: 3000,
+        color: { r: 255, g: 0, b: 0 },
+      })
+    );
     await page.getByRole('button', { name: 'File', exact: true }).click();
     await expect(page.getByRole('menu')).toBeVisible();
     await expect(page).toHaveScreenshot('foundation-file-menu.png', {
@@ -164,6 +181,9 @@ for (const screen of ['bulbs', 'rooms', 'library', 'movie/42', 'edit/42/proxy-fi
     if (screen.startsWith('edit/')) {
       await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeEnabled();
       await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeInViewport();
+      for (const name of ['Zoom out', 'Zoom in', 'Fit movie', 'Fit selection', 'Frame detail']) {
+        await expect(page.getByRole('button', { name, exact: true })).toBeInViewport();
+      }
     } else {
       await expect(page.locator('nav [aria-current="page"]')).toBeVisible();
       if (screen === 'rooms')

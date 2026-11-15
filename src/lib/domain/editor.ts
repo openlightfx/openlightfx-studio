@@ -83,6 +83,50 @@ export function displayedRgb(sample: Pick<Sample, 'r' | 'g' | 'b' | 'brightness'
     .join(',');
 }
 
+export const MIN_TIMELINE_SCALE = 0.0001;
+export const MAX_TIMELINE_SCALE = 2;
+/** Cap the physical timeline width so long movies remain scrollable in browser engines. */
+export const MAX_TIMELINE_CONTENT_WIDTH = 10_000_000;
+
+export function boundedTimelineScale(
+  scale: number,
+  durationMs?: number,
+  viewportWidth?: number
+): number {
+  let minimum = MIN_TIMELINE_SCALE;
+  let maximum = MAX_TIMELINE_SCALE;
+  if (
+    Number.isFinite(durationMs) &&
+    durationMs! > 0 &&
+    Number.isFinite(viewportWidth) &&
+    viewportWidth! > 0
+  ) {
+    minimum = Math.min(minimum, viewportWidth! / durationMs!);
+    maximum = Math.min(maximum, MAX_TIMELINE_CONTENT_WIDTH / durationMs!);
+    maximum = Math.max(minimum, maximum);
+  }
+  return Number.isFinite(scale) ? Math.max(minimum, Math.min(maximum, scale)) : minimum;
+}
+
+/** Keep the content-time under a viewport coordinate fixed, subject to scroll bounds. */
+export function anchoredScrollAt(
+  oldScale: number,
+  newScale: number,
+  oldScroll: number,
+  durationMs: number,
+  viewportWidth: number,
+  anchorX: number
+): number {
+  const duration = Number.isFinite(durationMs) ? Math.max(0, durationMs) : 0;
+  const width = Number.isFinite(viewportWidth) ? Math.max(0, viewportWidth) : 0;
+  const old = boundedTimelineScale(oldScale, duration, width);
+  const next = boundedTimelineScale(newScale, duration, width);
+  const scroll = Number.isFinite(oldScroll) ? Math.max(0, oldScroll) : 0;
+  const x = Number.isFinite(anchorX) ? anchorX : width / 2;
+  const contentTime = (scroll + x) / old;
+  return Math.max(0, Math.min(Math.max(0, duration * next - width), contentTime * next - x));
+}
+
 export function anchoredScroll(
   playheadMs: number,
   oldScale: number,
@@ -91,9 +135,15 @@ export function anchoredScroll(
   durationMs: number,
   viewportWidth: number
 ): number {
-  const anchor = playheadMs * oldScale - oldScroll;
-  return Math.max(
-    0,
-    Math.min(durationMs * newScale - viewportWidth, playheadMs * newScale - anchor)
+  const old = boundedTimelineScale(oldScale, durationMs, viewportWidth);
+  const playheadX = Number.isFinite(playheadMs) ? playheadMs * old - oldScroll : NaN;
+  const visible = playheadX >= 0 && playheadX <= viewportWidth;
+  return anchoredScrollAt(
+    old,
+    newScale,
+    oldScroll,
+    durationMs,
+    viewportWidth,
+    visible ? playheadX : viewportWidth / 2
   );
 }

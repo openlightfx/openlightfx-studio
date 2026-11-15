@@ -1,10 +1,6 @@
-import { test, type APIRequestContext, type Page } from '@playwright/test';
+import { test } from '@playwright/test';
 import { isExpectedFailure, parseTitle, recordOutcome } from '../../tests/harness/gate';
-
-export interface StudioFixtures {
-  page: Page;
-  request: APIRequestContext;
-}
+import { forwardStudioFixtures, type StudioFixtures } from './fixtures';
 
 /**
  * Title must be a string literal: `ID @tier description`.
@@ -14,9 +10,9 @@ export function requirement(title: string, fn: (args: StudioFixtures) => Promise
   const { id, tier } = parseTitle(title);
   const listed = isExpectedFailure(id, tier);
   const run = listed ? test.fail : test;
-  run(title, async ({ page, request }) => {
+  run(title, async ({ page, request, browserName }) => {
     try {
-      await fn({ page, request });
+      await forwardStudioFixtures({ page, request, browserName }, fn);
       recordOutcome({ id, tier, title, status: 'passed' });
     } catch (error) {
       recordOutcome({

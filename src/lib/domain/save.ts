@@ -6,6 +6,9 @@ export const AUTOSAVE_INTERVAL_MS = 30_000;
 
 export interface CrashRecord {
   key: string;
+  itemId: string;
+  trackId: string;
+  revision: string;
   track: Track;
   sidecar: ProjectSidecar;
   playheadMs: number;
@@ -33,21 +36,142 @@ export function flushOnPageHide(dirty: boolean): boolean {
 
 export function chooseLoadSource(
   serverUpdatedAt: number,
-  crash: CrashRecord | null
+  crash: CrashRecord | null,
+  identity?: { itemId: string; trackId: string }
 ): 'server' | 'crash' {
-  if (!crash || !crash.dirty) return 'server';
+  if (
+    !crash ||
+    !crash.dirty ||
+    !crash.revision ||
+    (identity &&
+      (crash.itemId !== identity.itemId ||
+        crash.trackId !== identity.trackId ||
+        crash.key !== crashKey(identity.itemId, identity.trackId) ||
+        crash.sidecar?.itemId !== identity.itemId ||
+        crash.sidecar?.trackId !== identity.trackId))
+  )
+    return 'server';
   if (crash.savedAt > serverUpdatedAt) return 'crash';
   return 'server';
 }
 
-export function sidecarDocument(input: ProjectSidecar): ProjectSidecar {
+export function clampRecoveryPosition(input: {
+  playheadMs: number;
+  scrollX: number;
+  durationMs: number;
+  pxPerMs: number;
+  viewportWidth: number;
+}): { playheadMs: number; scrollX: number } {
+  const finite = (value: number) => (Number.isFinite(value) ? value : 0);
+  const durationMs = Math.max(0, finite(input.durationMs));
+  const contentWidth = durationMs * Math.max(0, finite(input.pxPerMs));
   return {
-    version: 1,
-    itemId: input.itemId,
-    trackId: input.trackId,
-    sceneMarkers: input.sceneMarkers,
-    channelGroups: input.channelGroups,
+    playheadMs: Math.min(durationMs, Math.max(0, finite(input.playheadMs))),
+    scrollX: Math.min(
+      Math.max(0, contentWidth - Math.max(0, input.viewportWidth)),
+      Math.max(0, finite(input.scrollX))
+    ),
   };
+}
+
+const reservedSidecarFields = new Set([
+  'version',
+  'itemid',
+  'trackid',
+  'scenemarkers',
+  'channelgroups',
+  'undo',
+  'undostack',
+  'duration',
+  'auth',
+  'authstate',
+  'authorization',
+  'token',
+  'accesstoken',
+  'refreshtoken',
+  'apikey',
+  'credentials',
+]);
+const markerKinds = new Set(['manual', 'chapter', 'detected']);
+const groupModes = new Set(['mirror', 'spread', 'alternate']);
+
+export class InvalidProjectSidecarError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidProjectSidecarError';
+  }
+}
+
+/** Validate the plugin's v1 contract while retaining its allowed opaque top-level fields. */
+export function parseProjectSidecar(
+  value: unknown,
+  identity: { itemId: string; trackId: string }
+): ProjectSidecar {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    throw new InvalidProjectSidecarError('Project sidecar must be a JSON object');
+  const input = value as Record<string, unknown>;
+  if (input.version !== 1) throw new InvalidProjectSidecarError('Project sidecar version is not 1');
+  if (input.itemId !== identity.itemId || input.trackId !== identity.trackId)
+    throw new InvalidProjectSidecarError('Project sidecar identity does not match this track');
+  const sceneMarkers = input.sceneMarkers ?? [];
+  const channelGroups = input.channelGroups ?? [];
+  if (!Array.isArray(sceneMarkers) || !Array.isArray(channelGroups))
+    throw new InvalidProjectSidecarError('Project markers and channel groups must be arrays');
+  for (const marker of sceneMarkers) {
+    if (!marker || typeof marker !== 'object' || Array.isArray(marker))
+      throw new InvalidProjectSidecarError('Project scene marker is malformed');
+    const kind = (marker as Record<string, unknown>).kind;
+    if (typeof kind !== 'string' || !markerKinds.has(kind))
+      throw new InvalidProjectSidecarError('Project scene marker kind is unsupported');
+  }
+  for (const group of channelGroups) {
+    if (!group || typeof group !== 'object' || Array.isArray(group))
+      throw new InvalidProjectSidecarError('Project channel group is malformed');
+    const mode = (group as Record<string, unknown>).mode;
+    if (typeof mode !== 'string' || !groupModes.has(mode))
+      throw new InvalidProjectSidecarError('Project channel group mode is unsupported');
+  }
+  return sidecarDocument({
+    ...input,
+    version: 1,
+    itemId: identity.itemId,
+    trackId: identity.trackId,
+    sceneMarkers: sceneMarkers as ProjectSidecar['sceneMarkers'],
+    channelGroups: channelGroups as ProjectSidecar['channelGroups'],
+  });
+}
+
+export function sidecarDocument(input: ProjectSidecar): ProjectSidecar {
+  const output: Record<string, unknown> = {};
+  for (const [field, value] of Object.entries(input)) {
+    const normalizedField = field.toLowerCase().replace(/[_-]/g, '');
+    if (!reservedSidecarFields.has(normalizedField)) output[field] = value;
+  }
+  output.version = 1;
+  output.itemId = input.itemId;
+  output.trackId = input.trackId;
+  output.sceneMarkers = input.sceneMarkers;
+  output.channelGroups = input.channelGroups;
+  return output as ProjectSidecar;
+}
+
+export interface SaveCheckpoint {
+  itemId: string;
+  trackId: string;
+  revision: string;
+}
+
+export function matchesSaveCheckpoint(
+  current: SaveCheckpoint | null,
+  saved: SaveCheckpoint | null
+): boolean {
+  return Boolean(
+    current &&
+    saved &&
+    current.itemId === saved.itemId &&
+    current.trackId === saved.trackId &&
+    current.revision === saved.revision
+  );
 }
 
 export interface SavePlan {

@@ -1,5 +1,6 @@
 import type { Channel, ChannelGroup, EffectType, Keyframe, Rgb, SceneMarker, Track } from './types';
 import { BLACK, rgb } from './types';
+import { quantizeProxyFrameTime } from './media';
 
 export const CHANNEL_SLUG = /^[a-z0-9_-]{1,64}$/;
 export const TRACK_ID = /^[a-z0-9][a-z0-9_-]{0,63}$/;
@@ -160,8 +161,7 @@ export function snapTime(input: SnapInput): { timeMs: number; snapped: boolean }
   if (input.playheadMs !== undefined) targets.push(input.playheadMs);
   for (const time of input.otherTimes ?? []) targets.push(time);
   if (input.frameSnap && input.fps) {
-    const frame = Math.round(1000 / input.fps);
-    const nearest = Math.round(input.timeMs / frame) * frame;
+    const nearest = quantizeProxyFrameTime(input.timeMs, input.fps, input.durationMs);
     targets.push(nearest);
   }
   let best = input.timeMs;
@@ -169,7 +169,8 @@ export function snapTime(input: SnapInput): { timeMs: number; snapped: boolean }
   let snapped = false;
   for (const target of targets) {
     const distance = Math.abs(target - input.timeMs);
-    if (distance <= bestDistance) {
+    // A tie must not depend on target enumeration: earlier time wins deterministically.
+    if (distance < bestDistance || (distance === bestDistance && target < best)) {
       best = target;
       bestDistance = distance;
       snapped =
@@ -192,11 +193,11 @@ export function snapTime(input: SnapInput): { timeMs: number; snapped: boolean }
 }
 
 export function zoomIn(pxPerMs: number): number {
-  return pxPerMs * 1.25;
+  return Math.min(2, Math.max(0.0001, Number.isFinite(pxPerMs) ? pxPerMs : 0.0001) * 1.25);
 }
 
 export function zoomOut(pxPerMs: number): number {
-  return pxPerMs / 1.25;
+  return Math.max(0.0001, (Number.isFinite(pxPerMs) ? pxPerMs : 0.0001) / 1.25);
 }
 
 export function zoomToFit(durationMs: number, laneWidthPx: number): number {
@@ -241,49 +242,149 @@ export function setKelvin(value: number): { ok: true; kelvin: number } | { ok: f
 }
 
 export interface UndoHistory<T> {
-  current: T;
+  readonly current: T;
   canUndo: boolean;
   canRedo: boolean;
   edit: (next: T) => void;
+  replaceCurrent: (next: T) => void;
+  mapSnapshots: (map: (snapshot: T) => T) => void;
   undo: () => T;
   redo: () => T;
+}
+
+function cloneSnapshot<T>(value: T): T {
+  try {
+    return structuredClone(value);
+  } catch {
+    // Svelte deep-state proxies are not structured-cloneable; authored snapshots are JSON data.
+    return JSON.parse(JSON.stringify(value)) as T;
+  }
 }
 
 export function createHistory<T>(initial: T, limit = 200): UndoHistory<T> {
   const past: T[] = [];
   const future: T[] = [];
+  let current = cloneSnapshot(initial);
   const history: UndoHistory<T> = {
-    current: initial,
+    get current() {
+      return cloneSnapshot(current);
+    },
     canUndo: false,
     canRedo: false,
     edit(next: T) {
-      past.push(history.current);
+      past.push(current);
       if (past.length > limit) past.shift();
-      history.current = next;
+      current = cloneSnapshot(next);
       future.length = 0;
       history.canUndo = past.length > 0;
       history.canRedo = false;
     },
+    replaceCurrent(next: T) {
+      current = cloneSnapshot(next);
+    },
+    mapSnapshots(map) {
+      for (let index = 0; index < past.length; index += 1)
+        past[index] = cloneSnapshot(map(cloneSnapshot(past[index])));
+      for (let index = 0; index < future.length; index += 1)
+        future[index] = cloneSnapshot(map(cloneSnapshot(future[index])));
+      current = cloneSnapshot(map(cloneSnapshot(current)));
+    },
     undo() {
       const previous = past.pop();
-      if (previous === undefined) return history.current;
-      future.push(history.current);
-      history.current = previous;
+      if (previous === undefined) return cloneSnapshot(current);
+      future.push(current);
+      current = previous;
       history.canUndo = past.length > 0;
       history.canRedo = future.length > 0;
-      return history.current;
+      return cloneSnapshot(current);
     },
     redo() {
       const next = future.pop();
-      if (next === undefined) return history.current;
-      past.push(history.current);
-      history.current = next;
+      if (next === undefined) return cloneSnapshot(current);
+      past.push(current);
+      current = next;
       history.canUndo = past.length > 0;
       history.canRedo = future.length > 0;
-      return history.current;
+      return cloneSnapshot(current);
     },
   };
   return history;
+}
+
+export type EditTransaction<T> = {
+  begin: (current: T, label: string) => void;
+  update: (next: T) => boolean;
+  commit: () => boolean;
+  cancel: () => void;
+  mapSnapshots: (map: (snapshot: T) => T) => void;
+  readonly active: boolean;
+};
+
+/** A transient draft is observable separately; only commit invokes the authored-action callback. */
+export function createEditTransaction<T>(
+  onCommit: (snapshot: T, label: string) => void,
+  onDraft: (draft: T | null, label: string) => void,
+  equals: (left: T, right: T) => boolean = (left, right) =>
+    JSON.stringify(left) === JSON.stringify(right)
+): EditTransaction<T> {
+  let before: T | null = null;
+  let draft: T | null = null;
+  let label = '';
+  return {
+    get active() {
+      return before !== null;
+    },
+    begin(current, nextLabel) {
+      before = cloneSnapshot(current);
+      draft = cloneSnapshot(current);
+      label = nextLabel;
+      onDraft(cloneSnapshot(draft), label);
+    },
+    update(next) {
+      if (before === null) return false;
+      draft = cloneSnapshot(next);
+      onDraft(cloneSnapshot(draft), label);
+      return true;
+    },
+    commit() {
+      if (before === null || draft === null) return false;
+      const changed = !equals(before, draft);
+      if (changed) onCommit(cloneSnapshot(draft), label);
+      before = null;
+      draft = null;
+      onDraft(null, '');
+      return changed;
+    },
+    cancel() {
+      before = null;
+      draft = null;
+      onDraft(null, '');
+    },
+    mapSnapshots(map) {
+      if (before === null || draft === null) return;
+      before = cloneSnapshot(map(cloneSnapshot(before)));
+      draft = cloneSnapshot(map(cloneSnapshot(draft)));
+      onDraft(cloneSnapshot(draft), label);
+    },
+  };
+}
+
+export function createIdAllocator(
+  getUsedIds: () => Iterable<string>,
+  generate: (prefix: string) => string = nextId
+): (prefix: string) => string {
+  const allocated = new Set<string>();
+  return (prefix) => {
+    const used = new Set([...getUsedIds(), ...allocated]);
+    for (let attempt = 0; attempt < 10_000; attempt += 1) {
+      const candidate = generate(prefix);
+      if (!used.has(candidate)) {
+        allocated.add(candidate);
+        return candidate;
+      }
+    }
+    throw new Error(`Could not allocate a unique ${prefix} id`);
+  };
 }
 
 export function userAddedKeyframes(keyframes: Keyframe[]): boolean {

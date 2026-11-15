@@ -125,6 +125,8 @@ export interface ProjectSidecar {
   trackId: string;
   sceneMarkers: SceneMarker[];
   channelGroups: ChannelGroup[];
+  /** Plugin-preserved v1 metadata; values must remain JSON-serializable. */
+  [field: string]: unknown;
 }
 
 export interface Sample {

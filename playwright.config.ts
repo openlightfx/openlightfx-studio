@@ -2,11 +2,13 @@ import path from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 
 process.env.OLFX_OUTCOMES ??= path.join('test-results', 'outcomes-browser.jsonl');
+const previewPort = process.env.OLFX_STUDIO_PREVIEW_PORT ?? '4173';
+const previewUrl = `http://127.0.0.1:${previewPort}`;
 
 const browserUse = {
   ...devices['Desktop Chrome'],
   viewport: { width: 1280, height: 720 },
-  baseURL: process.env.OLFX_STUDIO_URL ?? 'http://127.0.0.1:4173',
+  baseURL: process.env.OLFX_STUDIO_URL ?? previewUrl,
   actionTimeout: 4_000,
   navigationTimeout: 10_000,
 };
@@ -22,8 +24,8 @@ export default defineConfig({
   reporter: [['list'], ['json', { outputFile: 'test-results/playwright.json' }]],
   globalSetup: './tests/harness/reset-outcomes.ts',
   webServer: {
-    command: 'npm run build && npm run preview -- --host 127.0.0.1 --port 4173',
-    url: 'http://127.0.0.1:4173',
+    command: `npm run build && npm run preview -- --host 127.0.0.1 --port ${previewPort}`,
+    url: previewUrl,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
   },
