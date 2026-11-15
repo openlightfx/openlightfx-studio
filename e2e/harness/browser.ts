@@ -8,7 +8,7 @@ import {
 } from '../../src/lib/domain';
 
 /** Stateful plugin contract fixture. Video is the generated H.264 edit proxy, never a file-picker path. */
-export async function installJ1Backend(
+export async function installBackend(
   page: Page,
   options: {
     empty?: boolean;
@@ -209,9 +209,9 @@ export async function installJ1Backend(
 
 export async function openFixtureEditor(
   page: Page,
-  options: Parameters<typeof installJ1Backend>[1] = {}
+  options: Parameters<typeof installBackend>[1] = {}
 ) {
-  const backend = await installJ1Backend(page, options);
+  const backend = await installBackend(page, options);
   await page.goto(
     `/emby/OpenLightFX/studio/?api_key=browser-test#/edit/42/${options.newTrack ? 'new' : 'proxy-fixture'}`
   );

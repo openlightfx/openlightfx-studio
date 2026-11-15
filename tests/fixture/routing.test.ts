@@ -77,9 +77,6 @@ requirement('MODEL-004 @fixture routing cases are shared fixture data, not a Stu
     '5.0 track fills only-Ambient room',
     'Follows override changes a bulb to Ambient routing',
   ]);
-  expect(
-    fs.readFileSync(path.join(process.cwd(), 'tests/fixtures/routing/SOURCE'), 'utf8')
-  ).toContain('J1 MODEL-003/004/005/006/007');
 });
 
 requirement('MODEL-005 @fixture mixer examples include weighted RGB and off states', () => {

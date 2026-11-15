@@ -1,4 +1,4 @@
-/** Parse openlightfx-simulator stdout. See docs/requirements T5. */
+/** Parse openlightfx-simulator stdout. */
 
 /**
  * @typedef {{

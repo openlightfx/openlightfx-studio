@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 import { requirement } from '../harness/requirement';
-import { installJ1Backend, openFixtureEditor, lanePoint, menu } from '../harness/j1-browser';
+import { installBackend, openFixtureEditor, lanePoint, menu } from '../harness/browser';
 
 const room = {
   id: 'living',
@@ -15,7 +15,7 @@ const room = {
 };
 
 async function installVisualFixture(page: Page, admin = true) {
-  const backend = await installJ1Backend(page, { rooms: [room], admin });
+  const backend = await installBackend(page, { rooms: [room], admin });
   backend.items[0].name = 'The Quiet Coast';
   backend.items[0].posterUrl = '/posters/fixture.svg';
   backend.items.push({

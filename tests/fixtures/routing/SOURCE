@@ -1,3 +1,2 @@
-OpenLightFX Studio shared routing cases for J1 MODEL-003/004/005/006/007.
-Authoritative source: docs/journeys/J1-first-light.md, Routing section.
+OpenLightFX Studio shared routing test cases.
 Copy byte-for-byte to openlightfx-emby/tests/fixtures/routing/cases.json.

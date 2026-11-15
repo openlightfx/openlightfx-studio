@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 import { requirement } from '../harness/requirement';
-import { installJ1Backend, openFixtureEditor } from '../harness/j1-browser';
+import { installBackend, openFixtureEditor } from '../harness/browser';
 
 async function prepare(page: Page) {
   await openFixtureEditor(page);
@@ -81,7 +81,7 @@ requirement(
 requirement(
   'PROP-004 @browser a queued future seek does not block picking the movie frame currently displayed',
   async ({ page }) => {
-    const backend = await installJ1Backend(page);
+    const backend = await installBackend(page);
     backend.media.proxy.state = 'building';
     backend.media.proxy.encodedThroughMs = 1000;
     let frameTime = -1;

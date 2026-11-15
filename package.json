@@ -16,7 +16,6 @@
     "test:browser": "OLFX_OUTCOMES=test-results/outcomes-browser.jsonl playwright test --project=chromium --project=firefox",
     "test:fullstack": "bash scripts/fullstack/run.sh",
     "test:realmedia": "playwright test --project=realmedia",
-    "test:traceability": "node docs/requirements/check-traceability.mjs",
     "test:report": "node scripts/report/requirements-report.mjs",
     "media:generate": "bash scripts/media/generate-clips.sh",
     "fixtures:generate": "vite-node scripts/fixtures/generate.ts",

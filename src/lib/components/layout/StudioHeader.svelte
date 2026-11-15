@@ -23,11 +23,6 @@
   </nav>
   <div class="header-end">
     <span class="emby-label">for Emby</span>
-    <a
-      class="help-link"
-      href="https://github.com/openlightfx/openlightfx-studio/blob/main/docs/journeys/J1-first-light.md"
-      ><StudioIcon name="help" size={18} /><span>Help</span></a
-    >
   </div>
 </header>
 
@@ -47,8 +42,7 @@
   .brand,
   nav,
   nav a,
-  .header-end,
-  .help-link {
+  .header-end {
     display: flex;
     align-items: center;
   }
@@ -109,14 +103,6 @@
     color: var(--text-muted);
     font-size: 12px;
     white-space: nowrap;
-  }
-  .help-link {
-    gap: var(--space-2);
-    color: var(--text-muted);
-    text-decoration: none;
-  }
-  .help-link:hover {
-    color: var(--text);
   }
   @media (max-width: 760px) {
     .studio-header {

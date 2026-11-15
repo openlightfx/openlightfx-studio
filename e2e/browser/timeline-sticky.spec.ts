@@ -1,6 +1,6 @@
 import { expect } from '@playwright/test';
 import { requirement } from '../harness/requirement';
-import { openFixtureEditor } from '../harness/j1-browser';
+import { openFixtureEditor } from '../harness/browser';
 
 for (const width of [1280, 390]) {
   requirement(

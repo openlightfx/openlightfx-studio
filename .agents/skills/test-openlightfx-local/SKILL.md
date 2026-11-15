@@ -5,7 +5,7 @@ description: Test local Studio/plugin checkouts in an isolated Emby lab with sim
 
 # Local OpenLightFX testing
 
-- Read repository instructions and `docs/testing/local-lab.md`; inspect all checkout states. Preserve existing work. Use only an isolated lab, never the hands-on server.
+- Read repository instructions; inspect all checkout states. Preserve existing work. Use only an isolated lab, never the hands-on server.
 - Follow `scripts/fullstack/lab.mjs` lifecycle. Missing prerequisites block testing; rebuild stale product code explicitly.
 - Define variations in temporary `OLFX_LAB_SCENARIO` inputs, not repository source. Use `OLFX_LAB_TEST_FILE` for custom workflows and `OLFX_LAB_PLAYBACK` to select playback mode. Follow the documented schema and inventory rules. Bulb `protocol`: rest/wiz/lifx/govee; UDP stays Docker-only.
 - Assert exact saved cues, fresh command receipts, rendered states and unchanged bulbs. Specify expectations independently; never weaken assertions to hide failures.

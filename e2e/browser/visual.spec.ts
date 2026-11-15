@@ -1,11 +1,11 @@
 import { expect } from '@playwright/test';
 import { requirement } from '../harness/requirement';
-import { installJ1Backend, openFixtureEditor } from '../harness/j1-browser';
+import { installBackend, openFixtureEditor } from '../harness/browser';
 
 requirement(
   'FLOW-001 @browser first run visually explains bulb setup and the no-lights authoring path',
   async ({ page }) => {
-    await installJ1Backend(page);
+    await installBackend(page);
     await page.route('**/OpenLightFX/Studio/Devices', (route) =>
       route.fulfill({ json: [{ deviceId: 'tv', name: 'Living room TV', appName: 'Emby Theater' }] })
     );

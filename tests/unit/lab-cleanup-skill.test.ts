@@ -34,10 +34,8 @@ it('keeps the concise agent skill aligned with current framework entry points an
     expect(skill).toContain(flag);
     expect(runner).toContain(flag);
   }
-  for (const doc of ['docs/testing/local-lab.md', 'scripts/fullstack/lab.mjs']) {
-    expect(skill).toContain(doc);
-    expect(fs.existsSync(doc)).toBe(true);
-  }
+  expect(skill).toContain('scripts/fullstack/lab.mjs');
+  expect(fs.existsSync('scripts/fullstack/lab.mjs')).toBe(true);
   expect(skill).toContain('remove agent-created temporary inputs/scripts');
   expect(skill).toContain('Never delete user-owned files');
   expect(skill).toContain('resupply inputs');

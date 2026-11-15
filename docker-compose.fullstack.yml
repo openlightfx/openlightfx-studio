@@ -1,4 +1,4 @@
-# Full stack for J1–J4 system tests.
+# Full-stack integration test environment.
 # Emby, the plugin built from openlightfx-emby cursor/studio-host-api-18c1
 # with this Studio build embedded, and headless openlightfx-simulator.
 # Bring it up with scripts/fullstack/run.sh. This file alone does not build the plugin.

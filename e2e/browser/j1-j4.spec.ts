@@ -3,13 +3,13 @@ import fs from 'node:fs';
 import { blackKeyframe, decodeTrack, encodeTrack, newTrackFromMovie } from '../../src/lib/domain';
 import { requirement } from '../harness/requirement';
 import {
-  installJ1Backend,
+  installBackend,
   openFixtureEditor,
   lanePoint,
   menu,
   seekFraction,
   reloadWithUnsaved,
-} from '../harness/j1-browser';
+} from '../harness/browser';
 import { StudioPage } from '../pages/studio-page';
 
 // Keep transport/performance measurements sequential within each browser. A failure
@@ -68,7 +68,7 @@ requirement(
 requirement(
   'SHELL-002 @browser local development requires Emby and never offers source-video playback',
   async ({ page }) => {
-    await installJ1Backend(page);
+    await installBackend(page);
     await page.route('**/OpenLightFX/Studio/Items?*', (route) =>
       route.fulfill({ status: 503, json: { message: 'Emby is unreachable' } })
     );
@@ -131,7 +131,7 @@ requirement(
 requirement(
   'LIB-001 @browser plugin movie names years and missing-poster fallbacks appear on Library cards',
   async ({ page }) => {
-    const backend = await installJ1Backend(page);
+    const backend = await installBackend(page);
     backend.items.push({ itemId: '43', name: '', year: 0, runtimeMs: 0, posterUrl: '' });
     await page.goto('/?api_key=browser-test#/library');
     const card = page.getByRole('link', { name: /Proxy Fixture/ });
@@ -143,7 +143,7 @@ requirement(
 requirement(
   'LIB-002 @browser searching the standalone Library filters actual plugin results',
   async ({ page }) => {
-    await installJ1Backend(page);
+    await installBackend(page);
     await page.goto('/?api_key=browser-test#/library');
     await expect(page.getByRole('link', { name: /Proxy Fixture/ })).toBeVisible();
     await page.getByRole('searchbox').fill('nothing-matches');
@@ -224,7 +224,7 @@ requirement(
 requirement(
   'MEDIA-010 @browser transport exists only after a movie is opened in the editor',
   async ({ page }) => {
-    await installJ1Backend(page);
+    await installBackend(page);
     await page.goto('/?api_key=browser-test#/library');
     await expect(page.getByRole('link', { name: /Proxy Fixture/ })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Play', exact: true })).toHaveCount(0);
@@ -265,7 +265,7 @@ requirement(
 requirement(
   'MEDIA-016 @browser building media plays and queues past-horizon seeks until ready',
   async ({ page }) => {
-    const backend = await installJ1Backend(page);
+    const backend = await installBackend(page);
     backend.media.proxy.state = 'building';
     backend.media.proxy.encodedThroughMs = 1000;
     await page.goto('/?api_key=browser-test#/edit/42/proxy-fixture');
@@ -285,7 +285,7 @@ requirement(
 requirement(
   'TRACK-001 @browser saved tracks are chosen from the Movie screen rather than an editor movie dropdown',
   async ({ page }) => {
-    await installJ1Backend(page);
+    await installBackend(page);
     await page.goto('/?api_key=browser-test#/movie/42');
     await expect(page.getByRole('button', { name: 'Open', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Open', exact: true }).click();
@@ -824,7 +824,7 @@ requirement(
 requirement(
   'PREV-012 @browser photosensitivity notice never changes authored protobuf brightness',
   async ({ page }) => {
-    await installJ1Backend(page, { rooms: [room] });
+    await installBackend(page, { rooms: [room] });
     await page.route('**/OpenLightFX/Settings', (route) =>
       route.fulfill({ json: { photosensitivityMode: true } })
     );
@@ -841,7 +841,7 @@ requirement(
 requirement(
   'SAFE-002 @browser computed intensity and flashing are visible read-only text',
   async ({ page }) => {
-    const backend = await installJ1Backend(page, { empty: true });
+    const backend = await installBackend(page, { empty: true });
     backend.track.keyframes = Array.from({ length: 8 }, (_, index) => ({
       ...blackKeyframe('left'),
       id: `flash-${index}`,
@@ -856,7 +856,7 @@ requirement(
 requirement(
   'PERF-001 @browser the standalone movie Library is ready within two seconds',
   async ({ page }) => {
-    await installJ1Backend(page);
+    await installBackend(page);
     const started = Date.now();
     await page.goto('/?api_key=browser-test#/library');
     await expect(page.getByRole('link', { name: /Proxy Fixture/ })).toBeVisible();
@@ -995,7 +995,7 @@ requirement(
 requirement(
   'ERR-001 @browser a failed proxy leaves authoring available and Retry requests a replacement',
   async ({ page }) => {
-    const backend = await installJ1Backend(page);
+    const backend = await installBackend(page);
     backend.media.proxy.state = 'failed';
     backend.media.proxy.reason = 'ffmpeg exited with code 1';
     await page.goto('/?api_key=browser-test#/edit/42/proxy-fixture');
@@ -1010,7 +1010,7 @@ requirement(
 requirement(
   'ERR-002 @browser an unreachable plugin never fabricates movie cards',
   async ({ page }) => {
-    await installJ1Backend(page);
+    await installBackend(page);
     await page.route('**/OpenLightFX/Studio/Items?*', (route) =>
       route.fulfill({ status: 503, json: { message: 'Plugin is unreachable' } })
     );
@@ -1050,7 +1050,7 @@ requirement(
 requirement(
   'ERR-006 @browser unknown movie duration blocks creation instead of inventing a duration field',
   async ({ page }) => {
-    await installJ1Backend(page, { durationMs: 0, empty: true });
+    await installBackend(page, { durationMs: 0, empty: true });
     await page.goto('/?api_key=browser-test#/movie/42');
     await expect(page.getByRole('button', { name: /Create track/ })).toBeDisabled();
     await new StudioPage(page).expectNoDurationField();

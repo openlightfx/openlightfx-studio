@@ -28,7 +28,7 @@ if [[ "${OLFX_FULLSTACK_CONFIG_ONLY:-}" == "1" ]]; then
 fi
 
 if ! command -v dotnet >/dev/null; then
-  echo "The .NET 8 SDK is required to build the plugin. See docs/testing.md." >&2
+  echo "The .NET 8 SDK is required to build the plugin." >&2
   exit 1
 fi
 
