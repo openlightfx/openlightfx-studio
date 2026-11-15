@@ -48,13 +48,16 @@ async function rooms(request: APIRequestContext) {
 }
 
 requirement(
-  'FLOW-001 @fullstack first run opens the welcome card without legacy setup',
+  'ROOM-003 @fullstack room setup lists named bulbs and keeps discovery and Identify on Bulbs',
   async ({ page, request }) => {
     await prepare(page, request);
-    await expect(page.getByRole('heading', { name: 'Welcome to OpenLightFX' })).toBeVisible();
-    await expect(page.getByLabel('Room name')).toHaveValue('Living Room');
-    await expect(page.getByRole('button', { name: 'Save room', exact: true })).toBeDisabled();
-    await expect(page.getByText(/legacy configuration|paste.*settings/i)).toHaveCount(0);
+    const bulbs = await (await request.get(`${base}/OpenLightFX/Studio/Bulbs`, { headers })).json();
+    expect(bulbs.length).toBeGreaterThan(0);
+    await expect(page.getByRole('link', { name: 'Manage bulbs' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Find bulbs' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Identify' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Rename…' })).toHaveCount(0);
+    await expect(page.getByRole('listitem')).toHaveCount(bulbs.length);
   }
 );
 
@@ -74,6 +77,69 @@ requirement(
     await page.reload();
     await expect(page).toHaveURL(/#\/rooms$/);
     await expect(page.getByRole('heading', { name: 'Your rooms' })).toBeVisible();
+  }
+);
+
+requirement(
+  'BULB-003 @fullstack a Bulbs page name persists on the server and is shown on Rooms',
+  async ({ page, request }) => {
+    await prepare(page, request);
+    const bulbs = await (await request.get(`${base}/OpenLightFX/Studio/Bulbs`, { headers })).json();
+    const bulb = bulbs[0];
+    expect(bulb).toBeTruthy();
+    await page.goto(`${studio}#/bulbs`);
+    const row = page.getByRole('article').filter({ hasText: bulb.ipAddress });
+    await row.getByLabel('Bulb name').fill('Cinema wall lamp');
+    await row.getByRole('button', { name: 'Save name' }).click();
+    await expect(page.getByRole('article', { name: 'Cinema wall lamp' })).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole('article', { name: 'Cinema wall lamp' })).toBeVisible();
+    expect(
+      (await (await request.get(`${base}/OpenLightFX/Studio/Bulbs`, { headers })).json()).find(
+        (entry: { id: string }) => entry.id === bulb.id
+      ).name
+    ).toBe('Cinema wall lamp');
+    await page.goto(`${studio}#/rooms`);
+    await expect(page.getByRole('listitem').filter({ hasText: 'Cinema wall lamp' })).toBeVisible();
+  }
+);
+
+requirement(
+  'BULB-004 @fullstack Forget deletes only unassigned bulbs from durable inventory',
+  async ({ page, request }) => {
+    const devices = await prepare(page, request);
+    const bulbs = await (await request.get(`${base}/OpenLightFX/Studio/Bulbs`, { headers })).json();
+    expect(bulbs.length).toBeGreaterThan(1);
+    const assigned = bulbs[0];
+    const unassigned = bulbs[bulbs.length - 1];
+    expect(unassigned.id).not.toBe(assigned.id);
+    const created = await request.post(`${base}/OpenLightFX/Studio/Rooms`, {
+      headers,
+      data: {
+        name: 'Forget guard',
+        screenDeviceId: devices[0].deviceId,
+        bulbs: [{ id: assigned.id, position: 'left', follows: null }],
+      },
+    });
+    expect(created.ok(), await created.text()).toBeTruthy();
+    await page.goto(`${studio}#/bulbs`);
+    const assignedRow = page.getByRole('article').filter({ hasText: assigned.ipAddress });
+    const unassignedRow = page.getByRole('article').filter({ hasText: unassigned.ipAddress });
+    await expect(assignedRow.getByRole('button', { name: 'Forget' })).toBeDisabled();
+    page.once('dialog', (dialog) => dialog.accept());
+    await unassignedRow.getByRole('button', { name: 'Forget' }).click();
+    await expect(page.getByRole('article').filter({ hasText: unassigned.ipAddress })).toHaveCount(
+      0
+    );
+    const savedBulbs = await (
+      await request.get(`${base}/OpenLightFX/Studio/Bulbs`, { headers })
+    ).json();
+    expect(savedBulbs.some((bulb: { id: string }) => bulb.id === unassigned.id)).toBe(false);
+    const rejected = await request.delete(
+      `${base}/OpenLightFX/Studio/Bulbs/${encodeURIComponent(assigned.id)}`,
+      { headers }
+    );
+    expect(rejected.ok()).toBe(false);
   }
 );
 
@@ -142,24 +208,28 @@ requirement(
   async ({ page, request }) => {
     const devices = await prepare(page, request);
     await page.getByLabel('Screen (the Emby app in this room)').selectOption(devices[0].deviceId);
-    const bulb = page.getByRole('listitem').filter({ hasText: 'Red target' });
+    const bulb = page.getByRole('listitem').filter({ hasText: 'Cinema wall lamp' });
     await bulb.dragTo(page.getByRole('region', { name: 'Left bulb position', exact: true }));
     await expect(
       page.getByRole('region', { name: 'Left bulb position', exact: true })
-    ).toContainText('Red target');
+    ).toContainText('Cinema wall lamp');
     await save(page);
     let [room] = await rooms(request);
     const id = room.bulbs[0].id;
     expect(room.bulbs[0].position).toBe('left');
     await page
       .getByRole('group', { name: 'Placed bulb' })
-      .filter({ hasText: 'Red target' })
+      .filter({ hasText: 'Cinema wall lamp' })
       .getByRole('button', { name: 'Take out of room' })
       .click();
-    await page.getByRole('listitem').filter({ hasText: 'Red target' }).locator('summary').click();
     await page
       .getByRole('listitem')
-      .filter({ hasText: 'Red target' })
+      .filter({ hasText: 'Cinema wall lamp' })
+      .locator('summary')
+      .click();
+    await page
+      .getByRole('listitem')
+      .filter({ hasText: 'Cinema wall lamp' })
       .locator('.place-menu')
       .getByRole('button', { name: 'Surround Right', exact: true })
       .click();
@@ -168,7 +238,7 @@ requirement(
     expect(room.bulbs.find((b: { id: string }) => b.id === id).position).toBe('surround-right');
     await page
       .getByRole('group', { name: 'Placed bulb' })
-      .filter({ hasText: 'Red target' })
+      .filter({ hasText: 'Cinema wall lamp' })
       .getByRole('button', { name: 'Take out of room' })
       .click();
     await save(page);
@@ -178,7 +248,7 @@ requirement(
 );
 
 requirement(
-  'ROOM-008 @fullstack renamed bulb and Follows persist through save and reload',
+  'ROOM-008 @fullstack Follows persists through room save and reload',
   async ({ page, request }) => {
     const devices = await prepare(page, request);
     await page.getByLabel('Screen (the Emby app in this room)').selectOption(devices[0].deviceId);
@@ -189,16 +259,11 @@ requirement(
       .getByRole('group', { name: 'Placed bulb' })
       .filter({ hasText: 'Blue neighbor' });
     await chip.getByRole('button', { name: 'Bulb options' }).click();
-    page.once('dialog', (dialog) => dialog.accept('Desk lamp'));
-    await chip.getByRole('button', { name: 'Rename…' }).click();
-    const renamed = page
-      .getByRole('group', { name: 'Placed bulb' })
-      .filter({ hasText: 'Desk lamp' });
-    await renamed.getByLabel('Follows').selectOption('ambient');
+    await chip.getByLabel('Follows').selectOption('ambient');
     await save(page);
     await page.reload();
     await expect(
-      page.getByRole('group', { name: 'Placed bulb' }).filter({ hasText: 'Desk lamp' })
+      page.getByRole('group', { name: 'Placed bulb' }).filter({ hasText: 'Blue neighbor' })
     ).toContainText('→ Ambient');
     const [room] = await rooms(request);
     expect(room.bulbs[0].follows).toBe('ambient');
@@ -210,7 +275,7 @@ requirement(
   async ({ page, request }) => {
     const devices = await prepare(page, request);
     await page.getByLabel('Screen (the Emby app in this room)').selectOption(devices[0].deviceId);
-    for (const name of ['Red target', 'Green third']) {
+    for (const name of ['Cinema wall lamp', 'Green third']) {
       const row = page.getByRole('listitem').filter({ hasText: name });
       await row.locator('summary').click();
       await row.locator('.place-menu').getByRole('button', { name: 'Left', exact: true }).click();

@@ -1,0 +1,88 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="wf.css" />
+    <title>08 Bulbs setup</title>
+    <style>
+      body {
+        background: #f2f2f2;
+      }
+      .inventory {
+        position: absolute;
+        left: 140px;
+        top: 150px;
+        width: 1000px;
+        padding: 18px;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 220px 1fr 250px;
+        gap: 18px;
+        align-items: center;
+        padding: 14px 0;
+        border-top: 1px solid #ddd;
+      }
+      .row small {
+        display: block;
+        color: #666;
+        margin-top: 5px;
+      }
+      .name {
+        border: 1px solid #aaa;
+        background: white;
+        padding: 9px;
+        width: 250px;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="app">
+      <span class="brand">OpenLightFX Studio</span><a class="current">Bulbs</a><a>Rooms</a
+      ><a>Library</a> <span class="spacer"></span><span class="muted">jonflix (Emby 4.9)</span
+      ><a>Help</a>
+    </header>
+    <div class="abs" style="left: 140px; top: 72px; width: 1000px">
+      <div class="h2">Set up your bulbs</div>
+      <div class="muted" style="margin-top: 6px">
+        Find each light, identify which one it is, and give it a name you will recognize. Your bulb
+        list is saved on this Emby server.
+      </div>
+      <div style="margin-top: 18px">
+        <span class="btn primary">Find bulbs</span
+        ><span class="muted" style="margin-left: 12px">4 known · 3 named</span>
+      </div>
+    </div>
+    <div class="abs box white inventory">
+      <div class="row" style="border: 0">
+        <div><b>Desk lamp</b><small>WiZ · ESP01 RGB · 192.168.1.44</small></div>
+        <div>
+          <span class="lbl">Bulb name</span>
+          <div class="name">Desk lamp</div>
+        </div>
+        <div><span class="btn">Identify</span><span class="btn">Forget</span></div>
+      </div>
+      <div class="row">
+        <div><b>Unnamed bulb</b><small>Govee · H6008 · 192.168.1.61</small></div>
+        <div>
+          <span class="lbl">Name this bulb</span>
+          <div class="name">Right reading lamp</div>
+        </div>
+        <div><span class="btn primary">Name bulb</span><span class="btn">Identify</span></div>
+      </div>
+      <div class="row">
+        <div><b>TV bias light</b><small>LIFX · Mini Color · In Living Room</small></div>
+        <div>
+          <span class="lbl">Bulb name</span>
+          <div class="name">TV bias light</div>
+        </div>
+        <div><span class="btn">Identify</span><span class="btn disabled">Forget</span></div>
+      </div>
+    </div>
+    <div class="abs" style="right: 140px; bottom: 70px">
+      <span class="btn">Skip setup — write a track without lights</span>
+      <span class="btn primary">Next: set up a room →</span>
+    </div>
+    <div class="wf-label">08 — Bulbs inventory and naming · J1 Step 1 · BULB-001…004, FLOW-001</div>
+  </body>
+</html>

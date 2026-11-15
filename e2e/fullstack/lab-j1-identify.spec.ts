@@ -8,7 +8,7 @@ const { requirement } = await import(
 );
 
 requirement(
-  'ROOM-004 @fullstack Identify flashes exactly the chosen bulb and shows progress',
+  'BULB-002 @fullstack Identify flashes exactly the selected saved bulb and shows progress',
   async ({ page, request }) => {
     const base = process.env.OLFX_EMBY_URL!;
     const token = process.env.OLFX_API_KEY!;
@@ -20,8 +20,7 @@ requirement(
     await page.locator('input[type=password]').fill('openlightfx-test');
     await page.getByRole('button', { name: 'Sign In', exact: true }).click();
     await expect(page).toHaveURL(/#!\/home/, { timeout: 15000 });
-    await page.goto(`${base}/emby/OpenLightFX/studio/?api_key=${token}#/rooms`);
-    await page.getByRole('button', { name: '+ New room', exact: true }).click();
+    await page.goto(`${base}/emby/OpenLightFX/studio/?api_key=${token}#/bulbs`);
 
     const bulbsResponse = await request.get(`${base}/OpenLightFX/Studio/Bulbs`, { headers });
     expect(bulbsResponse.ok()).toBeTruthy();
@@ -29,7 +28,7 @@ requirement(
     expect(bulbs).toHaveLength(4);
     const target = bulbs.find((bulb: { name: string }) => bulb.name === 'Red target');
     expect(target).toBeTruthy();
-    const targetRow = page.getByRole('listitem').filter({ hasText: target.name });
+    const targetRow = page.getByRole('article').filter({ hasText: target.ipAddress });
     await expect(targetRow).toBeVisible();
 
     const eventCount = fs.readFileSync(ndjson, 'utf8').trimEnd().split('\n').length;

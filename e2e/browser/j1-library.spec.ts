@@ -22,14 +22,16 @@ const movies = [
   },
 ];
 
-async function mockLibrary(page: Page, rooms: unknown[] = []) {
+async function mockLibrary(page: Page, rooms: unknown[] = [], bulbs: unknown[] = []) {
   await page.unroute('**/OpenLightFX/Studio/Rooms');
+  await page.unroute('**/OpenLightFX/Studio/Bulbs');
   await page.unroute('**/OpenLightFX/Studio/Session');
   await page.unroute('**/OpenLightFX/Studio/Items**');
   await page.route('**/OpenLightFX/Studio/Session', (route) =>
     route.fulfill({ json: { accessToken: 'browser-test' } })
   );
   await page.route('**/OpenLightFX/Studio/Rooms', (route) => route.fulfill({ json: rooms }));
+  await page.route('**/OpenLightFX/Studio/Bulbs', (route) => route.fulfill({ json: bulbs }));
   await page.route('**/OpenLightFX/Studio/Items**', async (route) => {
     const search = new URL(route.request().url()).searchParams.get('search')?.toLowerCase() ?? '';
     await route.fulfill({
@@ -99,14 +101,30 @@ requirement('LIB-003 @browser selecting a movie opens its Movie screen', async (
 });
 
 requirement(
-  'LIB-004 @browser no-room strip links to room setup and hides when a room exists',
+  'LIB-004 @browser no-room strip links to Bulbs or Rooms based on named inventory',
   async ({ page }) => {
-    await mockLibrary(page);
-    const strip = page.locator('.no-room');
-    await expect(strip).toBeVisible();
-    await strip.getByRole('link', { name: /set up a room/i }).click();
-    await expect(page).toHaveURL(/#\/rooms$/);
-    await mockLibrary(page, [
+    let rooms: unknown[] = [];
+    let bulbs: unknown[] = [];
+    await page.route('**/OpenLightFX/Studio/Session', (route) =>
+      route.fulfill({ json: { accessToken: 'browser-test' } })
+    );
+    await page.route('**/OpenLightFX/Studio/Rooms', (route) => route.fulfill({ json: rooms }));
+    await page.route('**/OpenLightFX/Studio/Bulbs', (route) => route.fulfill({ json: bulbs }));
+    await page.route('**/OpenLightFX/Studio/Items**', (route) => route.fulfill({ json: movies }));
+    await page.route('**/OpenLightFX/Studio/Tracks?**', (route) => route.fulfill({ json: [] }));
+    await page.goto('/?api_key=browser-test#/library');
+    await page
+      .locator('.no-room')
+      .getByRole('link', { name: /find and name bulbs/i })
+      .click();
+    await expect(page).toHaveURL(/#\/bulbs$/);
+
+    bulbs = [{ id: 'named', name: 'Desk lamp', isNamed: true }];
+    await page.getByRole('link', { name: 'Library', exact: true }).click();
+    await expect(
+      page.locator('.no-room').getByRole('link', { name: /set up a room/i })
+    ).toBeVisible();
+    rooms = [
       {
         id: 'room-1',
         name: 'Living Room',
@@ -114,7 +132,7 @@ requirement(
         bulbs: [],
         updatedAt: '2025-01-01T00:00:00Z',
       },
-    ]);
+    ];
     await page.reload();
     await expect(page.locator('.no-room')).toHaveCount(0);
   }

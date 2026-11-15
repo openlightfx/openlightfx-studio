@@ -1,12 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { fetchItems } from '$lib/api/client';
-  import { loadRooms } from '$lib/api/rooms';
+  import { loadBulbs, loadRooms } from '$lib/api/rooms';
   import type { LibraryItem } from '$lib/api/types';
 
   type SortOrder = 'title' | 'recent' | 'tracked';
   let items = $state<LibraryItem[]>([]);
   let roomCount = $state<number | null>(null);
+  let namedBulbCount = $state<number | null>(null);
   let search = $state('');
   let sort = $state<SortOrder>('title');
   let loading = $state(true);
@@ -36,6 +37,9 @@
       loadRooms()
         .then((rooms) => (roomCount = rooms.length))
         .catch(() => (roomCount = null)),
+      loadBulbs()
+        .then((bulbs) => (namedBulbCount = bulbs.filter((bulb) => bulb.isNamed).length))
+        .catch(() => (namedBulbCount = null)),
       searchItems(''),
     ]);
     return () => {
@@ -89,6 +93,7 @@
 <div class="library-app">
   <header>
     <strong>OpenLightFX Studio</strong>
+    <a href="#/bulbs">Bulbs</a>
     <a href="#/rooms">Rooms</a>
     <a href="#/library" aria-current="page">Library</a>
     <span class="spacer"></span><span>Emby</span>
@@ -98,7 +103,10 @@
     >
   </header>
   {#if roomCount === 0}<p class="no-room">
-      No room set up. You can still write tracks. <a href="#/rooms">Set up a room</a>
+      No room set up. You can still write tracks.
+      {#if namedBulbCount === 0}<a href="#/bulbs">Find and name bulbs</a>{:else}<a href="#/rooms"
+          >Set up a room</a
+        >{/if}
     </p>{/if}
   <main>
     <div class="toolbar">

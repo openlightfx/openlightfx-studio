@@ -386,7 +386,7 @@ requirement(
 );
 
 requirement(
-  'ROOM-001 @fullstack admin room controls use Emby role authorization',
+  'BULB-001 @fullstack admin Bulbs controls use Emby role authorization',
   async ({ page, request }) => {
     const response = await request.get(`${emby()}/OpenLightFX/Studio/CanManageRooms`, {
       headers: headers(),
@@ -395,9 +395,8 @@ requirement(
     expect(response.ok()).toBeTruthy();
     expect((await response.json()).canManageRooms).toBe(true);
 
-    await page.goto(`${emby()}/emby/OpenLightFX/studio/?api_key=${token()}#/rooms`);
+    await page.goto(`${emby()}/emby/OpenLightFX/studio/?api_key=${token()}#/bulbs`);
     await expect(page.getByRole('button', { name: 'Find bulbs' })).toBeEnabled();
-    await expect(page.getByRole('button', { name: '+ New room' })).toBeEnabled();
   }
 );
 

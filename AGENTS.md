@@ -23,13 +23,14 @@ So: **the journey spec is the source of truth and screens follow it. A step is d
 
 Spec: [`docs/journeys/J1-first-light.md`](docs/journeys/J1-first-light.md). Wireframes: [`docs/journeys/wireframes/`](docs/journeys/wireframes/). Summary:
 
-1. **Set up a room** (`#/rooms`). First run with no rooms lands here. Name the room, pick its screen from Emby devices, find bulbs, Identify (flash) each, drag each onto a top-down room diagram at a position, save. There is no pasted-config import or legacy bulb/profile setup.
-2. **Pick a movie** (`#/library`). Searchable poster grid of Emby movies. Movies only, no TV.
-3. **Open or create a track** (`#/movie/{itemId}`). List the movie's tracks, or create one with a layout (suggested from the room). Open from a `.lightfx` file. Marketplace is a plain-text "coming later" note, never a control.
-4. **Edit** (`#/edit/{itemId}/{trackId}`). One timeline whose ruler is the only scrubber. Click the ruler to move the playhead; click a lane to add a keyframe. Lanes are channels, labeled with the position and the room bulbs they reach. Room picker plus a Lights switch for live preview. File menu: New, Open, Open file, Save, Export, Close. Edit menu: Undo, Redo, Delete, Track settings.
-5. **Watch in Emby.** Saves, makes the track active for the movie, opens the movie in Emby.
+1. **Set up bulbs** (`#/bulbs`). Discover each light, Identify it, give it a durable user-chosen name, and keep it in the server's bulb inventory. Discovery, Identify, and naming live here.
+2. **Set up a room** (`#/rooms`). Pick its screen from Emby devices and place named bulbs on the top-down room diagram. Unnamed bulbs cannot be placed; a room can be saved empty.
+3. **Pick a movie** (`#/library`). Searchable poster grid of Emby movies. Movies only, no TV.
+4. **Open or create a track** (`#/movie/{itemId}`). List the movie's tracks, or create one with a layout (suggested from the room). Open from a `.lightfx` file. Marketplace is a plain-text "coming later" note, never a control.
+5. **Edit** (`#/edit/{itemId}/{trackId}`). One timeline whose ruler is the only scrubber. Click the ruler to move the playhead; click a lane to add a keyframe. Lanes are channels, labeled with the position and the room bulbs they reach. Room picker plus a Lights switch for live preview. File menu: New, Open, Open file, Save, Export, Close. Edit menu: Undo, Redo, Delete, Track settings.
+6. **Watch in Emby.** This step is deferred and incomplete: it saves, makes the track active for the movie, and opens the movie in Emby, but `WATCH-001`, `WATCH-002`, and whole-J1 acceptance remain outstanding.
 
-With no rooms, steps 2–4 still work: the editor shows "Set up a room to preview on your lights" and the preview controls are disabled with a reason.
+With no bulbs or rooms, steps 3–5 still work: the editor shows "Set up a room to preview on your lights" and the preview controls are disabled with a reason. Step 6 remains incomplete and its deferral is not acceptance.
 
 Other journeys (effects authoring, marketplace, TV, settings) are **out of scope** until J1 is done and the owner says otherwise.
 

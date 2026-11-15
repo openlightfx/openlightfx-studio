@@ -1,6 +1,6 @@
-# J1 Step 1 verification
+# J1 Step 1 verification — historical combined setup flow
 
-**Status: complete — J1 Step 1**, with passing requirement-scoped automated coverage.
+**Historical status:** complete against the prior combined Rooms setup flow. The journey has since been restructured so Step 1 is Bulbs and Step 2 is Rooms; this record is not acceptance evidence for the current journey. See [current Bulbs-first verification](j1-bulbs-first-verification.md).
 The project-wide gate gaps below remain open for other J1 work.
 
 Scope: `FLOW-001`, `FLOW-003`, and `ROOM-001/002/003/004/005/006/008/009/012`.

@@ -3,7 +3,7 @@ import { requirement } from '../harness/requirement';
 import { installJ1Backend, openFixtureEditor } from '../harness/j1-browser';
 
 requirement(
-  'FLOW-001 @browser first run visually explains room setup and the no-lights authoring path',
+  'FLOW-001 @browser first run visually explains bulb setup and the no-lights authoring path',
   async ({ page }) => {
     await installJ1Backend(page);
     await page.route('**/OpenLightFX/Studio/Devices', (route) =>
@@ -11,17 +11,14 @@ requirement(
     );
     await page.route('**/OpenLightFX/Studio/Bulbs', (route) => route.fulfill({ json: [] }));
     await page.goto('/emby/OpenLightFX/studio/?api_key=browser-test');
-    await expect(page).toHaveURL(/#\/rooms$/);
-    await expect(page.getByRole('heading', { name: 'Welcome to OpenLightFX' })).toBeVisible();
-    await expect(page.getByLabel('Room name')).toBeVisible();
-    await expect(page.getByRole('option', { name: 'Living room TV · Emby Theater' })).toHaveCount(
-      1
-    );
+    await expect(page).toHaveURL(/#\/bulbs$/);
+    await expect(page.getByRole('heading', { name: 'Set up your bulbs' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Find bulbs' })).toBeVisible();
     await expect(
-      page.getByRole('button', { name: 'Skip — write a track without lights' })
+      page.getByRole('button', { name: 'Skip setup — write a track without lights' })
     ).toBeVisible();
     await expect(page.getByRole('alert')).toHaveCount(0);
-    await expect(page).toHaveScreenshot('first-room.png', {
+    await expect(page).toHaveScreenshot('first-bulbs.png', {
       maxDiffPixelRatio: 0.03,
       animations: 'disabled',
     });

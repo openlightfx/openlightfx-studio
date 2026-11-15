@@ -10,9 +10,9 @@ const gate = (...args: string[]) =>
   });
 describe('requirement-scoped traceability', () => {
   it('checks selected approved requirements without altering the global gate', () => {
-    const result = gate('--requirements', 'ROOM-001,ROOM-003,ROOM-004');
+    const result = gate('--requirements', 'ROOM-001,ROOM-003,ROOM-005');
     expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain('selected approved L1 gated (ROOM-001,ROOM-003,ROOM-004)');
+    expect(result.stdout).toContain('selected approved L1 gated (ROOM-001,ROOM-003,ROOM-005)');
   });
   it('rejects empty and unknown selections', () => {
     expect(gate('--requirements').status).toBe(1);
@@ -23,9 +23,9 @@ describe('requirement-scoped traceability', () => {
     const report = path.join(dir, 'report.json');
     try {
       fs.writeFileSync(report, JSON.stringify({ tests: [] }));
-      const result = gate('--requirements', 'ROOM-004', '--report', report);
+      const result = gate('--requirements', 'ROOM-003', '--report', report);
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain('ROOM-004 no passing test contains ROOM-004 and @fullstack');
+      expect(result.stderr).toContain('ROOM-003 no passing test contains ROOM-003 and @fullstack');
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
@@ -36,14 +36,24 @@ describe('requirement-scoped traceability', () => {
     try {
       fs.writeFileSync(
         report,
-        JSON.stringify({ tests: [{ name: 'ROOM-004 @fullstack Identify', status: 'failed' }] })
+        JSON.stringify({
+          tests: [
+            { name: 'ROOM-003 @browser named inventory', status: 'passed' },
+            { name: 'ROOM-003 @fullstack Identify', status: 'failed' },
+          ],
+        })
       );
-      expect(gate('--requirements', 'ROOM-004', '--report', report).status).toBe(1);
+      expect(gate('--requirements', 'ROOM-003', '--report', report).status).toBe(1);
       fs.writeFileSync(
         report,
-        JSON.stringify({ tests: [{ name: 'ROOM-004 @fullstack Identify', status: 'passed' }] })
+        JSON.stringify({
+          tests: [
+            { name: 'ROOM-003 @browser named inventory', status: 'passed' },
+            { name: 'ROOM-003 @fullstack Identify', status: 'passed' },
+          ],
+        })
       );
-      expect(gate('--requirements', 'ROOM-004', '--report', report).status).toBe(0);
+      expect(gate('--requirements', 'ROOM-003', '--report', report).status).toBe(0);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

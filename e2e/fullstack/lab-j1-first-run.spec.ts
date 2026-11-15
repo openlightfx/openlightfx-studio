@@ -7,7 +7,7 @@ const { requirement } = await import(
 );
 
 requirement(
-  'FLOW-001 @fullstack a fresh Studio session opens the welcome room editor when there are no rooms',
+  'FLOW-001 @fullstack a fresh Studio session opens Bulbs when there is no inventory or room',
   async ({ page, request }) => {
     const base = process.env.OLFX_EMBY_URL!;
     const headers = { 'X-Emby-Token': process.env.OLFX_API_KEY! };
@@ -19,6 +19,15 @@ requirement(
       });
       expect(deleted.ok()).toBeTruthy();
     }
+    const knownBulbs = await request.get(`${base}/OpenLightFX/Studio/Bulbs`, { headers });
+    expect(knownBulbs.ok()).toBeTruthy();
+    for (const bulb of await knownBulbs.json()) {
+      const forgotten = await request.delete(
+        `${base}/OpenLightFX/Studio/Bulbs/${encodeURIComponent(bulb.id)}`,
+        { headers }
+      );
+      expect(forgotten.ok(), await forgotten.text()).toBeTruthy();
+    }
 
     const loginPage = await page.context().newPage();
     await loginPage.goto(`${base}/web/index.html`);
@@ -29,10 +38,9 @@ requirement(
     await loginPage.close();
 
     await page.goto(`${base}/emby/OpenLightFX/studio/`);
-    await expect(page).toHaveURL(/#\/rooms$/);
-    await expect(page.getByRole('heading', { name: 'Welcome to OpenLightFX' })).toBeVisible();
-    await expect(page.getByLabel('Room name')).toHaveValue('Living Room');
-    await expect(page.getByRole('button', { name: 'Save room', exact: true })).toBeDisabled();
+    await expect(page).toHaveURL(/#\/bulbs$/);
+    await expect(page.getByRole('heading', { name: 'Set up your bulbs' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Find bulbs', exact: true })).toBeEnabled();
     await expect(page.getByText(/legacy configuration|paste.*settings/i)).toHaveCount(0);
   }
 );

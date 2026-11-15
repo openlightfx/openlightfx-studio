@@ -2195,25 +2195,25 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 
 ### Navigation
 
-#### FLOW-001 First run lands on room setup
+#### FLOW-001 First run lands on Bulbs
 
 - **Layer:** L1
 - **Status:** approved
 - **Tests:** browser, fullstack
-- **Statement:** With no rooms, Studio opens on `#/rooms` with the welcome card.
+- **Statement:** With no last route and no known bulbs, Studio opens on `#/bulbs` with the setup welcome.
 
 **Acceptance:**
 
-- Given a fresh plugin with no rooms
+- Given a fresh plugin with no bulb inventory and no rooms
 - When Studio loads
-- Then the URL is `#/rooms`, the welcome card and an open room editor named "Living Room" are visible. No legacy configuration or import prompt is shown
+- Then the URL is `#/bulbs`, the discovery and naming actions are visible, and **Skip setup** opens the Library without a legacy configuration or import prompt
 
 #### FLOW-002 Returning users land where they were
 
 - **Layer:** L1
 - **Status:** approved
 - **Tests:** browser
-- **Statement:** With rooms, Studio opens on the last route used, else the Library.
+- **Statement:** Studio restores a valid last route, else opens Bulbs with no inventory, Rooms with inventory but no rooms, or the Library.
 
 **Acceptance:**
 
@@ -2232,7 +2232,7 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 
 - Given Studio is opened from Emby at `…/studio/#/rooms` with no `api_key` and Emby Web has a saved credential for this server
 - When Studio requests its session
-- Then it sends that credential to `/OpenLightFX/Studio/Session`, receives the active token without exposing it in a URL or persistent Studio storage, sends it in `X-Emby-Token`, and loads the Rooms screen
+- Then it sends that credential to `/OpenLightFX/Studio/Session`, receives the active token without exposing it in a URL or persistent Studio storage, sends it in `X-Emby-Token`, and loads the route screen
 - Given `…/studio/?api_key=K#/movie/m1`
 - When the page reloads or Back is pressed
 - Then the query is unchanged and the screen matches the route
@@ -2242,15 +2242,72 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 - **Layer:** L1
 - **Status:** approved
 - **Tests:** browser
-- **Statement:** Rooms and Library are one click from every screen except the editor, which reaches them through File → Close.
+- **Statement:** Bulbs, Rooms, and Library are one click from every non-editor screen; the editor reaches them through File → Close.
 
 **Acceptance:**
 
 - Given the Library
-- When Rooms is clicked
-- Then `#/rooms` shows and the Rooms link is marked current
+- When Bulbs or Rooms is clicked
+- Then the matching route shows and its navigation link is marked current
 
-### Step 1 — Rooms
+### Step 1 — Bulbs
+
+#### BULB-001 Discovery keeps a durable bulb inventory
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser, fullstack
+- **Statement:** Discovery merges found lights into the server's durable inventory without replacing names or room assignments.
+
+**Acceptance:**
+
+- Given an existing named bulb and a new discovered bulb
+- When Find bulbs completes and the page reloads
+- Then both bulbs remain in inventory, the new bulb has protocol/model/IP metadata, and the existing bulb keeps its name and room assignment
+- Given a simulated Govee bulb with a stable LAN `device` identity, a saved user name and room placement, and a changed IP address
+- When the simulator is restarted with the same device identity at the new IP and discovery runs again
+- Then the bulb keeps its ID, name, and room placement while its saved IP updates
+
+#### BULB-002 Identify flashes the selected inventory bulb
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser, fullstack
+- **Statement:** Identify on Bulbs sends the identify sequence only to the selected saved bulb.
+
+**Acceptance:**
+
+- Given two discovered bulbs
+- When Identify is activated on one row
+- Then the matching bulb flashes and the row shows progress; the other bulb receives no Identify commands
+
+#### BULB-003 Bulbs need user names before room placement
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser, fullstack
+- **Statement:** A user-chosen bulb name is durable and only named bulbs can be placed in a room.
+
+**Acceptance:**
+
+- Given an unnamed discovered bulb
+- When a valid name is saved and Studio is reloaded
+- Then the name remains saved and the bulb is available on Rooms; an unnamed bulb is not offered or accepted for room placement
+
+#### BULB-004 Forget only unassigned bulbs
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser, fullstack
+- **Statement:** Forget removes a bulb from durable inventory only when it is not assigned to a room.
+
+**Acceptance:**
+
+- Given one unassigned bulb and one bulb in a room
+- When Forget is used on the unassigned bulb
+- Then it is absent after reload; Forget is disabled and the API refuses to remove the assigned bulb
+
+### Step 2 — Rooms
 
 #### ROOM-001 Create and save a room
 
@@ -2280,43 +2337,30 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 - Then B appears as "In Bedroom" and is disabled
 - There is no user or room filter
 
-#### ROOM-003 Discover bulbs
-
-- **Layer:** L1
-- **Status:** approved
-- **Tests:** fullstack
-- **Statement:** Find bulbs runs discovery and lists all known bulbs, including bulbs assigned to another room.
-
-**Acceptance:**
-
-- Given the simulator emulating 4 bulbs, one already in Bedroom
-- When Find bulbs is clicked
-- Then within 10 s the list shows all 4 with protocol, model, and IP; the Bedroom bulb is labeled and cannot be placed here
-- A progress bar shows while discovery runs
-
-#### ROOM-004 Identify flashes the right bulb
-
-- **Layer:** L1
-- **Status:** approved
-- **Tests:** fullstack
-- **Statement:** Identify flashes exactly the chosen bulb.
-
-**Acceptance:**
-
-- Given bulbs b1 and b2 in the simulator
-- When Identify is clicked on b1
-- Then simulator NDJSON shows red, green, blue commands to b1 only, and b1's row reads "Flashing…" until it finishes
-
-#### ROOM-005 Place bulbs by drag or menu
+#### ROOM-003 Rooms uses named inventory only
 
 - **Layer:** L1
 - **Status:** approved
 - **Tests:** browser, fullstack
-- **Statement:** Dragging a bulb onto a zone or choosing a position from Place ▾ puts it at that position; × takes it out.
+- **Statement:** Rooms lists only named bulbs for placement and has no discovery, Identify, or rename controls.
 
 **Acceptance:**
 
-- Given an unplaced bulb
+- Given named and unnamed bulbs in inventory
+- When Rooms opens
+- Then named bulbs are available for placement, unnamed bulbs are absent, and the page links to Bulbs for inventory management
+- The Rooms page contains no Find bulbs or Identify action
+
+#### ROOM-005 Place named bulbs by drag or menu
+
+- **Layer:** L1
+- **Status:** approved
+- **Tests:** browser, fullstack
+- **Statement:** Dragging a named bulb onto a zone or choosing a position from Place ▾ puts it at that position; × takes it out.
+
+**Acceptance:**
+
+- Given an unplaced named bulb
 - When it is dragged to Left
 - Then its chip is in the Left zone;
 - When Place ▾ → Surround Right is used instead, the same result in that zone. After Save, `GET …/Rooms/{id}` lists the bulb with that position. When × is clicked and saved, it is unplaced again
@@ -2333,18 +2377,18 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 - Given bulbs at L and R
 - Then it reads "This room plays 2.0 tracks natively…". When a bulb is added at Center, it reads 3.0 without a reload
 
-#### ROOM-008 Rename and Follows
+#### ROOM-008 Follows override persists with the room
 
 - **Layer:** L1
 - **Status:** approved
 - **Tests:** browser, fullstack
-- **Statement:** Bulb names and Follows overrides save with the room.
+- **Statement:** A bulb's Follows override saves with its room placement.
 
 **Acceptance:**
 
-- Given b1 renamed "Desk lamp" and set to follow Ambient
+- Given a named bulb set to follow Ambient
 - When the room is saved and reloaded
-- Then the chip reads "Desk lamp → Ambient"
+- Then its chip shows "→ Ambient" and the room API returns the override
 
 #### ROOM-009 Delete a room
 
@@ -2364,18 +2408,15 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 - **Layer:** L1
 - **Status:** approved
 - **Tests:** browser
-- **Statement:** Each Step 1 error state shows the text in [Step 1 errors](../journeys/J1-first-light.md#empty-and-error-states) and keeps what the person entered.
+- **Statement:** Room save errors explain the problem and keep what the person entered.
 
 **Acceptance:**
 
-- Given discovery that finds nothing
-- When Discover runs
-- Then the "No bulbs answered…" text and Try again show
-- Given a 409 on save
+- Given a stale room version on save
 - When Save is clicked
 - Then the conflict prompt shows and the edited name is still in the field
 
-### Step 2 — Library
+### Step 3 — Library
 
 #### LIB-001 Poster grid of Emby movies
 
@@ -2416,23 +2457,26 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 - When the first card is clicked
 - Then the Movie screen for that item shows its title
 
-#### LIB-004 No-room strip
+#### LIB-004 No-room setup link
 
 - **Layer:** L1
 - **Status:** approved
 - **Tests:** browser, fullstack
-- **Statement:** With no rooms the Library shows the no-room strip with a working Set up a room link.
+- **Statement:** With no room the Library offers the next setup action based on whether any bulbs have been named.
 
 **Acceptance:**
 
-- Given no rooms
+- Given no room and no named bulb
 - When the Library loads
-- Then the strip shows, and clicking its link opens `#/rooms`
+- Then the strip links to `#/bulbs` to find and name bulbs
+- Given no room and at least one named bulb
+- When the Library loads
+- Then the strip links to `#/rooms`
 - Given a room exists
 - When the Library loads
 - Then the strip is absent
 
-### Step 3 — Open or create
+### Step 4 — Open or create
 
 #### TRACK-001 List a movie's tracks
 
@@ -2489,7 +2533,7 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 - When it renders
 - Then no element with role button or link contains "Marketplace"
 
-### Step 4 — Editor
+### Step 5 — Editor
 
 #### EDIT-001 One scrubber
 
@@ -2682,7 +2726,7 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 - When 2.0 is chosen
 - Then "Remove Center and its 4 keyframes?" shows; Cancel changes nothing
 
-### Step 5 — Watch in Emby
+### Step 6 — Watch in Emby
 
 #### WATCH-001 Watch in Emby makes the track active
 
@@ -2749,13 +2793,14 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 | Plugin contract            | PLUG   |       5 |      0 |     0 |       5 |
 | Model and routing          | MODEL  |       7 |      0 |     0 |       7 |
 | Navigation                 | FLOW   |       4 |      0 |     0 |       4 |
-| Step 1 — Rooms             | ROOM   |       9 |      0 |     0 |       9 |
-| Step 2 — Library           | LIB    |       4 |      0 |     0 |       4 |
-| Step 3 — Open or create    | TRACK  |       4 |      0 |     0 |       4 |
-| Step 4 — Editor            | EDIT   |      14 |      0 |     0 |      14 |
-| Step 5 — Watch in Emby     | WATCH  |       2 |      0 |     0 |       2 |
+| Step 1 — Bulbs             | BULB   |       4 |      0 |     0 |       4 |
+| Step 2 — Rooms             | ROOM   |       8 |      0 |     0 |       8 |
+| Step 3 — Library           | LIB    |       4 |      0 |     0 |       4 |
+| Step 4 — Open or create    | TRACK  |       4 |      0 |     0 |       4 |
+| Step 5 — Editor            | EDIT   |      14 |      0 |     0 |      14 |
+| Step 6 — Watch in Emby     | WATCH  |       2 |      0 |     0 |       2 |
 | Process                    | DONE   |       1 |      0 |     0 |       1 |
-| **Total**                  |        | **142** | **21** | **2** | **165** |
+| **Total**                  |        | **145** | **21** | **2** | **168** |
 
 The checker recomputes this table from the headings. Do not keep a second list.
 

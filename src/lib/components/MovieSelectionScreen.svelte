@@ -234,7 +234,8 @@
 <svelte:head><title>{item?.name ?? 'Movie'} · OpenLightFX Studio</title></svelte:head>
 <div class="movie-app">
   <header>
-    <strong>OpenLightFX Studio</strong><a href="#/rooms">Rooms</a><a href="#/library">Library</a
+    <strong>OpenLightFX Studio</strong><a href="#/bulbs">Bulbs</a><a href="#/rooms">Rooms</a><a
+      href="#/library">Library</a
     ><span></span><a
       href="https://github.com/openlightfx/openlightfx-studio/blob/main/docs/journeys/J1-first-light.md"
       >Help</a

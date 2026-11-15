@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import EditorScreen from '$lib/components/EditorScreen.svelte';
+  import BulbsScreen from '$lib/components/rooms/BulbsScreen.svelte';
   import LibraryScreen from '$lib/components/LibraryScreen.svelte';
   import MovieSelectionScreen from '$lib/components/MovieSelectionScreen.svelte';
   import RoomsScreen from '$lib/components/rooms/RoomsScreen.svelte';
-  import { loadRooms } from '$lib/api/rooms';
+  import { loadBulbs, loadRooms } from '$lib/api/rooms';
   import { StudioSession } from '$lib/studio/session.svelte';
 
   const session = new StudioSession();
@@ -39,16 +40,21 @@
     window.addEventListener('hashchange', updateRoute);
     window.addEventListener('olfx-editor-route-replaced', syncSavedRoute);
     if (!location.hash) {
-      void loadRooms()
-        .then((rooms) => {
+      void Promise.all([loadRooms(), loadBulbs()])
+        .then(([rooms, bulbs]) => {
           if (location.hash) return;
           const lastRoute = localStorage.getItem('olfx-last-route');
           const validLastRoute =
-            /^#\/(rooms(?:\/[^/?]+)?|library|movie\/[^/?]+|edit\/[^/?]+\/[^/?]+)$/.test(
+            /^#\/(bulbs|rooms(?:\/[^/?]+)?|library|movie\/[^/?]+|edit\/[^/?]+\/[^/?]+)$/.test(
               lastRoute ?? ''
             );
-          location.hash =
-            rooms.length === 0 ? '#/rooms' : validLastRoute ? lastRoute! : '#/library';
+          location.hash = validLastRoute
+            ? lastRoute!
+            : bulbs.length === 0
+              ? '#/bulbs'
+              : rooms.length === 0
+                ? '#/rooms'
+                : '#/library';
         })
         .catch(() => {
           if (!location.hash) location.hash = '#/rooms';
@@ -177,6 +183,8 @@
 
 {#if !hashRoute}
   <div class="route-loading" role="status">Loading OpenLightFX Studio…</div>
+{:else if hashRoute.startsWith('#/bulbs')}
+  <BulbsScreen />
 {:else if hashRoute.startsWith('#/rooms')}
   <RoomsScreen />
 {:else if hashRoute.startsWith('#/library')}

@@ -2,14 +2,11 @@
   import { onMount } from 'svelte';
   import {
     deleteRoom,
-    discoverBulbs,
-    identifyBulb,
     loadBulbs,
     loadDevices,
     loadRooms,
     loadSetup,
     positions,
-    renameBulb,
     saveRoom,
     type EmbyDevice,
     type Position,
@@ -26,15 +23,9 @@
   let name = $state('Living Room');
   let screenId = $state('');
   let placed = $state<{ id: string; position: Position | null; follows: Position | null }[]>([]);
-  let busy = $state(false);
-  let discoveryController: AbortController | null = null;
-  let discoveryRetry = $state(false);
-  let identifying = $state('');
-  let identifyFailure = $state<{ id: string; message: string } | null>(null);
   let notice = $state('');
   let error = $state('');
   let connectionFailed = $state(false);
-  let noBulbs = $state(false);
   let conflict = $state(false);
   let menuBulb = $state('');
   let pendingRoom = $state<Room | null>(null);
@@ -59,7 +50,7 @@
       )
   );
   const assigned = $derived(new Set(placed.map((b) => b.id)));
-  const unplaced = $derived(bulbs.filter((b) => !assigned.has(b.id)));
+  const unplaced = $derived(bulbs.filter((b) => b.isNamed && !assigned.has(b.id)));
   const positionsUsed = $derived(
     new Set(placed.map((b) => b.position).filter((p): p is Position => !!p))
   );
@@ -95,7 +86,7 @@
       if (room) {
         openRoom(room);
         fresh = false;
-      } else if (!selected) {
+      } else {
         fresh = true;
         selected = null;
         name = 'Living Room';
@@ -153,52 +144,15 @@
     placed = [];
     notice = 'Unsaved changes';
   }
-  async function discover() {
-    const controller = new AbortController();
-    discoveryController = controller;
-    busy = true;
-    discoveryRetry = false;
-    noBulbs = false;
-    error = '';
-    notice = 'Searching for bulbs…';
-    try {
-      const result = await discoverBulbs(controller.signal);
-      const knownBulbs = await loadBulbs();
-      if (controller.signal.aborted) return;
-      bulbs = knownBulbs;
-      const foundCount = result.foundCount ?? result.bulbs.length;
-      if (foundCount === 0) {
-        noBulbs = true;
-        error =
-          'No bulbs answered. Check the bulbs are powered and on the same network as the Emby server. If Emby runs in Docker, it needs host networking for discovery.';
-        notice = '';
-      } else {
-        notice = `Found ${foundCount} bulbs.`;
-      }
-    } catch (e) {
-      if (!controller.signal.aborted) {
-        error = (e as Error).message;
-        discoveryRetry = true;
-        notice = '';
-      }
-    } finally {
-      if (discoveryController === controller) {
-        discoveryController = null;
-        busy = false;
-      }
-    }
-  }
-  function cancelDiscovery() {
-    discoveryController?.abort();
-    discoveryController = null;
-    busy = false;
-    notice = 'Discovery cancelled. Known bulbs have been kept.';
-  }
   function place(id: string, pos: Position | null) {
     const bulb = bulbs.find((b) => b.id === id);
     if (!bulb) return;
     if (pos === null) {
       if (placed.some((entry) => entry.id === id)) remove(id);
+      return;
+    }
+    if (!bulb.isNamed) {
+      notice = 'Name this bulb on the Bulbs page before placing it in a room.';
       return;
     }
     if (bulb.roomId && bulb.roomId !== selected) {
@@ -212,44 +166,6 @@
   function remove(id: string) {
     placed = placed.filter((x) => x.id !== id);
     notice = 'Unsaved changes';
-  }
-  async function identify(id: string) {
-    identifying = id;
-    identifyFailure = null;
-    try {
-      await identifyBulb(id);
-      notice = 'Identify finished.';
-    } catch {
-      const bulb = bulbs.find((item) => item.id === id);
-      identifyFailure = {
-        id,
-        message: `Didn't answer${bulb?.ipAddress ? ` at ${bulb.ipAddress}` : ''}`,
-      };
-      setTimeout(() => {
-        if (identifyFailure?.id === id) identifyFailure = null;
-      }, 10_000);
-    } finally {
-      setTimeout(() => {
-        if (identifying === id) identifying = '';
-      }, 2000);
-    }
-  }
-  async function rename(id: string) {
-    const bulb = bulbs.find((b) => b.id === id);
-    const next = prompt('Bulb name', bulb?.name);
-    if (next === null) return;
-    const trimmed = next.trim();
-    if (trimmed.length < 1 || trimmed.length > 40) {
-      error = 'Bulb names must be 1–40 characters.';
-      return;
-    }
-    try {
-      await renameBulb(id, trimmed);
-      bulbs = await loadBulbs();
-      notice = 'Bulb renamed.';
-    } catch (e) {
-      error = (e as Error).message;
-    }
   }
   function lastSeen(value?: string): string {
     if (!value) return '';
@@ -334,9 +250,9 @@
 <svelte:head><title>Rooms · OpenLightFX Studio</title></svelte:head>
 <div class="rooms-app">
   <header>
-    <strong>OpenLightFX Studio</strong><a class="active" href="#/rooms">Rooms</a><a href="#/library"
-      >Library</a
-    ><span class="spacer"></span><span>Emby</span><a
+    <strong>OpenLightFX Studio</strong><a href="#/bulbs">Bulbs</a><a class="active" href="#/rooms"
+      >Rooms</a
+    ><a href="#/library">Library</a><span class="spacer"></span><span>Emby</span><a
       href="https://github.com/openlightfx/openlightfx-studio/blob/main/docs/journeys/J1-first-light.md"
       >Help</a
     >
@@ -389,23 +305,22 @@
         </dialog>
       </div>{/if}
     {#if fresh && rooms.length === 0}<div class="card welcome">
-        <h1>Welcome to OpenLightFX</h1>
-        <p>
-          OpenLightFX lights your room in time with a movie. First, tell it about the room you watch
-          in: its screen and its bulbs. It takes a few minutes.
-        </p>
-        <button onclick={() => (location.hash = '#/library')}
-          >Skip — write a track without lights</button
-        >
+        <h1>Set up a room</h1>
+        <p>Choose the Emby screen in this room, then place your named bulbs on the diagram.</p>
+        {#if bulbs.filter((bulb) => bulb.isNamed).length === 0}<p>
+            No named bulbs are ready yet. <a href="#/bulbs">Find and name bulbs</a>, or continue
+            without lights.
+          </p>{/if}
+        <a href="#/library">Write a track without lights</a>
       </div>{/if}
     {#if error}<p class="error" role="alert">
-        {error}{#if connectionFailed}<button onclick={() => void refresh()}>Retry</button
-          >{/if}{#if noBulbs || discoveryRetry}<button onclick={() => void discover()}
-            >Try again</button
-          >{/if}
+        {error}{#if connectionFailed}<button onclick={() => void refresh()}>Retry</button>{/if}
       </p>{/if}
     {#if placed.length === 0}<p class="notice" role="status">
-        No bulbs yet. Tracks will not light this room until you add bulbs.
+        No bulbs placed yet. Tracks will not light this room until you add bulbs.
+        {#if bulbs.filter((bulb) => bulb.isNamed).length === 0}<a href="#/bulbs"
+            >Find and name bulbs</a
+          >{/if}
       </p>{/if}
     <div class="topfields">
       <label
@@ -526,21 +441,13 @@
         </p>
       </div>
       <aside class="bulb-panel">
-        <div class="panelhead">
-          <b>Known bulbs</b><button disabled={busy || setup?.isAdmin !== true} onclick={discover}
-            >{busy ? 'Searching…' : 'Find bulbs'}</button
-          >
-        </div>
-        {#if busy}<progress aria-label="Finding bulbs"></progress><button onclick={cancelDiscovery}
-            >Cancel</button
-          >{/if}
+        <div class="panelhead"><b>Named bulbs</b><a href="#/bulbs">Manage bulbs</a></div>
         <p>
-          Found {unplaced.length} · Known bulbs stay listed after discovery. Bulbs assigned to other rooms
-          remain visible but cannot be placed here.
+          Only bulbs named on the Bulbs page can be placed here. Bulbs assigned to other rooms
+          remain visible but cannot be moved.
         </p>
         {#if unplaced.length === 0}<p class="empty">
-            No unplaced bulbs are known yet. Find bulbs searches your network for WiZ, LIFX, and
-            Govee.
+            No named bulbs are available to place. <a href="#/bulbs">Find and name bulbs</a> first.
           </p>{/if}{#each unplaced as bulb (bulb.id)}<div
             class="bulb"
             role="listitem"
@@ -550,26 +457,13 @@
             }}
           >
             <span
-              >⠿ <button
-                class="text"
-                disabled={setup?.isAdmin !== true}
-                onclick={() => rename(bulb.id)}>{bulb.name}</button
-              ><small
+              >⠿ <b>{bulb.name}</b><small
                 >{bulb.protocol} · {bulb.model ?? 'Unknown model'} · {bulb.ipAddress ??
                   ''}{bulb.roomId && bulb.roomId !== selected
                   ? ` · In ${rooms.find((r) => r.id === bulb.roomId)?.name ?? 'another room'}`
                   : ''}</small
               ></span
-            ><span>
-              {#if identifyFailure?.id === bulb.id}<small role="status"
-                  >{identifyFailure.message}</small
-                >{/if}
-              <button
-                disabled={identifying === bulb.id || setup?.isAdmin !== true}
-                onclick={() => identify(bulb.id)}
-                >{identifying === bulb.id ? 'Flashing…' : 'Identify'}</button
-              >
-            </span>
+            >
             <details>
               <summary>Place ▾</summary>
               <div class="place-menu">
@@ -610,8 +504,6 @@
       disabled={setup?.isAdmin !== true}
       onclick={() => remove(b.id)}>×</button
     >{#if menuBulb === b.id}<span class="chip-menu"
-        ><button disabled={setup?.isAdmin !== true} onclick={() => identify(b.id)}>Identify</button
-        ><button disabled={setup?.isAdmin !== true} onclick={() => rename(b.id)}>Rename…</button
         ><label
           >Follows<select
             disabled={setup?.isAdmin !== true}
@@ -919,13 +811,6 @@
     gap: 8px;
     border-bottom: 1px solid var(--surface2);
     padding: 8px 0;
-  }
-  .bulb .text {
-    padding: 0;
-    border: 0;
-    color: var(--accent2);
-    text-decoration: underline;
-    background: none;
   }
   .bulb details {
     position: relative;

@@ -53,11 +53,12 @@ const AREAS = [
   ['Plugin contract', 'PLUG'],
   ['Model and routing', 'MODEL'],
   ['Navigation', 'FLOW'],
-  ['Step 1 — Rooms', 'ROOM'],
-  ['Step 2 — Library', 'LIB'],
-  ['Step 3 — Open or create', 'TRACK'],
-  ['Step 4 — Editor', 'EDIT'],
-  ['Step 5 — Watch in Emby', 'WATCH'],
+  ['Step 1 — Bulbs', 'BULB'],
+  ['Step 2 — Rooms', 'ROOM'],
+  ['Step 3 — Library', 'LIB'],
+  ['Step 4 — Open or create', 'TRACK'],
+  ['Step 5 — Editor', 'EDIT'],
+  ['Step 6 — Watch in Emby', 'WATCH'],
   ['Process', 'DONE'],
 ];
 

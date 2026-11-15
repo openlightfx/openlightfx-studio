@@ -16,6 +16,7 @@ export interface RoomBulb {
   model?: string;
   ipAddress?: string;
   roomId?: string | null;
+  isNamed: boolean;
   position?: Position | null;
   follows?: Position | null;
   lastSeenAt?: string;
@@ -142,6 +143,8 @@ export const identifyBulb = (id: string) =>
   roomApi(`Bulbs/${encodeURIComponent(id)}/Identify`, { method: 'POST', body: '{}' });
 export const renameBulb = (id: string, name: string) =>
   roomApi(`Bulbs/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ name }) });
+export const forgetBulb = (id: string) =>
+  roomApi<void>(`Bulbs/${encodeURIComponent(id)}`, { method: 'DELETE' });
 export const saveRoom = (roomId: string | null, data: unknown, updatedAt?: string) =>
   roomApi<Room>(`Rooms${roomId ? `/${encodeURIComponent(roomId)}` : ''}`, {
     method: roomId ? 'PUT' : 'POST',

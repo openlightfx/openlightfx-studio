@@ -28,6 +28,7 @@ const bulbs = [
   {
     id: 'bulb-left',
     name: 'Left lamp',
+    isNamed: true,
     protocol: 'WiZ',
     model: 'A19',
     roomId: 'room-1',
@@ -36,12 +37,20 @@ const bulbs = [
   {
     id: 'bulb-right',
     name: 'Right lamp',
+    isNamed: true,
     protocol: 'WiZ',
     model: 'A19',
     roomId: 'room-1',
     position: 'right',
   },
-  { id: 'bulb-center', name: 'Center lamp', protocol: 'LIFX', model: 'Color', roomId: null },
+  {
+    id: 'bulb-center',
+    name: 'Center lamp',
+    isNamed: true,
+    protocol: 'LIFX',
+    model: 'Color',
+    roomId: null,
+  },
 ];
 
 async function mockRooms(page, { rooms: initialRooms = [initialRoom] } = {}) {
@@ -104,17 +113,6 @@ async function openRooms(page, options?: { rooms?: (typeof initialRoom)[] }) {
   await page.goto('/?api_key=browser-test#/rooms');
   await expect(page.getByRole('heading', { name: 'Your rooms' })).toBeVisible();
 }
-
-requirement(
-  'FLOW-001 @browser a first run with no rooms opens setup and welcome',
-  async ({ page }) => {
-    await mockRooms(page, { rooms: [] });
-    await page.goto('/?api_key=browser-test');
-    await expect(page).toHaveURL(/#\/rooms$/);
-    await expect(page.getByRole('heading', { name: 'Welcome to OpenLightFX' })).toBeVisible();
-    await expect(page.getByLabel('Room name')).toHaveValue('Living Room');
-  }
-);
 
 requirement(
   'FLOW-002 @browser a returning user resumes the last route they visited',
@@ -230,16 +228,6 @@ requirement(
 );
 
 requirement(
-  'ROOM-012 @browser empty discovery explains the problem and offers retry',
-  async ({ page }) => {
-    await openRooms(page);
-    await page.getByRole('button', { name: 'Find bulbs' }).click();
-    await expect(page.getByRole('alert')).toContainText('No bulbs answered.');
-    await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
-  }
-);
-
-requirement(
   'ROOM-012 @browser save conflict keeps the edited room name and offers resolution',
   async ({ page }) => {
     await openRooms(page);
@@ -258,40 +246,13 @@ requirement(
 );
 
 requirement(
-  'ROOM-012 @browser discovery failure keeps known bulbs and offers Try again',
+  'ROOM-003 @browser room setup shows only named bulbs and keeps discovery on Bulbs',
   async ({ page }) => {
     await openRooms(page);
-    await page.route('**/OpenLightFX/Studio/Discover', (route) =>
-      route.fulfill({ status: 500, body: 'Discovery is temporarily unavailable.' })
-    );
-    await page.getByRole('button', { name: 'Find bulbs', exact: true }).click();
-    await expect(page.getByRole('alert')).toContainText('Discovery is temporarily unavailable.');
-    await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
     await expect(page.getByRole('listitem').filter({ hasText: 'Center lamp' })).toBeVisible();
-    await expect(
-      page.getByRole('region', { name: 'Left bulb position', exact: true })
-    ).toContainText('Left lamp');
-  }
-);
-
-requirement(
-  'ROOM-003 @browser Cancel stops waiting for discovery without losing known bulbs',
-  async ({ page }) => {
-    await openRooms(page);
-    let release: (() => void) | undefined;
-    await page.route('**/OpenLightFX/Studio/Discover', async (route) => {
-      await new Promise<void>((resolve) => {
-        release = resolve;
-      });
-      await route.fulfill({ json: { foundCount: 4, bulbs: [] } }).catch(() => {});
-    });
-    await page.getByRole('button', { name: 'Find bulbs', exact: true }).click();
-    await expect(page.getByRole('progressbar', { name: 'Finding bulbs' })).toBeVisible();
-    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect(page.getByRole('progressbar')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Find bulbs', exact: true })).toBeEnabled();
-    await expect(page.getByText('Discovery cancelled. Known bulbs have been kept.')).toBeVisible();
-    release?.();
-    await expect(page.getByRole('listitem').filter({ hasText: 'Center lamp' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Manage bulbs' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Find bulbs' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Identify' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Rename…' })).toHaveCount(0);
   }
 );

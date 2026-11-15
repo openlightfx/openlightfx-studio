@@ -7,7 +7,7 @@ const { requirement } = await import(
 );
 
 requirement(
-  'ROOM-003 @fullstack Find bulbs discovers four WiZ bulbs with metadata and preserves the occupied bulb',
+  'BULB-001 @fullstack Bulbs discovery persists four WiZ inventory records and preserves names and room assignments',
   async ({ page, request }) => {
     const base = process.env.OLFX_EMBY_URL!;
     const token = process.env.OLFX_API_KEY!;
@@ -30,8 +30,7 @@ requirement(
       data: { name: 'Bedroom', screenDeviceId: devices[0].deviceId, bulbs: [occupied] },
     });
     expect(saved.ok(), await saved.text()).toBeTruthy();
-    await page.goto(`${base}/emby/OpenLightFX/studio/?api_key=${token}#/rooms`);
-    await page.getByRole('button', { name: '+ New room', exact: true }).click();
+    await page.goto(`${base}/emby/OpenLightFX/studio/?api_key=${token}#/bulbs`);
     const ndjson = process.env.OLFX_NDJSON!;
     const eventsBefore = fs.readFileSync(ndjson, 'utf8').trimEnd().split('\n').length;
     const responsePromise = page.waitForResponse(
@@ -45,12 +44,12 @@ requirement(
     const discovery = await response.json();
     expect(discovery.foundCount).toBe(4);
     expect(discovery.bulbs).toHaveLength(4);
-    await expect(page.getByRole('listitem')).toHaveCount(4);
+    await expect(page.getByRole('article')).toHaveCount(4);
     for (const bulb of discovery.bulbs) {
       expect(bulb.protocol).toBe('wiz');
       expect(bulb.model).toBe('ESP01_SHRGB1W_01');
       expect(bulb.ipAddress).toMatch(/^\d+\.\d+\.\d+\.\d+$/);
-      const row = page.getByRole('listitem').filter({ hasText: bulb.name });
+      const row = page.getByRole('article').filter({ hasText: bulb.ipAddress });
       await expect(row).toContainText(bulb.model);
       await expect(row).toContainText(bulb.ipAddress);
       await expect(row).toContainText('wiz');
@@ -59,12 +58,19 @@ requirement(
       (bulb: { roomId?: string }) => bulb.roomId === room.id
     );
     expect(occupiedBulb).toBeTruthy();
-    const occupiedRow = page.getByRole('listitem').filter({ hasText: occupiedBulb.name });
+    const occupiedRow = page.getByRole('article').filter({ hasText: occupiedBulb.ipAddress });
     await expect(occupiedRow).toContainText('In Bedroom');
-    await occupiedRow.locator('summary').click();
-    await expect(
-      occupiedRow.locator('.place-menu').getByRole('button', { name: 'Left', exact: true })
-    ).toBeDisabled();
+    await expect(occupiedRow.getByRole('button', { name: 'Forget' })).toBeDisabled();
+    await page.reload();
+    const persistedBulbs = await (
+      await request.get(`${base}/OpenLightFX/Studio/Bulbs`, { headers })
+    ).json();
+    expect(persistedBulbs.map((bulb: { id: string }) => bulb.id).sort()).toEqual(
+      discovery.bulbs.map((bulb: { id: string }) => bulb.id).sort()
+    );
+    expect(persistedBulbs.find((bulb: { id: string }) => bulb.id === occupiedBulb.id).roomId).toBe(
+      room.id
+    );
     const probes = fs
       .readFileSync(ndjson, 'utf8')
       .trimEnd()
