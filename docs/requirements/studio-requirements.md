@@ -126,7 +126,7 @@ On-demand, not CI. Characteristics, not a title: about 25 GB, 4K, HEVC 10-bit, H
 - Then the UI says the plugin is unreachable and does not show a built-in catalog of fake movies
 - Given `npm run dev` opened at its local origin
 - When the plugin is absent
-- Then the screen says it is local dev and offers an H.264 file picker, and it does not present three pretend library titles
+- Then the screen says it is local dev and explains that an Emby connection is required, without a local-video picker or pretend library titles
 
 #### SHELL-003 Desktop layout keeps transport on screen
 
@@ -556,7 +556,7 @@ On-demand, not CI. Characteristics, not a title: about 25 GB, 4K, HEVC 10-bit, H
 
 #### TIME-008 Selection gestures
 
-- **Layer:** L1
+- **Layer:** L2
 - **Status:** approved
 - **Tests:** browser
 - **Statement:** Click, Ctrl or Cmd click, and Shift click select keyframes, and clicking empty space clears the selection.
@@ -575,7 +575,7 @@ On-demand, not CI. Characteristics, not a title: about 25 GB, 4K, HEVC 10-bit, H
 
 #### TIME-009 Marquee selection
 
-- **Layer:** L1
+- **Layer:** L2
 - **Status:** approved
 - **Tests:** browser
 - **Statement:** Dragging a rectangle on empty timeline selects the keyframes inside it.
@@ -1530,7 +1530,7 @@ Conversion: `temp = clamp(kelvin, 1000, 40000) / 100`. At `temp ≤ 66`, red is 
 
 #### PREV-001 On-screen regions
 
-- **Layer:** L1
+- **Layer:** L2
 - **Status:** approved
 - **Tests:** browser
 - **Statement:** The movie overlay draws each mapped spatial hint in a fixed region and lists channels with no hint.
@@ -1564,7 +1564,7 @@ Conversion: `temp = clamp(kelvin, 1000, 40000) / 100`. At `temp ≤ 66`, red is 
 
 #### PREV-002 Overlay matches the sampler
 
-- **Layer:** L1
+- **Layer:** L2
 - **Status:** approved
 - **Tests:** browser, unit
 - **Statement:** The overlay color is the sampler output at the playhead.
@@ -1579,7 +1579,7 @@ Conversion: `temp = clamp(kelvin, 1000, 40000) / 100`. At `temp ≤ 66`, red is 
 
 #### PREV-003 Solo and mute affect the overlay
 
-- **Layer:** L1
+- **Layer:** L2
 - **Status:** approved
 - **Tests:** browser
 - **Statement:** Muted channels are hidden on the overlay, and solo shows only soloed channels.
@@ -1760,11 +1760,11 @@ Conversion: `temp = clamp(kelvin, 1000, 40000) / 100`. At `temp ≤ 66`, red is 
 - **Layer:** L1
 - **Status:** approved
 - **Tests:** browser
-- **Statement:** Panning and zooming a two-hour, 10,000-keyframe timeline stays within a 16.7 ms frame budget.
+- **Statement:** Panning and zooming a J1 5.0, two-hour, 10,000-keyframe timeline stays within a 16.7 ms frame budget.
 
 **Acceptance:**
 
-- Given 8 channels, 10,000 keyframes, duration 7,200,000 ms, video paused, device pixel ratio ≤ 2, and at least 4 CPU cores
+- Given the five canonical channels of a J1 5.0 layout, 10,000 keyframes, duration 7,200,000 ms, video paused, device pixel ratio ≤ 2, and at least 4 CPU cores
 - When the test applies a continuous zoom for 3 seconds
 - Then p95 time between animation frames is ≤ 16.7 ms in Chromium
 
@@ -2732,7 +2732,7 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 | -------------------------- | ------ | ------: | -----: | ----: | ------: |
 | App shell and navigation   | SHELL  |       6 |      3 |     0 |       9 |
 | Media loading and playback | MEDIA  |      14 |      0 |     0 |      14 |
-| Timeline view              | TIME   |      10 |      2 |     0 |      12 |
+| Timeline view              | TIME   |       8 |      4 |     0 |      12 |
 | Keyframe editing           | KEY    |      14 |      1 |     0 |      15 |
 | Effects                    | FX     |       0 |      4 |     1 |       5 |
 | Channels and groups        | CHAN   |       3 |      1 |     0 |       4 |
@@ -2741,7 +2741,7 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 | Shortcuts                  | KEYB   |       3 |      1 |     0 |       4 |
 | Save, load, and autosave   | SAVE   |       8 |      0 |     0 |       8 |
 | Import and export          | IO     |       4 |      0 |     1 |       5 |
-| Live preview               | PREV   |       8 |      1 |     0 |       9 |
+| Live preview               | PREV   |       5 |      4 |     0 |       9 |
 | Safety                     | SAFE   |       2 |      1 |     0 |       3 |
 | Performance                | PERF   |       4 |      0 |     0 |       4 |
 | Accessibility and input    | A11Y   |       3 |      1 |     0 |       4 |
@@ -2755,7 +2755,7 @@ Approved by the owner with [J1 — First light](../journeys/J1-first-light.md). 
 | Step 4 — Editor            | EDIT   |      14 |      0 |     0 |      14 |
 | Step 5 — Watch in Emby     | WATCH  |       2 |      0 |     0 |       2 |
 | Process                    | DONE   |       1 |      0 |     0 |       1 |
-| **Total**                  |        | **147** | **16** | **2** | **165** |
+| **Total**                  |        | **142** | **21** | **2** | **165** |
 
 The checker recomputes this table from the headings. Do not keep a second list.
 
@@ -2773,7 +2773,7 @@ The checker recomputes this table from the headings. Do not keep a second list.
 
 The March spec runs entirely in the browser: local files, File System Access API, and ffmpeg.wasm for HDR eyedropper frames, with COOP/COEP so SharedArrayBuffer works. The owner uses Firefox. Firefox has no File System Access API and cannot play HEVC, MKV, or TrueHD from an object URL. A 25 GB 4K HEVC HDR10 file is not a practical ffmpeg.wasm input (memory, software-decode speed, and the isolation headers Emby will not send).
 
-**Decision:** Emby is the media path. The browser plays an H.264 edit proxy from the plugin. HDR eyedropper frames are extracted by the plugin with Emby's ffmpeg and Hable-tonemapped to sRGB (`PLUG-002`, `PROP-004`). Studio does not ship ffmpeg.wasm and does not require COOP or COEP. Local dev may open an H.264/AAC MP4 for UI work. Anything the browser cannot decode is an error that points back to Emby (`MEDIA-014`, `ERR-005`).
+**Decision:** Emby is the media path. The browser plays an H.264 edit proxy from the plugin. HDR eyedropper frames are extracted by the plugin with Emby's ffmpeg and Hable-tonemapped to sRGB (`PLUG-002`, `PROP-004`). Studio does not ship ffmpeg.wasm and does not require COOP or COEP. Local dev requires an Emby connection too; it does not open source-video files. `MEDIA-014` and `ERR-005` are superseded by the approved J1 Emby-only journey.
 
 ### C3 — Scrubbing a transcode restarts the transcode
 

@@ -10,8 +10,10 @@
   const session = new StudioSession();
   let hashRoute = $state('');
   let bootedEditorRoute = '';
+  let localDev = $state(false);
 
   onMount(() => {
+    localDev = !/\/OpenLightFX\/studio\//i.test(location.pathname);
     const syncSavedRoute = () => {
       hashRoute = location.hash;
       bootedEditorRoute = hashRoute;
@@ -27,9 +29,7 @@
       if (hashRoute) localStorage.setItem('olfx-last-route', hashRoute);
       if (hashRoute.startsWith('#/edit/') && hashRoute !== bootedEditorRoute) {
         bootedEditorRoute = hashRoute;
-        void session.boot().then(() => {
-          document.body.dataset.frameP95Ms = String(session.frameP95);
-        });
+        void session.boot();
       } else if (!hashRoute.startsWith('#/edit/')) {
         bootedEditorRoute = '';
         session.cancelBoot();
@@ -55,7 +55,6 @@
         });
     }
 
-    document.body.dataset.frameP95Ms = String(session.frameP95);
     const stopAutosave = session.startAutosave();
     let frame = 0;
     const loop = () => {
@@ -114,6 +113,9 @@
       session.undo();
       return;
     }
+    // Only the explicitly handled modified shortcuts belong to Studio.
+    // Ctrl/Cmd+K, browser zoom, navigation and other browser chords remain untouched.
+    if (ctrl) return;
     if (key === ' ' || key === 'Spacebar') {
       event.preventDefault();
       session.togglePlay();
@@ -168,6 +170,11 @@
   }}
 />
 
+{#if localDev}<aside class="dev-notice" aria-label="Local development">
+    Local dev — connect to Emby to load movies and preview lights. Local video files are not
+    supported.
+  </aside>{/if}
+
 {#if !hashRoute}
   <div class="route-loading" role="status">Loading OpenLightFX Studio…</div>
 {:else if hashRoute.startsWith('#/rooms')}
@@ -189,6 +196,17 @@
   :global(body) {
     min-height: 100%;
     margin: 0;
+  }
+  .dev-notice {
+    position: fixed;
+    right: 8px;
+    bottom: 0;
+    z-index: 10;
+    padding: 4px 8px;
+    color: #bbc;
+    background: #141420ef;
+    font-size: 11px;
+    pointer-events: none;
   }
   .route-loading {
     min-height: 100vh;

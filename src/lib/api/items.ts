@@ -28,7 +28,7 @@ export function embyPrimaryUrl(itemId: string, tag: string): string {
 /** Accept the Studio contract and the Emby item fields a large library actually returns. */
 export function libraryItemFromApi(raw: Record<string, unknown>): LibraryItem {
   const itemId = text(raw.itemId ?? raw.Id ?? raw.id);
-  const name = text(raw.name ?? raw.Name ?? raw.title ?? raw.Title);
+  const name = text(raw.name ?? raw.Name ?? raw.title ?? raw.Title) || 'Untitled';
   const year = Math.round(number(raw.year ?? raw.ProductionYear ?? raw.productionYear));
   let runtimeMs = number(raw.runtimeMs);
   if (!runtimeMs) runtimeMs = Math.round(number(raw.RunTimeTicks) / 10_000);

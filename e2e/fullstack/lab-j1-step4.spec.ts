@@ -458,7 +458,12 @@ requirement(
         'right-bulb': { r: 0, g: 0, b: 255, brightness: 100, power: true },
       };
       await waitForObservation(control, { after: before, bulbs: embyStates });
-      await page.getByRole('button', { name: /Left keyframe at/ }).click();
+      const leftLane = (await page
+        .locator('.lane-row')
+        .filter({ hasText: 'Left' })
+        .locator('.lane')
+        .boundingBox())!;
+      await page.mouse.click(leftLane.x + leftLane.width * 0.1, leftLane.y + 19);
       await page.getByLabel('Hex', { exact: true }).fill('00ff00');
       await seek(page, 0.6);
       const cancelled = page.waitForEvent('dialog');

@@ -179,10 +179,10 @@ requirement(
     await addKeyframe(page);
     await page.getByRole('button', { name: 'Edit' }).click();
     await page.getByRole('menuitem', { name: /Undo/ }).click();
-    await expect(page.locator('.diamond')).toHaveCount(0);
+    await expect(page.locator('.lane-canvas').first()).toHaveAttribute('data-keyframe-count', '0');
     await page.getByRole('button', { name: 'Edit' }).click();
     await page.getByRole('menuitem', { name: 'Redo' }).click();
-    await expect(page.locator('.diamond')).toHaveCount(1);
+    await expect(page.locator('.lane-canvas').first()).toHaveAttribute('data-keyframe-count', '1');
   }
 );
 
@@ -581,23 +581,27 @@ requirement(
     const bounds = (await lane.boundingBox())!;
     for (const fraction of [0.2, 0.4])
       await page.mouse.click(bounds.x + bounds.width * fraction, bounds.y + bounds.height / 2);
-    const positions = () =>
-      lane
-        .locator('.diamond')
-        .evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).style.left));
+    async function positions() {
+      const download = page.waitForEvent('download');
+      await fileMenu(page, '^Export');
+      const file = await download;
+      return decodeTrack(fs.readFileSync((await file.path())!)).keyframes.map(
+        (frame) => frame.timestampMs
+      );
+    }
     const before = await positions();
-    async function drag(index: number, fraction: number) {
-      const box = (await lane.locator('.diamond').nth(index).boundingBox())!;
-      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    expect(before).toHaveLength(2);
+    async function drag(from: number, fraction: number) {
+      await page.mouse.move(bounds.x + bounds.width * from, bounds.y + bounds.height / 2);
       await page.mouse.down();
       await page.mouse.move(bounds.x + bounds.width * fraction, bounds.y + bounds.height / 2);
       await page.mouse.up();
     }
-    await drag(0, 0.8);
+    await drag(0.2, 0.8);
     expect(await positions()).toEqual(before);
-    await drag(1, 0.1);
+    await drag(0.4, 0.1);
     expect(await positions()).toEqual(before);
-    await drag(0, 0.3);
+    await drag(0.2, 0.3);
     expect(await positions()).not.toEqual(before);
     await page.getByRole('button', { name: 'Edit', exact: true }).click();
     await page.getByRole('menuitem', { name: /^Undo/ }).click();
@@ -712,10 +716,38 @@ requirement(
     await page.getByLabel('Fade type').selectOption('LINEAR');
     await page.getByLabel('Fade length').fill('500');
     await page.getByLabel('Fade length').blur();
-    await expect(page.locator('.color-segment').first()).toHaveCSS(
-      'background-color',
-      'rgb(102, 0, 0)'
-    );
+    await expect
+      .poll(() =>
+        page
+          .locator('.lane-canvas')
+          .first()
+          .evaluate((node) => {
+            const canvas = node as HTMLCanvasElement;
+            const ratio = canvas.width / canvas.clientWidth;
+            return Math.abs(
+              canvas
+                .getContext('2d')!
+                .getImageData(Math.floor(canvas.width * 0.4), Math.floor(4 * ratio), 1, 1).data[0] -
+                102
+            );
+          })
+      )
+      .toBeLessThanOrEqual(2);
+    const painted = await page
+      .locator('.lane-canvas')
+      .first()
+      .evaluate((node) => {
+        const canvas = node as HTMLCanvasElement;
+        const ratio = canvas.width / canvas.clientWidth;
+        return Array.from(
+          canvas
+            .getContext('2d')!
+            .getImageData(Math.floor(canvas.width * 0.4), Math.floor(4 * ratio), 1, 1).data
+        );
+      });
+    expect(Math.abs(painted[0] - 102)).toBeLessThanOrEqual(2);
+    expect(painted.slice(1, 3)).toEqual([0, 0]);
+    expect(Math.abs(painted[3] - 77)).toBeLessThanOrEqual(1);
     const downloaded = page.waitForEvent('download');
     await fileMenu(page, '^Export');
     const file = await downloaded;
@@ -769,7 +801,7 @@ requirement(
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(page).toHaveURL(/#/);
     await page.getByRole('link', { name: 'Set up a room', exact: true }).click();
-    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Save', exact: true }).click();
     await expect(page).toHaveURL(/#\/rooms$/);
   }
 );

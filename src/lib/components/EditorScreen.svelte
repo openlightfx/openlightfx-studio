@@ -2,6 +2,7 @@
   import { onMount, untrack } from 'svelte';
   import { L1_SHORTCUTS, sampleChannel, displayedRgb } from '$lib/domain';
   import PluginFramePicker from './PluginFramePicker.svelte';
+  import TimelineLane from './TimelineLane.svelte';
   import type { Channel, EffectKeyframe, Keyframe, Track } from '$lib/domain';
   import { setActiveTrack } from '$lib/api/client';
   import {
@@ -50,6 +51,7 @@
   const duration = $derived(Math.max(session.durationMs(), 1));
   const timelineWidth = $derived(Math.max(100, duration * session.pxPerMs));
   const roomCount = $derived(rooms.length);
+  const safetyFlags = $derived(session.safetyLabel());
   const selected = $derived(
     session.track?.keyframes.find((keyframe: Keyframe) => session.selection.includes(keyframe.id))
   );
@@ -389,12 +391,26 @@
   }
 
   function laneClick(event: MouseEvent, channelId: string) {
-    const lane = event.currentTarget as HTMLElement;
+    const target = event.currentTarget as HTMLElement;
+    const lane = target.closest('.lane') ?? target;
     const bounds = lane.getBoundingClientRect();
     const time = ((event.clientX - bounds.left) / bounds.width) * duration;
     selectedEffectId = '';
     session.activeChannelId = channelId;
     session.insertAt(time, channelId);
+  }
+
+  function chooseKeyframe(
+    event: MouseEvent | KeyboardEvent,
+    keyframeId: string,
+    channelId: string
+  ) {
+    selectedEffectId = '';
+    session.selectKeyframe(
+      keyframeId,
+      event.shiftKey ? 'extend' : event.ctrlKey || event.metaKey ? 'toggle' : 'replace'
+    );
+    session.activeChannelId = channelId;
   }
 
   function beginDiamond(event: PointerEvent, keyframeId: string) {
@@ -547,6 +563,22 @@
   }
 </script>
 
+<svelte:window
+  onkeydown={(event) => {
+    if (event.key === 'Escape' && session.menuChannel) {
+      session.menuChannel = null;
+      event.preventDefault();
+    }
+  }}
+  onpointerdown={(event) => {
+    if (
+      session.menuChannel &&
+      !(event.target as HTMLElement)?.closest('.channel-context-menu, .lane-header')
+    )
+      session.menuChannel = null;
+  }}
+/>
+
 <svelte:head
   ><title>{session.track?.metadata.title ?? 'Edit track'} · OpenLightFX Studio</title></svelte:head
 >
@@ -693,6 +725,31 @@
         </div>
       {/each}
     </div>
+    <button
+      class="quick-action"
+      aria-label="Save"
+      disabled={!session.track || !canManage || session.saving || !session.durationKnown}
+      title={!canManage
+        ? 'Only an Emby administrator can save'
+        : !session.durationKnown
+          ? 'The movie duration is unknown'
+          : 'Save (Ctrl/⌘ S)'}
+      onclick={() => void session.save()}>Save</button
+    >
+    <button
+      class="quick-action"
+      aria-label="Undo"
+      disabled={!session.canUndo}
+      title={session.canUndo ? 'Undo (Ctrl/⌘ Z)' : 'Nothing to undo'}
+      onclick={() => session.undo()}>↶</button
+    >
+    <button
+      class="quick-action"
+      aria-label="Redo"
+      disabled={!session.canRedo}
+      title={session.canRedo ? 'Redo (Ctrl/⌘ Shift Z)' : 'Nothing to redo'}
+      onclick={() => session.redo()}>↷</button
+    >
     <input
       id="track-title"
       class="track-title"
@@ -707,6 +764,9 @@
           ? 'Unsaved changes'
           : 'Saved'}</span
     >
+    {#if safetyFlags.intense}<span class="safety-badge">Intense</span>{/if}
+    {#if safetyFlags.flashing}<span class="safety-badge">Flashing</span>{/if}
+    {#if safetyFlags.strobing}<span class="safety-badge">Strobing</span>{/if}
     <span class="spacer"></span>
     {#if rooms.length > 0}
       <label class="room-picker"
@@ -832,7 +892,13 @@
         <h2>{selectedEffect.effectType}</h2>
         <p>Effect editing comes in a later version. This effect is kept as is.</p>
       {:else if selected}
-        <h2>Keyframe</h2>
+        <h2>
+          {session.selection.length > 1
+            ? `${session.selection.length} selected keyframes`
+            : 'Keyframe'}
+        </h2>
+        {#if session.hexError}<p class="error" role="alert">{session.hexError}</p>{/if}
+        {#if session.kelvinError}<p class="error" role="alert">{session.kelvinError}</p>{/if}
         <label
           >Time <input
             aria-label="Keyframe time"
@@ -941,11 +1007,10 @@
             oninput={(event) =>
               session.setBrightness((event.currentTarget as HTMLInputElement).value)}
           /><input
-            type="number"
-            min="0"
-            max="100"
+            type="text"
+            inputmode="decimal"
             aria-label="Brightness value"
-            value={selected.brightness}
+            value={session.brightnessText}
             oninput={(event) =>
               session.setBrightness((event.currentTarget as HTMLInputElement).value)}
           /></label
@@ -977,6 +1042,12 @@
         )}
         <h2>{channel?.displayName}</h2>
         {#if channel}
+          <dl aria-label="Channel identity">
+            <dt>Channel</dt>
+            <dd>{channel.id}</dd>
+            <dt>Position</dt>
+            <dd>{positionLabel(channel.spatialHint)}</dd>
+          </dl>
           <label
             >Default color <input
               type="color"
@@ -1075,9 +1146,24 @@
               .filter((keyframe: Keyframe) => keyframe.channelId === channel.id)
               .toSorted((a: Keyframe, b: Keyframe) => a.timestampMs - b.timestampMs) ?? []}
           <div class="lane-row" style={`width:${timelineWidth + 150}px`}>
-            <div class="lane-header">
+            <div
+              class="lane-header"
+              role="group"
+              aria-label={`${channel.displayName} channel controls`}
+            >
               <button
                 class="lane-name"
+                oncontextmenu={(event) => {
+                  event.preventDefault();
+                  menu = '';
+                  session.menuChannel = channel.id;
+                }}
+                onkeydown={(event) => {
+                  if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
+                    event.preventDefault();
+                    session.menuChannel = channel.id;
+                  }
+                }}
                 title={laneDescription(channel)}
                 onclick={() => {
                   session.selection = [];
@@ -1099,13 +1185,22 @@
               >
             </div>
             <div class="lane" role="presentation" onclick={(event) => laneClick(event, channel.id)}>
-              {#if laneKeyframes.length === 0}
-                <span
-                  class="color-segment default-segment"
-                  aria-hidden="true"
-                  style={`left:0;width:100%;background:rgb(${displayedRgb({ ...channel.defaultColor, brightness: channel.defaultBrightness })})`}
-                ></span>
-              {/if}
+              <TimelineLane
+                frames={laneKeyframes}
+                scale={session.pxPerMs}
+                scroll={session.scrollX}
+                width={session.laneWidth}
+                selected={session.selection}
+                label={channel.displayName}
+                defaultRgb={displayedRgb({
+                  ...channel.defaultColor,
+                  brightness: channel.defaultBrightness,
+                })}
+                choose={(event, id) => chooseKeyframe(event, id, channel.id)}
+                begin={beginDiamond}
+                finish={moveDiamond}
+                empty={(event) => laneClick(event, channel.id)}
+              />
               {#if session.track?.keyframes.length === 0}
                 <span class="lane-empty">Click to add a keyframe</span>
               {/if}
@@ -1123,28 +1218,20 @@
                   }}>{effect.effectType}</button
                 >
               {/each}
-              {#each laneKeyframes as keyframe, index (keyframe.id)}
-                {@const next = laneKeyframes[index + 1]}
-                {@const frameSample = sampleChannel(laneKeyframes, keyframe.timestampMs)}
-                <span
-                  class="color-segment"
-                  aria-hidden="true"
-                  style={`left:${(keyframe.timestampMs / duration) * 100}%;width:${(((next?.timestampMs ?? duration) - keyframe.timestampMs) / duration) * 100}%;background:${laneFill(laneKeyframes, keyframe, next)}`}
-                ></span>
+              <!-- Only the focused selection gets a DOM focus target; all marks are canvas pixels. -->
+              {#each laneKeyframes
+                .filter((frame: Keyframe) => session.selection.includes(frame.id))
+                .slice(0, 1) as keyframe (keyframe.id)}
                 <button
                   class="diamond"
                   aria-label={`${channel.displayName} keyframe at ${format(keyframe.timestampMs)}`}
                   class:selected={session.selection.includes(keyframe.id)}
-                  style={`left:${(keyframe.timestampMs / duration) * 100}%;background:rgb(${frameSample.r},${frameSample.g},${frameSample.b})`}
+                  style={`left:${(keyframe.timestampMs / duration) * 100}%;background:transparent`}
                   onpointerdown={(event) => beginDiamond(event, keyframe.id)}
                   onpointerup={(event) => moveDiamond(event, keyframe.id)}
                   onclick={(event) => {
                     event.stopPropagation();
-                    selectedEffectId = '';
-                    session.selection = event.shiftKey
-                      ? [...new Set([...session.selection, keyframe.id])]
-                      : [keyframe.id];
-                    session.activeChannelId = channel.id;
+                    chooseKeyframe(event, keyframe.id, channel.id);
                   }}
                 ></button>
               {/each}
@@ -1154,6 +1241,43 @@
       </div>
     </section>
   </main>
+  {#if lightsOn && session.photosensitivity}<p
+      class="photosensitivity-notice"
+      role="status"
+      aria-label="Photosensitivity"
+    >
+      {session.photosensitivity}
+    </p>{/if}
+  {#if session.menuChannel}
+    <div class="channel-context-menu" role="menu" aria-label="Channel actions">
+      <button
+        role="menuitemcheckbox"
+        aria-checked={Boolean(session.solo[session.menuChannel])}
+        onclick={() => {
+          session.toggleSolo(session.menuChannel!);
+          session.menuChannel = null;
+        }}
+        >Solo {session.channels.find((channel: Channel) => channel.id === session.menuChannel)
+          ?.displayName}</button
+      >
+      <button
+        role="menuitemcheckbox"
+        aria-checked={Boolean(session.mute[session.menuChannel])}
+        onclick={() => {
+          session.toggleMute(session.menuChannel!);
+          session.menuChannel = null;
+        }}
+        >Mute {session.channels.find((channel: Channel) => channel.id === session.menuChannel)
+          ?.displayName}</button
+      >
+    </div>
+  {/if}
+  {#if session.restored}<p class="crash-recovery" role="status" aria-label="Crash recovery">
+      {session.restored} <button onclick={() => (session.restored = '')}>Dismiss</button>
+    </p>{/if}
+  {#if session.status && !['Saved', 'Saving…', 'Unsaved changes'].includes(session.status)}
+    <p class="editor-feedback" role="status" aria-label="Editor feedback">{session.status}</p>
+  {/if}
   {#if session.alert}<div class="alert" role="alert">
       {session.alert}
       {#if session.saveConflict}
@@ -1728,13 +1852,6 @@
     font-size: 11px;
     pointer-events: none;
   }
-  .color-segment {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    opacity: 0.3;
-    pointer-events: none;
-  }
   .diamond {
     position: absolute;
     top: 12px;
@@ -1757,6 +1874,61 @@
     background: #4338ca;
     border-color: #818cf8;
     border-radius: 4px;
+  }
+  .safety-badge {
+    padding: 3px 6px;
+    color: #fed7aa;
+    background: #542b16;
+    border-radius: 4px;
+    font-size: 11px;
+  }
+  .photosensitivity-notice {
+    position: fixed;
+    right: 12px;
+    bottom: 32px;
+    padding: 6px 10px;
+    color: #ddd;
+    background: #252535;
+    font-size: 12px;
+  }
+  .quick-action {
+    min-width: 28px;
+    padding: 3px 5px;
+  }
+  .channel-context-menu {
+    position: fixed;
+    left: 12px;
+    bottom: 38px;
+    z-index: 12;
+    display: grid;
+    padding: 6px;
+    background: #202033;
+    border: 1px solid #555;
+    border-radius: 4px;
+  }
+  .channel-context-menu button {
+    text-align: left;
+  }
+  .crash-recovery {
+    position: fixed;
+    left: 12px;
+    bottom: 30px;
+    padding: 8px;
+    color: #ddd;
+    background: #252535;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+  .editor-feedback {
+    position: fixed;
+    left: 12px;
+    bottom: 0;
+    margin: 0;
+    padding: 6px 10px;
+    color: #ddd;
+    background: #151522e8;
+    font-size: 12px;
+    pointer-events: none;
   }
   .alert {
     position: fixed;

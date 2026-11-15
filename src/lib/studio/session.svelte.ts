@@ -675,8 +675,19 @@ export class StudioSession {
 
   syncFromVideo(): void {
     if (!this.video || this.video.paused) return;
-    this.playheadMs = this.video.currentTime * 1000;
     this.playing = !this.video.paused;
+    if (this.pendingSeekMs != null) return;
+    this.playheadMs = this.video.currentTime * 1000;
+    const position = this.playheadMs * this.pxPerMs;
+    if (position - this.scrollX >= this.laneWidth * 0.75) {
+      this.scrollX = Math.max(
+        0,
+        Math.min(
+          this.durationMs() * this.pxPerMs - this.laneWidth,
+          position - this.laneWidth * 0.25
+        )
+      );
+    }
   }
 
   onVideoError(): void {
@@ -1353,12 +1364,13 @@ export class StudioSession {
     URL.revokeObjectURL(link.href);
   }
 
-  safetyLabel(): { intense: boolean; flashing: boolean } {
-    if (!this.track) return { intense: false, flashing: false };
+  safetyLabel(): { intense: boolean; flashing: boolean; strobing: boolean } {
+    if (!this.track) return { intense: false, flashing: false, strobing: false };
     const safety = computeSafety(this.track);
     return {
       intense: safety.intensityRating === 'INTENSE' || safety.intensityRating === 'EXTREME',
       flashing: safety.containsFlashing,
+      strobing: safety.containsStrobing,
     };
   }
 
@@ -1417,21 +1429,43 @@ export class StudioSession {
     while (this.historyColors.length < 16) this.historyColors.push('#000000');
   }
 
+  selectKeyframe(id: string, mode: 'replace' | 'extend' | 'toggle' = 'replace'): void {
+    const frame = this.track?.keyframes.find((frame) => frame.id === id);
+    if (!frame) return;
+    this.selection =
+      mode === 'replace'
+        ? [id]
+        : mode === 'toggle' && this.selection.includes(id)
+          ? this.selection.filter((value) => value !== id)
+          : [...new Set([...this.selection, id])];
+    this.activeChannelId = frame.channelId;
+    this.hexError = '';
+    this.kelvinError = '';
+    this.syncPropertyFields();
+  }
+
   private syncPropertyFields(): void {
     const selected = this.selectedKeyframes();
-    if (selected.length !== 1) {
+    if (!selected.length) {
       this.brightnessText = '—';
       this.kelvinOn = false;
       return;
     }
     const kf = selected[0];
-    this.brightnessText = String(kf.brightness);
-    this.kelvinOn = kf.colorMode === 'COLOR_TEMPERATURE';
-    this.kelvin = String(kf.colorTemperature || 2700);
-    this.green = String(kf.color.g);
-    this.hex = [kf.color.r, kf.color.g, kf.color.b]
-      .map((v) => v.toString(16).padStart(2, '0'))
-      .join('');
+    this.brightnessText = selected.every((frame) => frame.brightness === kf.brightness)
+      ? String(kf.brightness)
+      : '—';
+    this.kelvinOn = selected.every((frame) => frame.colorMode === 'COLOR_TEMPERATURE');
+    this.kelvin = selected.every((frame) => frame.colorTemperature === kf.colorTemperature)
+      ? String(kf.colorTemperature || 2700)
+      : '—';
+    this.green = selected.every((frame) => frame.color.g === kf.color.g) ? String(kf.color.g) : '—';
+    this.hex = selected.every(
+      (frame) =>
+        frame.color.r === kf.color.r && frame.color.g === kf.color.g && frame.color.b === kf.color.b
+    )
+      ? [kf.color.r, kf.color.g, kf.color.b].map((v) => v.toString(16).padStart(2, '0')).join('')
+      : '—';
   }
 
   private async openDb(): Promise<void> {

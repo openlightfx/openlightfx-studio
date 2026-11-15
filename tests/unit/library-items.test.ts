@@ -16,7 +16,7 @@ it('LIB-001 @unit track count, active state, and date are normalized from the it
   });
 });
 
-it('MEDIA-001 @unit Emby Name and ProductionYear become the visible movie', () => {
+it('LIB-001 @unit Emby Name and ProductionYear become the visible movie, with an unnamed-title fallback', () => {
   const item = libraryItemFromApi({
     Id: '9001',
     Name: 'Glass Harbor',
@@ -32,6 +32,7 @@ it('MEDIA-001 @unit Emby Name and ProductionYear become the visible movie', () =
   });
   expect(item.posterUrl).toBe('/emby/Items/9001/Images/Primary?tag=abc&maxHeight=240');
   const untitled = libraryItemFromApi({ itemId: '2', year: 2012 });
-  expect(untitled.name).toBe('');
+  expect(untitled.name).toBe('Untitled');
+  expect(libraryItemFromApi({ itemId: '3', name: '   ' }).name).toBe('Untitled');
   expect(untitled.posterUrl).toBe('');
 });

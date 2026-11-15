@@ -129,8 +129,10 @@ requirement(
 
 async function chooseFile(page: Page, bytes: Uint8Array, name = 'import.lightfx') {
   const chooser = page.waitForEvent('filechooser');
-  // Keyboard activation avoids rapid repeated clicks becoming a native double-click.
-  await page.getByRole('button', { name: 'Open a .lightfx file…', exact: true }).press('Enter');
+  // Wait for content focus after a native confirmation, then use a complete Space
+  // activation (keyup click), avoiding both native double-click and Enter-dialog races.
+  await page.waitForFunction(() => document.hasFocus());
+  await page.getByRole('button', { name: 'Open a .lightfx file…', exact: true }).press('Space');
   await (
     await chooser
   ).setFiles({ name, mimeType: 'application/octet-stream', buffer: Buffer.from(bytes) });
@@ -151,7 +153,14 @@ requirement(
     await cancelDialog.dismiss();
     await expect(page).toHaveURL(/#\/movie\/m1$/);
     const continued = page.waitForEvent('dialog');
-    await chooseFile(page, encodeTrack(track));
+    // The first upload verifies the native picker activation. Re-upload the same
+    // file through its input here: Firefox may not reactivate a native chooser
+    // immediately after dismissing a native confirmation.
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'import.lightfx',
+      mimeType: 'application/octet-stream',
+      buffer: Buffer.from(encodeTrack(track)),
+    });
     await (await continued).accept();
     await expect(page).toHaveURL(/#\/edit\/m1\/import$/);
   }
