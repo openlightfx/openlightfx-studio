@@ -8,7 +8,7 @@ const { requirement } = await import(
 );
 
 requirement(
-  'BULB-002 @fullstack Identify flashes exactly the selected saved bulb and shows progress',
+  'BULB-002 @fullstack Identify power-cycles exactly the selected saved bulb twice',
   async ({ page, request }) => {
     const base = process.env.OLFX_EMBY_URL!;
     const token = process.env.OLFX_API_KEY!;
@@ -45,19 +45,13 @@ requirement(
       .slice(eventCount)
       .filter(Boolean)
       .map((line) => JSON.parse(line))
-      .filter(
-        (event) =>
-          event.event === 'command_received' &&
-          event.params.dimming === 100 &&
-          event.params.state === true
-      );
+      .filter((event) => event.event === 'command_received');
     const targetCommands = newEvents.filter((event) => event.bulb_id === 'red-target');
-    expect(
-      targetCommands.slice(0, 3).map((event) => [event.params.r, event.params.g, event.params.b])
-    ).toEqual([
-      [255, 0, 0],
-      [0, 255, 0],
-      [0, 0, 255],
+    expect(targetCommands.slice(0, 4).map((event) => event.params.state)).toEqual([
+      false,
+      true,
+      false,
+      true,
     ]);
     expect(newEvents.every((event) => event.bulb_id === 'red-target')).toBe(true);
     expect(targetCommands.every((event) => event.protocol === 'wiz')).toBe(true);

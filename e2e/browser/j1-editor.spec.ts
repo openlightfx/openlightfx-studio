@@ -567,7 +567,8 @@ requirement(
       .toBe(0);
     const fitted = (await ruler.boundingBox())!;
     expect(fitted.width).toBeCloseTo(
-      (await page.locator('.timeline-scroll').boundingBox())!.width - 150,
+      (await page.locator('.timeline-scroll').boundingBox())!.width -
+        (await page.locator('.lane-header').first().boundingBox())!.width,
       0
     );
   }

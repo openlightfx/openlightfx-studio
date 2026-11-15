@@ -19,7 +19,7 @@ requirement(
     ).toBeVisible();
     await expect(page.getByRole('alert')).toHaveCount(0);
     await expect(page).toHaveScreenshot('first-bulbs.png', {
-      maxDiffPixelRatio: 0.03,
+      maxDiffPixelRatio: 0.001,
       animations: 'disabled',
     });
   }
@@ -47,7 +47,7 @@ requirement(
       page.getByRole('status').filter({ hasText: 'Set up a room to preview on your lights.' })
     ).toBeVisible();
     await expect(page).toHaveScreenshot('j1-editor.png', {
-      maxDiffPixelRatio: 0.03,
+      maxDiffPixelRatio: 0.001,
       animations: 'disabled',
       mask: [page.locator('video')],
     });

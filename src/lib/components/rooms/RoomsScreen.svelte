@@ -1,4 +1,5 @@
 <script lang="ts">
+  import StudioHeader from '$lib/components/layout/StudioHeader.svelte';
   import { onMount } from 'svelte';
   import {
     deleteRoom,
@@ -248,15 +249,8 @@
 </script>
 
 <svelte:head><title>Rooms · OpenLightFX Studio</title></svelte:head>
-<div class="rooms-app">
-  <header>
-    <strong>OpenLightFX Studio</strong><a href="#/bulbs">Bulbs</a><a class="active" href="#/rooms"
-      >Rooms</a
-    ><a href="#/library">Library</a><span class="spacer"></span><span>Emby</span><a
-      href="https://github.com/openlightfx/openlightfx-studio/blob/main/docs/journeys/J1-first-light.md"
-      >Help</a
-    >
-  </header>
+<div class="rooms-app studio-page">
+  <StudioHeader current="rooms" />
   <aside class="room-list">
     <h2>Your rooms</h2>
     {#if setup && !setup.isAdmin}<p role="status">
@@ -282,6 +276,11 @@
     >
   </aside>
   <main>
+    <section class="page-intro">
+      <p class="eyebrow">A place for every light</p>
+      <h1>{fresh && rooms.length === 0 ? 'Set up a room' : 'Your room'}</h1>
+      <p>Choose your screen. Place your lights. Studio takes care of the connections.</p>
+    </section>
     {#if conflict}<div class="dialog-backdrop">
         <dialog open aria-labelledby="conflict-title" class="unsaved-dialog">
           <h2 id="conflict-title">This room changed in another tab</h2>
@@ -305,7 +304,6 @@
         </dialog>
       </div>{/if}
     {#if fresh && rooms.length === 0}<div class="card welcome">
-        <h1>Set up a room</h1>
         <p>Choose the Emby screen in this room, then place your named bulbs on the diagram.</p>
         {#if bulbs.filter((bulb) => bulb.isNamed).length === 0}<p>
             No named bulbs are ready yet. <a href="#/bulbs">Find and name bulbs</a>, or continue
@@ -480,9 +478,10 @@
       </aside>
     </div>
     <footer>
-      <button disabled={!current || setup?.isAdmin !== true} onclick={removeRoom}
+      <button class="danger" disabled={!current || setup?.isAdmin !== true} onclick={removeRoom}
         >Delete room</button
       ><span>{notice}</span><button
+        class="primary"
         disabled={!validName || !screenId || setup?.isAdmin !== true}
         onclick={save}>Save room</button
       ><button onclick={() => (location.hash = '#/library')}>Next: pick a movie →</button>
@@ -520,71 +519,38 @@
 
 <style>
   .rooms-app {
-    font:
-      13px/1.4 'Inter',
-      system-ui,
-      sans-serif;
-    color: var(--text);
-    background: var(--bg);
-    min-height: 100vh;
-    position: relative;
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
   }
-  header {
-    height: 42px;
-    border-bottom: 1px solid var(--surface2);
-    background: var(--surface);
-    display: flex;
-    align-items: center;
-    gap: 22px;
-    padding: 0 16px;
-  }
-  header strong {
-    color: var(--text);
-  }
-  header a {
-    color: var(--text-muted);
-    text-decoration: none;
-    padding: 6px 8px;
-    border-radius: 4px;
-  }
-  header a:hover {
-    color: var(--text);
-    background: var(--surface2);
-  }
-  header a.active {
-    color: var(--text);
-    background: var(--surface3);
-  }
-  .spacer {
-    flex: 1;
+  .rooms-app :global(.studio-header) {
+    grid-column: 1 / -1;
   }
   .room-list {
-    position: absolute;
-    top: 43px;
-    bottom: 0;
-    left: 0;
-    width: 196px;
-    padding: 12px;
-    border-right: 1px solid var(--surface2);
-    background: var(--surface);
+    padding: var(--space-8) var(--space-4);
+    border-right: 1px solid var(--border);
+    background: var(--header-bg);
   }
   .room-list h2 {
-    font-size: 14px;
-    margin: 0 0 8px;
-    color: var(--text);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin: 0 0 var(--space-5);
+    color: var(--text-muted);
   }
   .room-list button {
     display: block;
     width: 100%;
     text-align: left;
-    margin-bottom: 8px;
-    padding: 8px;
-    color: var(--text);
-    background: var(--surface2);
+    margin-bottom: var(--space-2);
+    padding: var(--space-3);
+    background: transparent;
     border: 1px solid transparent;
-    border-radius: 6px;
+    border-radius: var(--radius);
   }
   .room-list button.chosen {
+    color: var(--accent-text);
+    background: var(--accent-soft);
     border-color: var(--accent);
   }
   .room-list small,
@@ -593,7 +559,11 @@
     color: var(--text-muted);
   }
   main {
-    margin: 14px 18px 0 220px;
+    min-width: 0;
+    padding: var(--space-8);
+    max-width: 1600px;
+    width: 100%;
+    margin: 0 auto;
   }
   .dialog-backdrop {
     position: fixed;
@@ -625,122 +595,116 @@
     gap: 8px;
   }
   .card {
-    padding: 12px;
-    border: 1px solid var(--surface2);
-    border-radius: 8px;
+    padding: var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
     background: var(--surface);
-    margin-bottom: 12px;
-  }
-  .welcome h1 {
-    font-size: 18px;
-    margin: 0 0 6px;
-    color: var(--text);
+    margin-bottom: var(--space-6);
+    color: var(--text-muted);
   }
   .topfields {
     display: flex;
-    gap: 24px;
+    gap: var(--space-4);
     align-items: end;
-    margin-bottom: 12px;
+    margin: var(--space-6) 0;
   }
   .topfields label {
     display: grid;
-    gap: 4px;
+    gap: var(--space-2);
     color: var(--text-muted);
+    min-width: 0;
+    flex: 1;
+    font-size: 12px;
+  }
+  .topfields label:nth-child(2) {
+    flex: 2;
   }
   .topfields input,
   .topfields select {
-    min-width: 220px;
-    padding: 7px;
-    color: var(--text);
-    background: var(--bg);
-    border: 1px solid var(--surface3);
-    border-radius: 6px;
+    width: 100%;
+    font-size: 14px;
   }
   .columns {
     display: grid;
-    grid-template-columns: minmax(540px, 1.3fr) minmax(340px, 1fr);
-    gap: 14px;
+    grid-template-columns: minmax(0, 1.7fr) minmax(260px, 1fr);
+    gap: var(--space-5);
   }
   .diagram {
-    position: relative;
-    height: 410px;
-    border: 1px solid var(--surface3);
-    border-radius: 8px;
-    background: var(--timeline-lane-bg);
+    display: grid;
+    grid-template-columns: 1fr 1.2fr 1fr;
+    grid-template-areas: 'screen screen screen' 'left center right' 'sl seat sr' 'ambient ambient ambient';
+    grid-template-rows: auto minmax(120px, auto) minmax(120px, auto) minmax(80px, auto);
+    gap: var(--space-3);
+    padding: var(--space-5);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
   }
   .screen {
-    position: absolute;
-    top: 8px;
-    left: 30%;
-    width: 40%;
+    grid-area: screen;
+    justify-self: center;
+    width: 66%;
     text-align: center;
-    background: var(--surface3);
-    color: var(--text);
-    padding: 6px;
-    border-radius: 4px;
+    padding: 8px 12px;
+    margin-bottom: var(--space-3);
+    border-top: 3px solid var(--text-muted);
+    border-radius: var(--radius-sm);
+    background: var(--surface2);
+    color: var(--text-muted);
+    font-size: 11px;
+    letter-spacing: 0.04em;
   }
   .zone {
-    position: absolute;
-    border: 1px dashed var(--surface3);
-    border-radius: 6px;
-    background: var(--surface);
-    padding: 5px;
-    min-height: 80px;
+    min-width: 0;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius);
+    padding: var(--space-2);
+    background: var(--bg);
+    transition:
+      border-color var(--transition),
+      background var(--transition);
   }
-  .zone b {
+  .zone:hover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .zone > b {
     display: block;
-    font-size: 12px;
-    margin-bottom: 6px;
-    color: var(--text);
+    font-size: 11px;
+    font-weight: 500;
+    margin-bottom: var(--space-2);
+    color: var(--text-muted);
   }
   .left {
-    left: 10px;
-    top: 45px;
-    width: 25%;
-    height: 100px;
+    grid-area: left;
   }
   .center {
-    left: 30%;
-    top: 45px;
-    width: 38%;
-    height: 75px;
+    grid-area: center;
   }
   .right {
-    right: 10px;
-    top: 45px;
-    width: 25%;
-    height: 100px;
+    grid-area: right;
   }
   .surround-left {
-    left: 10px;
-    top: 190px;
-    width: 25%;
-    height: 100px;
+    grid-area: sl;
   }
   .surround-right {
-    right: 10px;
-    top: 190px;
-    width: 25%;
-    height: 100px;
+    grid-area: sr;
   }
   .ambient {
-    left: 10px;
-    right: 10px;
-    bottom: 10px;
-    height: 68px;
+    grid-area: ambient;
   }
   .seat {
-    position: absolute;
-    left: 35%;
-    top: 200px;
-    width: 30%;
-    height: 45px;
-    border: 1px solid var(--surface3);
-    border-radius: 4px;
-    background: var(--surface2);
+    grid-area: seat;
+    align-self: center;
     text-align: center;
-    padding-top: 12px;
-    color: var(--text-muted);
+    padding: var(--space-4) var(--space-2);
+    border: 1px solid var(--border);
+    border-radius: 16px 16px 6px 6px;
+    background: var(--surface2);
+    color: var(--text-subtle);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
   }
   .chip {
     position: relative;
@@ -748,17 +712,21 @@
     align-items: center;
     gap: 3px;
     margin: 3px;
-    padding: 3px 5px;
+    padding: 5px 7px;
+    max-width: 100%;
+    flex-wrap: wrap;
     color: var(--text);
     background: var(--surface2);
-    border: 1px solid var(--surface3);
-    border-radius: 4px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
   }
   .chip button {
     border: 0;
     background: transparent;
     color: var(--text);
     padding: 0 3px;
+    min-height: 24px;
   }
   .chip-menu {
     position: absolute;
@@ -782,27 +750,27 @@
     border-radius: 4px;
   }
   .coverage {
-    border: 1px solid var(--surface2);
-    border-radius: 6px;
-    background: var(--surface);
     color: var(--text-muted);
-    padding: 10px;
+    padding: var(--space-4) var(--space-1);
+    font-size: 12px;
   }
   .bulb-panel {
-    border: 1px solid var(--surface2);
-    border-radius: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     background: var(--surface);
-    padding: 10px;
-    min-height: 350px;
+    padding: var(--space-5);
+    align-self: start;
+    min-height: 300px;
+    color: var(--text-muted);
   }
   .panelhead {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    font-size: 12px;
+    color: var(--text);
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+    font-size: 13px;
   }
   .bulb {
     display: flex;
@@ -823,6 +791,9 @@
     border-radius: 6px;
     display: grid;
     min-width: 150px;
+    right: 0;
+    padding: var(--space-1);
+    box-shadow: var(--shadow-popover);
   }
   .empty {
     text-align: center;
@@ -833,7 +804,10 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    margin: 12px 0;
+    margin: var(--space-6) 0;
+    padding-top: var(--space-5);
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
   }
   footer span {
     flex: 1;
@@ -841,44 +815,49 @@
   }
   .error {
     color: var(--danger);
-    background: rgba(239, 68, 68, 0.12);
-    border: 1px solid rgba(239, 68, 68, 0.4);
+    background: var(--danger-soft);
+    border: 1px solid var(--danger);
     border-radius: 6px;
     padding: 8px;
   }
   .notice {
     color: var(--text-muted);
   }
-  button {
-    cursor: pointer;
-    font: inherit;
-    color: var(--text);
-    background: var(--surface2);
-    border: 1px solid var(--surface3);
-    border-radius: 6px;
-    padding: 6px 10px;
-  }
-  button:hover:not(:disabled) {
-    border-color: var(--accent);
-  }
-  button:focus-visible {
-    outline: 2px solid var(--accent2);
-    outline-offset: 2px;
-  }
-  button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+  @media (max-width: 1200px) {
+    .columns {
+      grid-template-columns: 1fr;
+    }
   }
   @media (max-width: 900px) {
+    .rooms-app {
+      grid-template-columns: minmax(0, 1fr);
+    }
     .room-list {
-      position: static;
+      border-right: 0;
+      border-bottom: 1px solid var(--border);
+      padding: var(--space-4);
+    }
+    .room-list button {
+      display: inline-block;
       width: auto;
+      margin: 0 var(--space-2) var(--space-2) 0;
     }
     .columns {
       grid-template-columns: 1fr;
     }
     main {
-      margin: 12px;
+      padding: var(--space-6) var(--page-gutter);
+    }
+    .diagram {
+      padding: var(--space-3);
+      gap: var(--space-2);
+    }
+    .topfields label {
+      flex-basis: 100%;
+    }
+    footer span {
+      flex-basis: 100%;
+      order: -1;
     }
     .topfields {
       flex-wrap: wrap;

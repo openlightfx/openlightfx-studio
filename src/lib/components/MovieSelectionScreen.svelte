@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import StudioHeader from '$lib/components/layout/StudioHeader.svelte';
   import {
     fetchActiveTrackPath,
     fetchItems,
@@ -232,15 +233,8 @@
 </script>
 
 <svelte:head><title>{item?.name ?? 'Movie'} · OpenLightFX Studio</title></svelte:head>
-<div class="movie-app">
-  <header>
-    <strong>OpenLightFX Studio</strong><a href="#/bulbs">Bulbs</a><a href="#/rooms">Rooms</a><a
-      href="#/library">Library</a
-    ><span></span><a
-      href="https://github.com/openlightfx/openlightfx-studio/blob/main/docs/journeys/J1-first-light.md"
-      >Help</a
-    >
-  </header>
+<div class="movie-app studio-page">
+  <StudioHeader current="library" />
   <main>
     <a href="#/library">← Library</a>
     {#if failed}<p role="alert">{failed} <a href="#/library">Return to the Library</a></p>
@@ -255,6 +249,7 @@
             {item.name}
           </div>{/if}
         <div>
+          <p class="eyebrow">Light up this movie</p>
           <h1>{item.name}</h1>
           <p>
             {item.year || 'Year unknown'}{item.runtimeMs
@@ -373,47 +368,31 @@
 </div>
 
 <style>
-  .movie-app {
-    min-height: 100vh;
-    background: var(--bg);
-    color: var(--text);
-    font:
-      14px/1.45 system-ui,
-      sans-serif;
-  }
-  header {
-    height: 48px;
-    display: flex;
-    align-items: center;
-    gap: 22px;
-    padding: 0 20px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--surface2);
-  }
-  header span {
-    flex: 1;
-  }
-  header a,
   main > a {
     color: var(--text-muted);
     text-decoration: none;
   }
+  main > a:hover {
+    color: var(--text);
+  }
   main {
-    padding: 24px;
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: var(--space-8) var(--page-gutter) var(--space-12);
   }
   .movie-heading {
     display: flex;
-    gap: 18px;
+    gap: var(--space-6);
     align-items: center;
-    margin: 14px 0 22px;
+    margin: var(--space-6) 0 var(--space-8);
   }
   .movie-heading img,
   .poster {
-    width: 90px;
-    height: 130px;
+    width: 100px;
+    height: 150px;
     object-fit: cover;
     background: var(--surface2);
-    border-radius: 5px;
+    border-radius: var(--radius);
   }
   .poster {
     display: grid;
@@ -425,7 +404,7 @@
   .movie-heading h1 {
     margin: 0;
   }
-  .movie-heading p,
+  .movie-heading p:not(.eyebrow),
   .track-row p,
   .muted {
     color: var(--text-muted);
@@ -433,27 +412,26 @@
   .columns {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-    gap: 18px;
+    gap: var(--space-6);
+    align-items: start;
   }
   .panel {
     position: relative;
-    padding: 16px;
+    padding: var(--space-6);
     background: var(--surface);
-    border: 1px solid var(--surface2);
-    border-radius: 8px;
-    min-height: 430px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
   }
   .panel h2 {
-    margin: 0 0 12px;
-    font-size: 17px;
+    margin: 0 0 var(--space-5);
   }
   .track-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 12px;
-    padding: 12px 0;
-    border-bottom: 1px solid var(--surface2);
+    padding: var(--space-5) 0;
+    border-bottom: 1px solid var(--border);
   }
   .track-row p {
     font-size: 12px;
@@ -463,49 +441,33 @@
     display: inline-block;
     margin-left: 8px;
     padding: 2px 7px;
-    border-radius: 12px;
-    background: var(--surface2);
+    border-radius: var(--radius-sm);
+    color: var(--accent-text);
+    background: var(--accent-soft);
     font-size: 11px;
   }
   .other {
     margin-top: 24px;
     padding-top: 16px;
-    border-top: 1px solid var(--surface2);
+    border-top: 1px solid var(--border);
   }
-  button,
-  input,
-  select {
-    font: inherit;
-    color: var(--text);
-    background: var(--surface2);
-    border: 1px solid var(--surface3);
-    border-radius: 5px;
-    padding: 8px;
-  }
-  button {
-    cursor: pointer;
-  }
-  .primary {
-    background: #356e91;
-    border-color: #356e91;
-    color: white;
-  }
+
   .invalid,
   .error {
-    color: #ff8585;
+    color: var(--danger);
   }
   .create {
-    padding-bottom: 58px;
+    display: flex;
+    flex-direction: column;
+  }
+  .create-button {
+    align-self: flex-end;
   }
   .create > label {
     display: grid;
-    gap: 5px;
-    margin: 12px 0;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-5);
     color: var(--text-muted);
-  }
-  .create > label input,
-  .create > label select {
-    background: var(--bg);
   }
   fieldset {
     border: 0;
@@ -518,17 +480,18 @@
   .layouts {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 8px;
+    gap: var(--space-3);
   }
   .layouts button {
-    min-height: 145px;
+    min-height: 180px;
+    padding: var(--space-3);
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     text-align: left;
     gap: 8px;
     background: var(--bg);
-    border-color: var(--surface3);
+    border-color: var(--border-strong);
   }
   .layout-map {
     position: relative;
@@ -577,8 +540,18 @@
     width: 52px;
     border-radius: 3px;
   }
+  .layouts button:hover {
+    background: var(--hover);
+  }
   .layouts button.chosen {
-    outline: 2px solid var(--accent2);
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .layouts button.chosen strong {
+    color: var(--accent-text);
+  }
+  .layouts button.chosen small {
+    color: var(--accent-text);
   }
   .layouts span,
   .layouts small {
@@ -588,18 +561,13 @@
   .layouts small {
     margin-top: auto;
   }
-  .create-button {
-    position: absolute;
-    right: 16px;
-    bottom: 16px;
-  }
   .muted {
     font-size: 12px;
   }
   .other p {
     color: var(--text-muted);
   }
-  @media (max-width: 850px) {
+  @media (max-width: 1100px) {
     .columns {
       grid-template-columns: 1fr;
     }

@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import StudioHeader from '$lib/components/layout/StudioHeader.svelte';
+  import StudioIcon from '$lib/components/shared/StudioIcon.svelte';
   import {
     discoverBulbs,
     forgetBulb,
@@ -143,20 +145,11 @@
 </script>
 
 <svelte:head><title>Bulbs · OpenLightFX Studio</title></svelte:head>
-<div class="bulbs-app">
-  <header>
-    <strong>OpenLightFX Studio</strong>
-    <a href="#/bulbs" aria-current="page">Bulbs</a>
-    <a href="#/rooms">Rooms</a>
-    <a href="#/library">Library</a>
-    <span class="spacer"></span><span>Emby</span>
-    <a
-      href="https://github.com/openlightfx/openlightfx-studio/blob/main/docs/journeys/J1-first-light.md"
-      >Help</a
-    >
-  </header>
+<div class="bulbs-app studio-page">
+  <StudioHeader current="bulbs" />
   <main>
-    <section class="intro">
+    <section class="intro page-intro">
+      <p class="eyebrow">Your lighting, connected</p>
       <h1>{bulbs.length === 0 ? 'Set up your bulbs' : 'Your bulbs'}</h1>
       <p>
         Find each light, identify which one it is, and give it a name you will recognize. Your bulb
@@ -187,8 +180,11 @@
           <p>{bulbs.length} known · {bulbs.filter((bulb) => bulb.isNamed).length} named</p>
         </div>
         <div class="actions">
-          <button disabled={busy || setup?.isAdmin !== true} onclick={() => void discover()}
-            >{busy ? 'Searching…' : 'Find bulbs'}</button
+          <button
+            class="primary"
+            disabled={busy || setup?.isAdmin !== true}
+            onclick={() => void discover()}
+            ><StudioIcon name="search" size={17} />{busy ? 'Searching…' : 'Find bulbs'}</button
           >
           {#if busy}<button class="quiet" onclick={cancelDiscovery}>Cancel</button>{/if}
         </div>
@@ -198,6 +194,7 @@
         <p role="status">Loading bulbs…</p>
       {:else if bulbs.length === 0}
         <div class="empty">
+          <span class="empty-icon"><StudioIcon name="bulb" size={28} /></span>
           <h2>No bulbs found yet</h2>
           <p>
             Turn on your WiZ, LIFX, or Govee bulbs, then choose Find bulbs. They must be on the same
@@ -253,7 +250,7 @@
                   >{identifying === bulb.id ? 'Flashing…' : 'Identify'}</button
                 >
                 <button
-                  class="quiet"
+                  class="danger"
                   disabled={!!bulb.roomId || setup?.isAdmin !== true}
                   onclick={() => void forget(bulb)}>Forget</button
                 >
@@ -265,7 +262,9 @@
     </section>
 
     <footer>
-      <a class="button-link" href="#/rooms">Next: set up a room →</a>
+      <a class="button-link" href="#/rooms"
+        >Next: set up a room <StudioIcon name="arrow" size={17} /></a
+      >
       {#if rooms.length === 0}<button
           class="quiet"
           onclick={() => {
@@ -278,85 +277,41 @@
 </div>
 
 <style>
-  .bulbs-app {
-    min-height: 100vh;
-    color: var(--text);
-    background: var(--bg);
-    font:
-      14px/1.45 system-ui,
-      sans-serif;
-  }
-  header {
-    height: 48px;
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    padding: 0 20px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--surface2);
-  }
-  header strong {
-    font-size: 15px;
-  }
-  header a {
-    color: var(--text-muted);
-    text-decoration: none;
-    padding: 6px;
-    border-radius: 4px;
-  }
-  header a:hover,
-  header a[aria-current='page'] {
-    color: var(--text);
-    background: var(--surface2);
-  }
-  .spacer {
-    flex: 1;
-  }
   main {
-    max-width: 1060px;
+    max-width: 1240px;
     margin: 0 auto;
-    padding: 24px;
+    padding: var(--space-10) var(--page-gutter);
   }
   h1,
   h2,
   p {
     margin-top: 0;
   }
-  h1 {
-    font-size: 24px;
-    margin-bottom: 6px;
-  }
   h2 {
-    font-size: 17px;
-    margin-bottom: 3px;
+    margin-bottom: var(--space-1);
   }
-  .intro {
-    margin-bottom: 20px;
-  }
-  .intro p,
+  .intro p:not(.eyebrow),
   .toolbar p {
     color: var(--text-muted);
     margin-bottom: 6px;
   }
-  .first-run,
-  .notice {
-    padding: 10px 12px;
-    background: var(--surface);
-    border: 1px solid var(--surface2);
-    border-radius: 6px;
+  .first-run {
+    margin-top: var(--space-5);
+    padding-left: var(--space-4);
+    border-left: 2px solid var(--border-strong);
   }
   .inventory {
-    padding: 16px;
+    padding: var(--space-6);
     background: var(--surface);
-    border: 1px solid var(--surface2);
-    border-radius: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
   }
   .toolbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    margin-bottom: 14px;
+    margin-bottom: var(--space-6);
   }
   .toolbar p {
     margin: 0;
@@ -369,16 +324,14 @@
   }
   .list {
     display: grid;
-    gap: 10px;
   }
   .bulb {
     display: grid;
-    grid-template-columns: minmax(180px, 1fr) minmax(240px, 1fr) auto;
+    grid-template-columns: minmax(150px, 1fr) minmax(220px, 1fr) auto;
     align-items: center;
     gap: 18px;
-    padding: 12px;
-    border: 1px solid var(--surface2);
-    border-radius: 7px;
+    padding: var(--space-5) 0;
+    border-top: 1px solid var(--border);
   }
   .identity {
     min-width: 0;
@@ -405,54 +358,16 @@
     color: var(--text-muted);
     font-size: 12px;
   }
-  input {
-    min-width: 0;
-    padding: 8px;
-    color: var(--text);
-    background: var(--bg);
-    border: 1px solid var(--surface3);
-    border-radius: 5px;
-    font: inherit;
-  }
-  button,
-  .button-link {
-    cursor: pointer;
-    color: var(--text);
-    background: var(--surface2);
-    border: 1px solid var(--surface3);
-    border-radius: 6px;
-    padding: 7px 10px;
-    font: inherit;
-    text-decoration: none;
-    white-space: nowrap;
-  }
-  button:hover:not(:disabled),
-  .button-link:hover {
-    border-color: var(--accent);
-  }
-  button:focus-visible,
-  a:focus-visible,
-  input:focus-visible {
-    outline: 2px solid var(--accent2);
-    outline-offset: 2px;
-  }
-  button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  .quiet {
-    color: var(--text-muted);
-  }
   .empty {
     text-align: center;
-    padding: 40px 12px;
+    padding: var(--space-12) var(--space-6);
+    border-top: 1px solid var(--border);
     color: var(--text-muted);
   }
   .error {
-    color: var(--danger);
-    padding: 10px;
-    background: rgba(239, 68, 68, 0.12);
-    border-radius: 6px;
+    padding: var(--space-4);
+    background: var(--danger-soft);
+    border-radius: var(--radius);
   }
   .error button {
     margin-left: 10px;
@@ -468,15 +383,20 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: flex-start;
     gap: 10px;
-    margin-top: 16px;
+    margin-top: var(--space-6);
+    flex-direction: row-reverse;
+  }
+  @media (max-width: 1000px) {
+    .bulb {
+      grid-template-columns: 1fr 1fr;
+    }
+    .bulb-actions {
+      grid-column: 2;
+    }
   }
   @media (max-width: 760px) {
-    header {
-      gap: 10px;
-      padding: 0 10px;
-    }
     main {
       padding: 16px 12px;
     }
@@ -491,6 +411,7 @@
       grid-column: auto;
     }
     .bulb-actions {
+      grid-column: auto;
       justify-content: flex-start;
     }
     footer {

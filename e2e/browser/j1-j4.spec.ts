@@ -411,7 +411,11 @@ requirement(
     await page.getByRole('button', { name: 'Fit', exact: true }).click();
     expect(
       (await page.getByRole('slider', { name: 'Timeline ruler' }).boundingBox())!.width
-    ).toBeCloseTo((await page.locator('.timeline-scroll').boundingBox())!.width - 150, 0);
+    ).toBeCloseTo(
+      (await page.locator('.timeline-scroll').boundingBox())!.width -
+        (await page.locator('.lane-header').first().boundingBox())!.width,
+      0
+    );
   }
 );
 requirement(

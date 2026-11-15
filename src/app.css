@@ -2,62 +2,286 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Studio-owned foundation, aligned with Emby Web's dark theme. Do not import
+   Emby's internal CSS: the static Studio page must remain version-independent. */
 :root {
-  --bg: #0f0f1a;
-  --surface: #1a1a2e;
-  --surface2: #252540;
-  --surface3: #2f2f4a;
-  --accent: #6c63ff;
-  --accent-hover: #7b73ff;
-  --accent2: #00d9ff;
-  --text: #e2e8f0;
-  --text-muted: #94a3b8;
-  --danger: #ef4444;
-  --success: #22c55e;
-  --warning: #f59e0b;
-
-  /* Timeline specific */
-  --timeline-ruler-bg: #141428;
-  --timeline-lane-bg: #161630;
-  --timeline-lane-alt-bg: #1a1a35;
-  --timeline-grid-line: rgba(108, 99, 255, 0.08);
-  --timeline-playhead: #ef4444;
-  --timeline-selection: rgba(108, 99, 255, 0.2);
-
-  /* Panel splitter */
+  color-scheme: dark;
+  --bg: #181818;
+  --surface: #222222;
+  --surface2: #2c2c2c;
+  --surface3: #3c3c3c;
+  --header-bg: #202020;
+  --input-bg: #292929;
+  --hover: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --accent: hsl(116, 41.7%, 50.2%);
+  --accent-hover: #69c860;
+  --accent-text: #83d77b;
+  --accent-soft: rgba(82, 181, 75, 0.12);
+  --on-accent: #10220e;
+  --accent2: var(--accent-text);
+  --text: #eeeeee;
+  --text-muted: #aaaaaa;
+  --text-subtle: #929292;
+  --danger: #ff9696;
+  --danger-soft: rgba(239, 68, 68, 0.12);
+  --success: var(--accent-text);
+  --warning: #edc17a;
+  --warning-soft: rgba(237, 193, 122, 0.12);
+  --video-bg: #000000;
+  --overlay-bg: rgba(0, 0, 0, 0.72);
+  --on-video: #ffffff;
+  --effect-bg: #294d48;
+  --effect-border: #6fa69c;
+  --timeline-ruler-bg: #202020;
+  --timeline-lane-bg: #242424;
+  --timeline-lane-alt-bg: #292929;
+  --timeline-grid-line: rgba(255, 255, 255, 0.06);
+  --timeline-playhead: #f2b66e;
+  --timeline-selection: rgba(82, 181, 75, 0.2);
   --splitter-size: 4px;
-  --splitter-color: var(--surface2);
+  --splitter-color: var(--border);
   --splitter-hover: var(--accent);
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', monospace;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --radius-sm: 5px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --shadow-popover: 0 12px 40px rgba(0, 0, 0, 0.4);
+  --transition: 150ms ease;
+  --header-height: 64px;
+  --page-gutter: clamp(16px, 3vw, 48px);
 }
 
+html,
 body {
-  background-color: var(--bg);
-  color: var(--text);
-  font-family: 'Inter', system-ui, sans-serif;
-  overflow: hidden;
+  height: 100%;
   margin: 0;
-  padding: 0;
-  height: 100vh;
-  width: 100vw;
 }
-
-/* Custom scrollbars */
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 var(--font-sans);
+  overflow: hidden;
+}
+* {
+  box-sizing: border-box;
+}
+::selection {
+  background: var(--timeline-selection);
+}
+:where(h1, h2, h3, p) {
+  margin-top: 0;
+}
+:root :where(h1) {
+  font-size: clamp(26px, 2.5vw, 34px);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+}
+:root :where(h2) {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+}
+:root :where(a) {
+  color: var(--accent-text);
+  text-underline-offset: 3px;
+}
+:root :where(a:hover) {
+  color: var(--text);
+}
+:root :where(button, input, select, textarea) {
+  font: inherit;
+  color: inherit;
+}
+:root :where(button, .button-link, summary) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface2);
+  color: var(--text);
+  font-weight: 500;
+  line-height: 1.35;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background var(--transition),
+    border-color var(--transition),
+    color var(--transition);
+}
+:root :where(button, .button-link, summary):hover:not(:disabled) {
+  background: var(--surface3);
+  border-color: var(--border-strong);
+}
+:root :where(button, .button-link):active:not(:disabled) {
+  background: var(--surface2);
+}
+:root :where(button.primary, .button-link.primary) {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: transparent;
+  font-weight: 650;
+}
+:root :where(button.primary, .button-link.primary):hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: transparent;
+}
+:root :where(button.quiet, .button-link.quiet) {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-muted);
+}
+:root :where(button.danger) {
+  color: var(--danger);
+  background: transparent;
+  border-color: transparent;
+}
+:root :where(button.danger):hover:not(:disabled) {
+  background: var(--danger-soft);
+}
+:root :where(button:disabled, input:disabled, select:disabled, textarea:disabled) {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+:root
+  :where(
+    input:not([type='range']):not([type='checkbox']):not([type='radio']):not([type='file']),
+    select,
+    textarea
+  ) {
+  min-width: 0;
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  color: var(--text);
+  line-height: 1.4;
+}
+:root :where(input)::placeholder,
+:root :where(textarea)::placeholder {
+  color: var(--text-subtle);
+}
+:root :where(input[type='color']) {
+  width: 48px;
+  padding: 4px;
+  cursor: pointer;
+}
+:root :where(input[type='range']) {
+  width: 100%;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+:root :where(input[type='checkbox'], progress) {
+  accent-color: var(--accent);
+}
+:root :where(button, a, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 3px;
+}
+:root :where(dialog) {
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-popover);
+}
+.studio-page {
+  height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--bg);
+}
+.eyebrow {
+  margin: 0 0 var(--space-3);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-text);
+}
+.page-intro {
+  margin-bottom: var(--space-8);
+}
+.page-intro h1 {
+  margin-bottom: var(--space-3);
+}
+.page-intro > p:not(.eyebrow) {
+  max-width: 720px;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+.empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: var(--space-5);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  border-radius: 50%;
+}
+.notice,
+.no-room {
+  background: var(--surface);
+  border-left: 3px solid var(--accent);
+  padding: 12px 16px;
+  color: var(--text-muted);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.error {
+  color: var(--danger);
+}
+.error-text {
+  color: var(--danger);
+}
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--surface);
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--surface2);
-  border-radius: 3px;
+  background: var(--surface3);
+  border: 2px solid var(--bg);
+  border-radius: 6px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--accent);
+  background: var(--text-subtle);
 }
-
-/* Utility classes for the studio */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface3) transparent;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 @layer utilities {
   .drag-handle {
     cursor: grab;

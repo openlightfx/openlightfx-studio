@@ -507,7 +507,7 @@ requirement(
 );
 
 requirement(
-  'EDIT-004 @fullstack five-channel labels use native bulb names and server fold-down',
+  'EDIT-004 @fullstack five-channel routing labels stay pinned and usable while panning',
   async ({ page }) => {
     await create(page, 'Step 4 fold labels', '5.0');
     await expect(
@@ -521,6 +521,25 @@ requirement(
     await expect(
       page.locator('.lane-name').filter({ hasText: /^Center — Center lamp$/ })
     ).toBeVisible();
+    for (let i = 0; i < 8; i++)
+      await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+    const labels = page.locator('.lane-header');
+    const before = await labels.evaluateAll((nodes) =>
+      nodes.map((node) => node.getBoundingClientRect().x)
+    );
+    const viewport = page.locator('.timeline-scroll');
+    await viewport.evaluate((node) => (node.scrollLeft = 400));
+    await expect.poll(() => viewport.evaluate((node) => node.scrollLeft)).toBe(400);
+    expect(
+      await labels.evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().x))
+    ).toEqual(before);
+    await labels.first().locator('.lane-name').click();
+    await expect(
+      page.locator('.inspector').getByRole('heading', { name: 'Left', exact: true })
+    ).toBeVisible();
+    const solo = page.getByRole('button', { name: 'Solo Left', exact: true });
+    await solo.click();
+    await expect(solo).toHaveAttribute('aria-pressed', 'true');
   }
 );
 

@@ -158,7 +158,7 @@
     cursor: crosshair;
   }
   canvas:focus-visible {
-    outline: 2px solid #a78bfa;
+    outline: 2px solid var(--accent-text);
     outline-offset: -2px;
   }
 </style>

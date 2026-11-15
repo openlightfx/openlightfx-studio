@@ -103,6 +103,30 @@ requirement(
   }
 );
 
+requirement(
+  'BULB-001 @browser a long bulb inventory can be scrolled to its last bulb',
+  async ({ page }) => {
+    const manyBulbs = Array.from({ length: 24 }, (_, index) => ({
+      ...initialBulbs[0],
+      id: `bulb-${index + 1}`,
+      name: `Bulb ${index + 1}`,
+      isNamed: true,
+    }));
+    await mockBulbs(page, manyBulbs);
+    await page.goto('/?api_key=browser-test#/bulbs');
+
+    const scrollContainer = page.locator('.bulbs-app');
+    await expect
+      .poll(() =>
+        scrollContainer.evaluate((element) => element.scrollHeight > element.clientHeight)
+      )
+      .toBe(true);
+    await page.mouse.move(600, 600);
+    await page.mouse.wheel(0, 3000);
+    await expect(page.getByRole('article', { name: 'Bulb 24' })).toBeInViewport();
+  }
+);
+
 requirement('BULB-002 @browser Identify targets the selected saved bulb', async ({ page }) => {
   const state = await mockBulbs(page, initialBulbs);
   await page.goto('/?api_key=browser-test#/bulbs');

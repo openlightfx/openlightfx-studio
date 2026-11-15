@@ -75,7 +75,7 @@
     position: absolute;
     inset: 0;
     z-index: 4;
-    background: #000;
+    background: var(--video-bg);
   }
   .source {
     width: 100%;
@@ -100,8 +100,8 @@
     justify-content: space-between;
     align-items: center;
     padding: 6px;
-    color: white;
-    background: #000b;
+    color: var(--on-video);
+    background: var(--overlay-bg);
   }
   .source-time {
     display: block;
@@ -109,9 +109,9 @@
   }
   .instructions button {
     padding: 6px 9px;
-    color: white;
-    background: #202033;
-    border: 1px solid #596078;
-    border-radius: 5px;
+    color: var(--text);
+    background: var(--surface2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
   }
 </style>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import StudioHeader from '$lib/components/layout/StudioHeader.svelte';
   import { fetchItems } from '$lib/api/client';
   import { loadBulbs, loadRooms } from '$lib/api/rooms';
   import type { LibraryItem } from '$lib/api/types';
@@ -90,18 +91,8 @@
 </script>
 
 <svelte:head><title>Library · OpenLightFX Studio</title></svelte:head>
-<div class="library-app">
-  <header>
-    <strong>OpenLightFX Studio</strong>
-    <a href="#/bulbs">Bulbs</a>
-    <a href="#/rooms">Rooms</a>
-    <a href="#/library" aria-current="page">Library</a>
-    <span class="spacer"></span><span>Emby</span>
-    <a
-      href="https://github.com/openlightfx/openlightfx-studio/blob/main/docs/journeys/J1-first-light.md"
-      >Help</a
-    >
-  </header>
+<div class="library-app studio-page">
+  <StudioHeader current="library" />
   {#if roomCount === 0}<p class="no-room">
       No room set up. You can still write tracks.
       {#if namedBulbCount === 0}<a href="#/bulbs">Find and name bulbs</a>{:else}<a href="#/rooms"
@@ -109,6 +100,11 @@
         >{/if}
     </p>{/if}
   <main>
+    <section class="page-intro">
+      <p class="eyebrow">From your Emby server</p>
+      <h1>Movie library</h1>
+      <p>Pick a movie. Make every scene feel a little closer.</p>
+    </section>
     <div class="toolbar">
       <label
         >Search <input
@@ -166,7 +162,7 @@
             <span class="title">{item.name}</span><span class="year"
               >{item.year || 'Year unknown'}</span
             >
-            <span class="badge">{trackBadge(item)}</span>
+            <span class="badge" class:active={item.hasActiveTrack}>{trackBadge(item)}</span>
           </a>
         {/each}
       </div>
@@ -175,83 +171,50 @@
 </div>
 
 <style>
-  .library-app {
-    min-height: 100vh;
-    background: var(--bg);
-    color: var(--text);
-    font:
-      14px/1.45 system-ui,
-      sans-serif;
-  }
-  header {
-    height: 48px;
-    display: flex;
-    align-items: center;
-    gap: 22px;
-    padding: 0 20px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--surface2);
-  }
-  header strong {
-    font-size: 15px;
-  }
-  header a {
-    color: var(--text-muted);
-    text-decoration: none;
-    padding: 6px;
-    border-radius: 4px;
-  }
-  header a:hover,
-  header a[aria-current='page'] {
-    color: var(--text);
-    background: var(--surface2);
-  }
-  .spacer {
-    flex: 1;
-  }
   .no-room {
-    margin: 14px 24px;
-    padding: 12px;
-    background: var(--surface);
-    border: 1px solid var(--surface2);
-    border-radius: 6px;
+    margin: var(--space-6) var(--page-gutter) 0;
   }
   .no-room a {
-    color: var(--accent2);
+    margin-left: var(--space-2);
   }
   main {
-    padding: 20px 24px;
+    max-width: 1800px;
+    margin: 0 auto;
+    padding: var(--space-10) var(--page-gutter);
   }
   .toolbar {
     display: flex;
     align-items: end;
     gap: 16px;
-    margin-bottom: 20px;
+    margin-bottom: var(--space-8);
+    padding-bottom: var(--space-6);
+    border-bottom: 1px solid var(--border);
   }
   .toolbar label {
     display: grid;
-    gap: 5px;
+    gap: var(--space-2);
     color: var(--text-muted);
+    font-size: 12px;
+  }
+  input {
+    width: min(360px, 100%);
   }
   input,
   select {
-    min-width: 220px;
-    padding: 9px;
-    color: var(--text);
-    background: var(--surface);
-    border: 1px solid var(--surface3);
-    border-radius: 5px;
-    font: inherit;
+    font-size: 14px;
+  }
+  .toolbar label:first-child {
+    flex: 1;
   }
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 18px;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: var(--space-8) var(--space-6);
   }
   .movie {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
     color: var(--text);
     text-decoration: none;
     min-width: 0;
@@ -262,8 +225,11 @@
     width: 100%;
     aspect-ratio: 2/3;
     object-fit: cover;
-    background: #34343b;
-    border-radius: 5px;
+    background: var(--surface2);
+    border-radius: var(--radius);
+    transition:
+      box-shadow var(--transition),
+      filter var(--transition);
   }
   .poster-fallback {
     display: grid;
@@ -279,7 +245,12 @@
     color: var(--text-muted);
   }
   .placeholder {
-    background: linear-gradient(100deg, #34343b 30%, #45454d 45%, #34343b 60%);
+    background: linear-gradient(
+      100deg,
+      var(--surface2) 30%,
+      var(--surface3) 45%,
+      var(--surface2) 60%
+    );
     background-size: 200% 100%;
     animation: poster-shimmer 1.4s ease-in-out infinite;
   }
@@ -294,6 +265,7 @@
     }
   }
   .title {
+    margin-top: var(--space-2);
     font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
@@ -305,15 +277,20 @@
   }
   .badge {
     align-self: flex-start;
-    border-radius: 12px;
-    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    padding: 3px 8px;
     background: var(--surface2);
     font-size: 11px;
     color: var(--text-muted);
   }
+  .badge.active {
+    color: var(--accent-text);
+    background: var(--accent-soft);
+  }
   .movie:hover img,
   .movie:hover .poster-fallback {
-    outline: 2px solid var(--accent);
+    box-shadow: 0 0 0 2px var(--accent);
+    filter: brightness(1.08);
   }
   .movie:focus-visible {
     outline: 2px solid var(--accent2);
@@ -325,16 +302,20 @@
     color: var(--text-muted);
   }
   .error {
-    color: #ff8080;
+    color: var(--danger);
+    background: var(--danger-soft);
+    padding: var(--space-5);
+    border-radius: var(--radius);
   }
-  button {
-    font: inherit;
-    color: var(--text);
-    background: var(--surface2);
-    border: 1px solid var(--surface3);
-    border-radius: 4px;
-    padding: 5px 9px;
-    cursor: pointer;
+  .empty {
+    padding: var(--space-12);
+    text-align: center;
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+  }
+  .error button,
+  .empty button {
+    margin-left: var(--space-3);
   }
   @media (max-width: 600px) {
     main {
@@ -348,10 +329,6 @@
     .toolbar select {
       width: 100%;
       box-sizing: border-box;
-    }
-    header {
-      gap: 10px;
-      padding: 0 10px;
     }
     .grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));

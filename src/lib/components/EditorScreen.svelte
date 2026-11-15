@@ -1,4 +1,5 @@
 <script lang="ts">
+  import StudioIcon from '$lib/components/shared/StudioIcon.svelte';
   import { onMount, untrack } from 'svelte';
   import { L1_SHORTCUTS, sampleChannel, displayedRgb } from '$lib/domain';
   import PluginFramePicker from './PluginFramePicker.svelte';
@@ -67,7 +68,7 @@
     const container = timelineContainer;
     if (!container) return;
     const observer = new ResizeObserver(() => {
-      session.laneWidth = Math.max(1, container.clientWidth - 150);
+      session.laneWidth = Math.max(1, container.clientWidth - 180);
       if (session.fit && container.clientWidth) fitTimeline();
     });
     observer.observe(container);
@@ -428,7 +429,7 @@
 
   function fitTimeline() {
     if (timelineContainer?.clientWidth) {
-      session.laneWidth = Math.max(1, timelineContainer.clientWidth - 150);
+      session.laneWidth = Math.max(1, timelineContainer.clientWidth - 180);
       session.zoomFit();
     }
   }
@@ -734,21 +735,22 @@
         : !session.durationKnown
           ? 'The movie duration is unknown'
           : 'Save (Ctrl/⌘ S)'}
-      onclick={() => void session.save()}>Save</button
+      onclick={() => void session.save()}
+      ><StudioIcon name="save" size={16} /><span>Save</span></button
     >
     <button
       class="quick-action"
       aria-label="Undo"
       disabled={!session.canUndo}
       title={session.canUndo ? 'Undo (Ctrl/⌘ Z)' : 'Nothing to undo'}
-      onclick={() => session.undo()}>↶</button
+      onclick={() => session.undo()}><StudioIcon name="undo" size={16} /></button
     >
     <button
       class="quick-action"
       aria-label="Redo"
       disabled={!session.canRedo}
       title={session.canRedo ? 'Redo (Ctrl/⌘ Shift Z)' : 'Nothing to redo'}
-      onclick={() => session.redo()}>↷</button
+      onclick={() => session.redo()}><StudioIcon name="redo" size={16} /></button
     >
     <input
       id="track-title"
@@ -786,6 +788,7 @@
       >
     {/if}
     <button
+      class="lights-switch"
       role="switch"
       aria-checked={lightsOn}
       disabled={!roomCount || !session.track || !canManage || Boolean(routingError)}
@@ -794,7 +797,10 @@
         : !roomCount
           ? 'Set up a room first'
           : routingError || ''}
-      onclick={() => void toggleLights()}>{lightsOn ? 'Lights on' : 'Lights'}</button
+      onclick={() => void toggleLights()}
+      ><span class="switch-track" aria-hidden="true"></span>{lightsOn
+        ? 'Lights on'
+        : 'Lights'}</button
     >
     <button
       class="primary"
@@ -880,15 +886,34 @@
         {/each}
       </div>
       <div class="transport">
-        <button aria-label="Skip back 5 seconds" onclick={() => session.skip(-1)}>⏮ −5 s</button>
-        <button aria-label="Previous frame" onclick={() => session.step(-1)}>◀ frame</button>
         <button
-          aria-label={session.playing ? 'Pause' : 'Play'}
-          disabled={!session.canPlay}
-          onclick={() => session.togglePlay()}>{session.playing ? '❚❚ Pause' : '▶ Play'}</button
+          aria-label="Skip back 5 seconds"
+          title="Back 5 seconds (Shift ←)"
+          onclick={() => session.skip(-1)}
+          ><StudioIcon name="rewind" size={17} /><span>5s</span></button
         >
-        <button aria-label="Next frame" onclick={() => session.step(1)}>frame ▶</button>
-        <button aria-label="Skip forward 5 seconds" onclick={() => session.skip(1)}>+5 s ⏭</button>
+        <button
+          aria-label="Previous frame"
+          title="Previous frame (←)"
+          onclick={() => session.step(-1)}><StudioIcon name="previous" size={17} /></button
+        >
+        <button
+          class="play-button"
+          aria-label={session.playing ? 'Pause' : 'Play'}
+          title={session.playing ? 'Pause (Space)' : 'Play (Space)'}
+          disabled={!session.canPlay}
+          onclick={() => session.togglePlay()}
+          ><StudioIcon name={session.playing ? 'pause' : 'play'} size={20} /></button
+        >
+        <button aria-label="Next frame" title="Next frame (→)" onclick={() => session.step(1)}
+          ><StudioIcon name="next" size={17} /></button
+        >
+        <button
+          aria-label="Skip forward 5 seconds"
+          title="Forward 5 seconds (Shift →)"
+          onclick={() => session.skip(1)}
+          ><span>5s</span><StudioIcon name="forward" size={17} /></button
+        >
         <time>{timeLabel}</time>
       </div>
     </section>
@@ -1040,7 +1065,7 @@
               session.setTransition((event.currentTarget as HTMLInputElement).value)}
           /> ms</label
         >
-        <button onclick={() => session.deleteSelection()}>Delete</button>
+        <button class="danger" onclick={() => session.deleteSelection()}>Delete</button>
       {:else if session.activeChannelId}
         {@const channel = session.channels.find(
           (candidate: Channel) => candidate.id === session.activeChannelId
@@ -1150,7 +1175,7 @@
             session.track?.keyframes
               .filter((keyframe: Keyframe) => keyframe.channelId === channel.id)
               .toSorted((a: Keyframe, b: Keyframe) => a.timestampMs - b.timestampMs) ?? []}
-          <div class="lane-row" style={`width:${timelineWidth + 150}px`}>
+          <div class="lane-row" style={`width:${timelineWidth + 180}px`}>
             <div
               class="lane-header"
               role="group"
@@ -1523,16 +1548,6 @@
 </div>
 
 <style>
-  :global(html),
-  :global(body) {
-    height: 100%;
-    margin: 0;
-    background: #0b0b16;
-    color: #e2e8f0;
-    font:
-      14px/1.4 system-ui,
-      sans-serif;
-  }
   .route-status {
     min-height: 100dvh;
     box-sizing: border-box;
@@ -1542,14 +1557,11 @@
     gap: 12px;
     padding: 32px;
     text-align: center;
-    background: #0b0b16;
+    background: var(--bg);
   }
   .route-status p {
     margin: 0;
-    color: #b7b7c8;
-  }
-  .route-status a {
-    color: #a9bcff;
+    color: var(--text-muted);
   }
   .editor-hidden {
     display: none;
@@ -1558,33 +1570,31 @@
     height: 100dvh;
     display: grid;
     grid-template-rows: auto auto minmax(0, 1fr);
-    background: #0b0b16;
+    background: var(--bg);
+    font-size: 13px;
   }
   button,
   input,
   select,
   textarea {
-    color: inherit;
-    background: #1a1a2e;
-    border: 1px solid #39415b;
-    border-radius: 5px;
-    padding: 6px 9px;
+    min-height: 32px;
+    padding: 6px 10px;
   }
-  button {
-    cursor: pointer;
-  }
-  button:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
+  input:not([type='range']):not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    min-height: 34px;
+    padding: 6px 10px;
   }
   .menubar {
     display: flex;
     align-items: center;
-    gap: 12px;
-    min-height: 48px;
-    padding: 4px 12px;
-    background: #141422;
-    border-bottom: 1px solid #303047;
+    gap: var(--space-2);
+    min-height: 58px;
+    padding: 8px 16px;
+    background: var(--header-bg);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
   }
   .menus {
     display: flex;
@@ -1605,9 +1615,10 @@
     min-width: 230px;
     padding: 5px;
     display: grid;
-    background: #202033;
-    border: 1px solid #41415a;
-    box-shadow: 0 8px 24px #0009;
+    background: var(--surface2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-popover);
   }
   .menu button {
     display: flex;
@@ -1620,16 +1631,19 @@
     padding: 8px;
   }
   .menu button:hover {
-    background: #343450;
+    background: var(--hover);
   }
   .track-title {
     max-width: 22vw;
+    border-color: transparent;
+    background: transparent;
+    font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .save-state {
-    color: #cbd5e1;
+    color: var(--text-muted);
     font-size: 12px;
   }
   .room-picker {
@@ -1641,51 +1655,78 @@
   .spacer {
     flex: 1;
   }
-  .primary {
-    background: #4f46e5;
-    border-color: #6366f1;
+  .lights-switch {
+    border-color: transparent;
+    background: transparent;
+  }
+  .switch-track {
+    display: inline-flex;
+    align-items: center;
+    width: 28px;
+    height: 16px;
+    padding: 2px;
+    border-radius: 12px;
+    background: var(--surface3);
+  }
+  .switch-track::after {
+    content: '';
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: transform var(--transition);
+  }
+  .lights-switch[aria-checked='true'] .switch-track {
+    background: var(--accent);
+  }
+  .lights-switch[aria-checked='true'] .switch-track::after {
+    transform: translateX(12px);
+    background: var(--on-accent);
   }
   .file-input {
     display: none;
   }
   .no-room {
-    padding: 7px 14px;
-    background: #29233b;
+    padding: 8px 16px;
+    border-radius: 0;
+    font-size: 12px;
   }
   .no-room a {
-    color: #c4b5fd;
     margin-left: 6px;
   }
   .workspace {
     grid-row: 3;
     min-height: 0;
     display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr);
+    grid-template-columns: minmax(0, 1fr) clamp(280px, 28vw, 380px);
     grid-template-rows: minmax(0, 1fr) minmax(210px, 38vh);
   }
   .movie-column {
     min-height: 0;
     display: flex;
     flex-direction: column;
-    padding: 12px;
+    padding: var(--space-4);
   }
   .video-stage {
     flex: 1;
     min-height: 0;
-    background: #000;
+    background: var(--video-bg);
     display: grid;
     place-items: center;
     position: relative;
   }
   .video-stage video {
-    max-width: 100%;
-    max-height: 100%;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
     pointer-events: none;
   }
   .region {
     position: absolute;
     z-index: 1;
-    border: 1px solid #fff4;
+    border: 1px solid var(--border-strong);
     border-radius: 6px;
     pointer-events: none;
     mix-blend-mode: screen;
@@ -1733,7 +1774,7 @@
     position: absolute;
     z-index: 1;
     bottom: 4px;
-    background: #111c;
+    background: var(--overlay-bg);
     padding: 4px 8px;
   }
   .transport {
@@ -1745,27 +1786,94 @@
     padding: 10px 0;
   }
   .transport time {
-    font-variant-numeric: tabular-nums;
+    font: 11px var(--font-mono);
+    color: var(--text-muted);
     margin-left: 8px;
   }
+  .transport button {
+    background: transparent;
+    border-color: transparent;
+  }
+  .transport button:hover:not(:disabled) {
+    background: var(--surface2);
+  }
+  .transport .play-button {
+    background: var(--text);
+    color: var(--bg);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+  }
+  .transport .play-button:hover:not(:disabled) {
+    background: var(--accent);
+  }
   .inspector {
-    padding: 16px;
-    border-left: 1px solid #303047;
+    padding: var(--space-5);
+    border-left: 1px solid var(--border);
     overflow: auto;
+    background: var(--surface);
   }
   .inspector h2 {
     font-size: 16px;
+    padding-bottom: var(--space-4);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: var(--space-5);
+  }
+  .inspector p {
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.6;
+    margin-top: var(--space-5);
   }
   .inspector label {
     display: grid;
-    gap: 5px;
-    margin: 12px 0;
+    grid-template-columns: 90px minmax(0, 1fr);
+    align-items: center;
+    gap: var(--space-2);
+    margin: var(--space-4) 0;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+  .inspector label input,
+  .inspector label select {
+    color: var(--text);
+  }
+  .inspector label input[type='range'] + input {
+    grid-column: 2;
+  }
+  .inspector label:has(input[type='radio']) {
+    display: inline-flex;
+    margin: var(--space-2) var(--space-4) var(--space-2) 0;
+  }
+  .inspector dl {
+    display: grid;
+    grid-template-columns: 90px minmax(0, 1fr);
+    gap: var(--space-2);
+    font-size: 12px;
+  }
+  .inspector dt {
+    color: var(--text-muted);
+  }
+  .inspector dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+  .inspector input[type='radio'] {
+    min-height: 0;
+    accent-color: var(--accent);
+  }
+  .inspector input[type='color'] {
+    width: 100%;
+    height: 36px;
+    padding: 3px;
   }
   .timeline {
     grid-column: 1 / -1;
+    min-width: 0;
     min-height: 0;
-    border-top: 1px solid #303047;
-    padding: 8px 12px;
+    border-top: 1px solid var(--border-strong);
+    background: var(--surface);
+    padding: 8px 16px;
   }
   .timeline-tools {
     display: flex;
@@ -1781,19 +1889,21 @@
     height: calc(100% - 38px);
   }
   .ruler {
-    margin-left: 150px;
+    margin-left: 180px;
     height: 30px;
     display: flex;
     justify-content: space-between;
     position: relative;
     align-items: center;
-    border-bottom: 1px solid #596078;
+    border-bottom: 1px solid var(--border-strong);
+    background: var(--timeline-ruler-bg);
     cursor: ew-resize;
     touch-action: none;
   }
   .ruler span {
     font-size: 11px;
-    color: #aab1c5;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
     pointer-events: none;
   }
   .playhead {
@@ -1801,22 +1911,27 @@
     top: 0;
     bottom: -500px;
     width: 2px;
-    background: #fb7185;
+    background: var(--timeline-playhead);
     pointer-events: none;
   }
   .lane-row {
     height: 40px;
     display: grid;
-    grid-template-columns: 150px minmax(0, 1fr);
-    border-bottom: 1px solid #303047;
+    grid-template-columns: 180px minmax(0, 1fr);
+    border-bottom: 1px solid var(--border);
   }
   .lane-header {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: var(--surface);
     min-width: 0;
     display: flex;
     align-items: center;
     gap: 2px;
   }
   .lane-name {
+    display: block;
     flex: 1;
     min-width: 0;
     overflow: hidden;
@@ -1826,6 +1941,12 @@
     border: 0;
     background: transparent;
   }
+  .lane-header button[aria-pressed='true'] {
+    color: var(--accent-text);
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    font-weight: 700;
+  }
   .history-swatches {
     display: flex;
     flex-wrap: wrap;
@@ -1834,6 +1955,7 @@
   .history-swatches button {
     width: 22px;
     height: 22px;
+    min-height: 22px;
     padding: 0;
   }
   .rgb-fields {
@@ -1843,17 +1965,22 @@
   .rgb-fields label {
     min-width: 0;
     flex: 1;
+    grid-template-columns: 1fr;
+    margin-top: 0;
+  }
+  .rgb-fields input {
+    width: 100%;
   }
   .lane {
     position: relative;
-    background: linear-gradient(90deg, #181827, #202033);
+    background: var(--timeline-lane-bg);
     cursor: crosshair;
   }
   .lane-empty {
     position: absolute;
     left: 12px;
     top: 10px;
-    color: #777f98;
+    color: var(--text-subtle);
     font-size: 11px;
     pointer-events: none;
   }
@@ -1864,10 +1991,11 @@
     height: 14px;
     padding: 0;
     transform: translateX(-50%) rotate(45deg);
-    border: 2px solid #111;
+    min-height: 0;
+    border: 2px solid var(--bg);
   }
   .diamond.selected {
-    outline: 2px solid white;
+    outline: 2px solid var(--on-video);
   }
   .effect-block {
     position: absolute;
@@ -1876,14 +2004,15 @@
     min-width: 24px;
     padding: 0;
     overflow: hidden;
-    background: #4338ca;
-    border-color: #818cf8;
+    min-height: 0;
+    background: var(--effect-bg);
+    border-color: var(--effect-border);
     border-radius: 4px;
   }
   .safety-badge {
     padding: 3px 6px;
-    color: #fed7aa;
-    background: #542b16;
+    color: var(--warning);
+    background: var(--warning-soft);
     border-radius: 4px;
     font-size: 11px;
   }
@@ -1892,8 +2021,8 @@
     right: 12px;
     bottom: 32px;
     padding: 6px 10px;
-    color: #ddd;
-    background: #252535;
+    color: var(--text);
+    background: var(--surface2);
     font-size: 12px;
   }
   .quick-action {
@@ -1907,8 +2036,8 @@
     z-index: 12;
     display: grid;
     padding: 6px;
-    background: #202033;
-    border: 1px solid #555;
+    background: var(--surface2);
+    border: 1px solid var(--border-strong);
     border-radius: 4px;
   }
   .channel-context-menu button {
@@ -1919,9 +2048,9 @@
     left: 12px;
     bottom: 30px;
     padding: 8px;
-    color: #ddd;
-    background: #252535;
-    border-radius: 4px;
+    color: var(--text);
+    background: var(--surface2);
+    border-radius: var(--radius-sm);
     font-size: 12px;
   }
   .editor-feedback {
@@ -1930,8 +2059,8 @@
     bottom: 0;
     margin: 0;
     padding: 6px 10px;
-    color: #ddd;
-    background: #151522e8;
+    color: var(--text);
+    background: var(--header-bg);
     font-size: 12px;
     pointer-events: none;
   }
@@ -1940,7 +2069,9 @@
     right: 12px;
     bottom: 12px;
     padding: 10px;
-    background: #542b35;
+    color: var(--danger);
+    background: var(--surface2);
+    border: 1px solid var(--danger);
     border-radius: 6px;
   }
   .modal-backdrop {
@@ -1949,7 +2080,7 @@
     z-index: 20;
     display: grid;
     place-items: center;
-    background: #000a;
+    background: var(--overlay-bg);
   }
   .settings-dialog {
     display: grid;
@@ -1958,10 +2089,10 @@
     width: min(720px, calc(100vw - 32px));
     max-height: 90vh;
     overflow: auto;
-    padding: 20px;
-    border: 1px solid #52526a;
-    border-radius: 10px;
-    background: #171728;
+    padding: var(--space-6);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
   }
   .settings-dialog h2,
   .settings-dialog button {
@@ -1977,25 +2108,33 @@
     flex-wrap: wrap;
     gap: 10px;
     max-width: 440px;
-    padding: 20px;
-    border: 1px solid #52526a;
-    border-radius: 10px;
-    background: #171728;
+    padding: var(--space-6);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
   }
   .leave-dialog h2,
   .leave-dialog p {
     width: 100%;
     margin: 0;
   }
+  @media (max-width: 500px) {
+    .ruler span:not(:first-child):not(:nth-child(5)) {
+      display: none;
+    }
+    .settings-dialog {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
   @media (max-width: 750px) {
     .workspace {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
       grid-template-rows: minmax(260px, 1fr) auto minmax(200px, 38vh);
       overflow: auto;
     }
     .inspector {
       border: 0;
-      border-top: 1px solid #303047;
+      border-top: 1px solid var(--border);
     }
     .timeline {
       grid-column: 1;

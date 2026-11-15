@@ -211,15 +211,15 @@
     bottom: 0;
     z-index: 10;
     padding: 4px 8px;
-    color: #bbc;
-    background: #141420ef;
+    color: var(--text-muted);
+    background: var(--header-bg);
     font-size: 11px;
     pointer-events: none;
   }
   .route-loading {
     min-height: 100vh;
     padding: 2rem;
-    color: #ddd;
-    background: #0b0b16;
+    color: var(--text);
+    background: var(--bg);
   }
 </style>
