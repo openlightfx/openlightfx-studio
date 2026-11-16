@@ -96,8 +96,7 @@ import {
   rangeReason,
 } from '$lib/domain/audition-range';
 
-const DB_NAME = 'openlightfx-studio';
-const STORE = 'crash';
+import { openRecoveryDatabase, RECOVERY_STORE as STORE } from '$lib/studio/recovery-database';
 const FPS = 24;
 export const INITIAL_PX_PER_MS = 0.032;
 
@@ -2485,16 +2484,7 @@ export class StudioSession {
   private async openDb(): Promise<boolean> {
     if (this.db) return true;
     try {
-      this.db = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, 1);
-        request.onupgradeneeded = () => {
-          const db = request.result;
-          if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
-        };
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-        request.onblocked = () => reject(new Error('IndexedDB open was blocked'));
-      });
+      this.db = await openRecoveryDatabase();
       return true;
     } catch {
       this.recoveryUnavailable = true;

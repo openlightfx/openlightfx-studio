@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 import { chooseLoadSource, type CrashRecord } from '../../src/lib/domain';
 import { ActiveEditorPage } from '../pages/active-editor-page';
-import { menu, openFixtureEditor } from '../harness/browser';
+import { installBackend, menu, openFixtureEditor } from '../harness/browser';
 import { requirement } from '../harness/requirement';
 
 async function installStorageFault(page: Page, fault: 'open' | 'read' | 'write') {
@@ -58,6 +58,144 @@ async function recoveryRows(page: Page) {
       })
   );
 }
+
+for (const schema of ['missing-v1', 'missing-v7', 'existing-v7'] as const) {
+  for (const newTrack of [false, true]) {
+    requirement(
+      `ED2-033 @browser ${schema} database permits ${newTrack ? 'creating' : 'opening'} a track without deleting existing data`,
+      async ({ page }) => {
+        const backend = await installBackend(page, { newTrack });
+        await page.goto('/emby/OpenLightFX/studio/?api_key=browser-test#/library');
+        await expect(page.getByRole('heading', { name: 'Movie library' })).toBeVisible();
+        await page.evaluate(
+          (schema) =>
+            new Promise<void>((resolve, reject) => {
+              const request = indexedDB.open('openlightfx-studio', schema === 'missing-v1' ? 1 : 7);
+              request.onupgradeneeded = () => {
+                request.result.createObjectStore('legacy').put('keep legacy data', 'sentinel');
+                if (schema === 'existing-v7') {
+                  request.result.createObjectStore('crash').put('keep recovery data', 'sentinel');
+                }
+              };
+              request.onerror = () => reject(request.error);
+              request.onsuccess = () => {
+                request.result.close();
+                resolve();
+              };
+            }),
+          schema
+        );
+
+        // Change the query too, so this starts a fresh document rather than
+        // racing a hash navigation against the Library's initial route setup.
+        await page.goto(
+          `/emby/OpenLightFX/studio/?api_key=browser-test&schema-seeded=1#/edit/42/${newTrack ? 'new' : 'proxy-fixture'}`
+        );
+        await expect(page.getByRole('slider', { name: 'Timeline ruler' })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeEnabled();
+        await expect(page.getByRole('alert', { name: 'Local recovery unavailable' })).toHaveCount(
+          0
+        );
+        const title = `Recovered ${schema} ${newTrack ? 'new' : 'opened'}`;
+        await page.getByLabel('Track title', { exact: true }).fill(title);
+        await expect
+          .poll(async () =>
+            (await recoveryRows(page)).some(
+              (row) =>
+                row.dirty === true &&
+                (row.track as { metadata: { title: string } }).metadata.title === title
+            )
+          )
+          .toBe(true);
+        expect((await new ActiveEditorPage(page).exportTrack()).metadata.title).toBe(title);
+        const schemaAfter = await page.evaluate(
+          () =>
+            new Promise((resolve, reject) => {
+              const request = indexedDB.open('openlightfx-studio');
+              request.onerror = () => reject(request.error);
+              request.onsuccess = () => {
+                const db = request.result;
+                const tx = db.transaction(['legacy', 'crash']);
+                const legacy = tx.objectStore('legacy').get('sentinel');
+                const crash = tx.objectStore('crash').get('sentinel');
+                tx.oncomplete = () => {
+                  resolve({ version: db.version, legacy: legacy.result, crash: crash.result });
+                  db.close();
+                };
+                tx.onabort = () => reject(tx.error);
+              };
+            })
+        );
+        expect(schemaAfter).toEqual({
+          version: schema === 'missing-v1' ? 2 : schema === 'missing-v7' ? 8 : 7,
+          legacy: 'keep legacy data',
+          crash: schema === 'existing-v7' ? 'keep recovery data' : undefined,
+        });
+        if (newTrack) {
+          await menu(page, 'File', '^Save');
+          await expect(page.getByText('Saved', { exact: true })).toBeVisible();
+          expect(backend.track.metadata.title).toBe(title);
+          await expect
+            .poll(async () => (await recoveryRows(page)).some((row) => row.dirty === true))
+            .toBe(false);
+        } else {
+          await page.reload();
+          await expect(page.getByLabel('Track title', { exact: true })).toHaveValue(title);
+          await expect(page.getByRole('status', { name: 'Crash recovery' })).toContainText(
+            'restored'
+          );
+        }
+      }
+    );
+  }
+}
+
+requirement(
+  'ED2-033 @browser a legacy tab blocking schema repair leaves authoring available and Retry recovers after it closes',
+  async ({ page }) => {
+    await installBackend(page);
+    const legacyTab = await page.context().newPage();
+    await legacyTab.goto('/emby/OpenLightFX/studio/?api_key=browser-test#/library');
+    await legacyTab.evaluate(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          const request = indexedDB.open('openlightfx-studio', 1);
+          request.onupgradeneeded = () => request.result.createObjectStore('legacy');
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => {
+            // Simulate an older Studio tab which does not close on versionchange.
+            (window as Window & { legacyConnection?: IDBDatabase }).legacyConnection =
+              request.result;
+            resolve();
+          };
+        })
+    );
+    await page.goto('/emby/OpenLightFX/studio/?api_key=browser-test#/edit/42/proxy-fixture');
+    const unavailable = page.getByRole('alert', { name: 'Local recovery unavailable' });
+    await expect(unavailable).toBeVisible();
+    await page.getByLabel('Track title', { exact: true }).fill('Edited while upgrade blocked');
+    expect((await new ActiveEditorPage(page).exportTrack()).metadata.title).toBe(
+      'Edited while upgrade blocked'
+    );
+    await legacyTab.close();
+    await unavailable.getByRole('button', { name: 'Retry' }).click();
+    await expect(unavailable).toBeHidden();
+    await expect
+      .poll(async () =>
+        (await recoveryRows(page)).some(
+          (row) =>
+            row.dirty === true &&
+            (row.track as { metadata: { title: string } }).metadata.title ===
+              'Edited while upgrade blocked'
+        )
+      )
+      .toBe(true);
+    await page.reload();
+    await expect(page.getByLabel('Track title', { exact: true })).toHaveValue(
+      'Edited while upgrade blocked'
+    );
+  }
+);
 
 for (const fault of ['open', 'read', 'write'] as const) {
   requirement(
