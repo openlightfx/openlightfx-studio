@@ -60,6 +60,7 @@ export interface PreviewChannelState {
   r: number;
   g: number;
   b: number;
+  colorTemperature: number;
   brightness: number;
   transitionMs: number;
 }

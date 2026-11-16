@@ -440,7 +440,8 @@ requirement('PROP-002 @unit hex and sliders stay inside 0-255', () => {
 requirement('PROP-003 @unit kelvin authoring is 1000 to 10000 in steps of 100', () => {
   const accepted = setKelvin(4200);
   expect(accepted.ok && accepted.kelvin).toBe(4200);
-  expect(kelvinToRgb(4200).r).toBe(255);
+  expect(kelvinToRgb(4200)).toEqual({ r: 255, g: 210, b: 175 });
+  expect(setKelvin(4200.5).ok).toBe(false);
   expect(setKelvin(500).ok).toBe(false);
   expect(setKelvin(20000).ok).toBe(false);
 });

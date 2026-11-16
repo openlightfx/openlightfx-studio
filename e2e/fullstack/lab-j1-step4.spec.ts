@@ -636,7 +636,9 @@ requirement(
     expect(changed.ok()).toBeTruthy();
     await create(page, 'Step 4 preview');
     await add(page, 'Left', 0.5, 'ff0000', '50');
-    await add(page, 'Right', 0.1, '0000ff', '80');
+    await page.getByRole('radio', { name: 'Kelvin', exact: true }).check();
+    await page.getByRole('spinbutton', { name: 'Kelvin', exact: true }).fill('3200');
+    await page.getByRole('spinbutton', { name: 'Kelvin', exact: true }).press('Tab');
     await seek(page, 0.6);
     const before = await cursor(request),
       receiptStart = receipts().length;
@@ -644,24 +646,21 @@ requirement(
     const sample = await waitForObservation(control, {
       after: before,
       bulbs: {
-        'left-bulb': { r: 255, g: 0, b: 0, brightness: 50, power: true },
-        'center-bulb': { r: 255, g: 0, b: 0, brightness: 50, power: true },
-        'right-bulb': { r: 0, g: 0, b: 255, brightness: 80, power: true },
+        'left-bulb': { r: 255, g: 96, b: 255, brightness: 50, power: true },
+        'center-bulb': { r: 255, g: 96, b: 255, brightness: 50, power: true },
+        'right-bulb': { r: 0, g: 0, b: 0, brightness: 0, power: false },
       },
     });
     const fresh = receipts().slice(receiptStart);
-    for (const [id, rgb, brightness] of [
-      ['left-bulb', [255, 0, 0], 50],
-      ['center-bulb', [255, 0, 0], 50],
-      ['right-bulb', [0, 0, 255], 80],
-    ] as const) {
+    for (const bulbId of ['left-bulb', 'center-bulb']) {
       expect(
         fresh.some(
           (event) =>
-            event.bulb_id === id &&
-            [event.params.r, event.params.g, event.params.b].map(Number).join() === rgb.join() &&
-            Number(event.params.brightness) === brightness
-        )
+            event.bulb_id === bulbId &&
+            event.command === 'setPilot' &&
+            Number(event.params.temp) === 3200
+        ),
+        `Kelvin preview must send an actual Wiz color-temperature command to ${bulbId}`
       ).toBe(true);
     }
     await test.info().attach('preview-observation.json', {

@@ -543,6 +543,7 @@
         r: audible ? sample.r : 0,
         g: audible ? sample.g : 0,
         b: audible ? sample.b : 0,
+        colorTemperature: audible && sample.mode === 'COLOR_TEMPERATURE' ? sample.kelvin : 0,
         brightness: audible ? sample.brightness : 0,
         transitionMs: 0,
       };

@@ -3,6 +3,7 @@
 // ============================================================
 
 import type { RGBColor } from '$lib/types/index.js';
+import { kelvinToRgb as convertKelvinToRgb } from '$lib/domain/kelvin.js';
 
 export function clampColorComponent(value: number): number {
   return Math.round(Math.min(255, Math.max(0, value)));
@@ -106,37 +107,7 @@ export function hexToRgb(hex: string): RGBColor | null {
  * Based on Tanner Helland's algorithm.
  */
 export function kelvinToRgb(kelvin: number): RGBColor {
-  const temp = Math.min(40000, Math.max(1000, kelvin)) / 100;
-
-  let r: number;
-  let g: number;
-  let b: number;
-
-  if (temp <= 66) {
-    r = 255;
-  } else {
-    r = 329.698727446 * Math.pow(temp - 60, -0.1332047592);
-  }
-
-  if (temp <= 66) {
-    g = 99.4708025861 * Math.log(temp) - 161.1195681661;
-  } else {
-    g = 288.1221695283 * Math.pow(temp - 60, -0.0755148492);
-  }
-
-  if (temp >= 66) {
-    b = 255;
-  } else if (temp <= 19) {
-    b = 0;
-  } else {
-    b = 138.5177312231 * Math.log(temp - 10) - 305.0447927307;
-  }
-
-  return {
-    r: clampColorComponent(r),
-    g: clampColorComponent(g),
-    b: clampColorComponent(b),
-  };
+  return convertKelvinToRgb(kelvin);
 }
 
 export function interpolateColor(a: RGBColor, b: RGBColor, t: number): RGBColor {
