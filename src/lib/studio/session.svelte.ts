@@ -367,10 +367,6 @@ export class StudioSession {
       this.bulbs = bulbs;
       this.photosensitivity = photosensitivityNotice(settings.photosensitivityMode);
 
-      await this.loadItems(this.search);
-      if (token !== this.bootToken) return;
-      if (this.pluginDown) throw new Error('Movies could not be loaded from Emby.');
-
       let request: { itemId?: string; title?: string; layout?: string } = {};
       try {
         request = JSON.parse(sessionStorage.getItem('olfx-editor-request') ?? '{}');
@@ -437,8 +433,15 @@ export class StudioSession {
     imported?: { fileName: string; bytes: Uint8Array },
     token = this.bootToken
   ): Promise<void> {
-    const item = this.items.find((candidate) => candidate.itemId === itemId);
-    if (!item) throw new Error('This movie is no longer available in Emby.');
+    // The editor is opened with an item ID from the route; fetching the whole Emby
+    // library just to resolve its title/runtime is unnecessary. MediaInfo and the
+    // track API provide the editor data we need.
+    const item = this.items.find((candidate) => candidate.itemId === itemId) ?? {
+      itemId,
+      name: itemId,
+      year: 0,
+      runtimeMs: 0,
+    };
     this.item = item;
     this.videoError = '';
     this.pendingSeekMs = null;

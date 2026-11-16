@@ -3,7 +3,7 @@
   import StudioHeader from '$lib/components/layout/StudioHeader.svelte';
   import {
     fetchActiveTrackPath,
-    fetchItems,
+    fetchItem,
     fetchMediaInfo,
     fetchTrackBytes,
     fetchTracks,
@@ -103,12 +103,13 @@
 
   onMount(() => {
     const itemId = decodeURIComponent(location.hash.split('/')[2] ?? '');
-    void Promise.all([loadRooms(), fetchItems('')])
-      .then(async ([loadedRooms, items]) => {
+    void Promise.all([loadRooms(), fetchItem(itemId).catch(() => null)])
+      .then(async ([loadedRooms, movie]) => {
         rooms = loadedRooms;
         roomId = rooms[0]?.id ?? '';
-        item = items.find((movie) => movie.itemId === itemId) ?? null;
-        if (!item) throw new Error('This movie is no longer available in Emby.');
+        // Item details are fetched by the route's known ID. If Emby's details
+        // endpoint is unavailable, the track/media APIs can still serve the page.
+        item = movie ?? { itemId, name: itemId, year: 0, runtimeMs: 0 };
         if (!item.runtimeMs) {
           try {
             const media = await fetchMediaInfo(itemId);

@@ -284,7 +284,7 @@
             step="0.1"
             bind:value={sampleRateFps}
           />
-          <small>More samples create more keyframes and take longer.</small>
+          <small>Higher rates can catch scene changes sooner, but take longer to analyze.</small>
         </label>
         <label
           >Scene-cut sensitivity
@@ -296,7 +296,9 @@
             step="0.01"
             bind:value={sceneCutThreshold}
           />
-          <small>Lower values react to smaller color changes.</small>
+          <small
+            >A keyframe is added when a channel’s sampled color change reaches this threshold.</small
+          >
         </label>
         <label
           >Ignore center of each zone (%)

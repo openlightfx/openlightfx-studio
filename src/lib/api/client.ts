@@ -204,6 +204,14 @@ async function send(path: string, init: RequestInit = {}): Promise<Response> {
   });
 }
 
+export async function fetchItem(itemId: string): Promise<LibraryItem | null> {
+  const query = new URLSearchParams({ fields: 'DateCreated,MediaSources,ProviderIds' });
+  const response = await send(`/emby/Items/${encodeURIComponent(itemId)}?${query}`);
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`Item ${response.status}`);
+  return libraryItemFromApi(await response.json());
+}
+
 export async function fetchItems(search = '', signal?: AbortSignal): Promise<LibraryItem[]> {
   const pageSize = 200;
   const items: LibraryItem[] = [];
