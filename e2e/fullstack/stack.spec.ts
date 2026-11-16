@@ -832,6 +832,72 @@ requirement('SAVE-002 @fullstack playback uses the saved track', async ({ reques
   }
 });
 
+requirement(
+  'PLAY-001 @fullstack playback auto-selects and uses a discovered track when none is active',
+  async ({ request }) => {
+    const id = await itemId(request);
+    await ensureRoom(request);
+    for (const track of [freshTrackId(), freshTrackId()])
+      expect((await saveTrack(request, id, track)).ok()).toBeTruthy();
+
+    for (const deviceId of [undefined, 'openlightfx-fullstack-play']) {
+      const cleared = await request.post(`${emby()}/OpenLightFX/Tracks/Select`, {
+        headers: headers(),
+        data: { itemId: id, ...(deviceId ? { deviceId } : {}) },
+        timeout: 5000,
+      });
+      expect(cleared.ok()).toBeTruthy();
+    }
+
+    const listUrl = `${emby()}/OpenLightFX/Tracks/ByItem?ItemId=${id}&DeviceId=openlightfx-fullstack-play`;
+    const unselected = await (await request.get(listUrl, { headers: headers() })).json();
+    expect(unselected.globalSelectedTrack ?? null).toBeNull();
+    expect(unselected.deviceSelectedTrack ?? null).toBeNull();
+    const discovered = (unselected.tracks ?? []).map(
+      (entry: { trackPath: string }) => entry.trackPath
+    );
+    expect(discovered.length).toBeGreaterThanOrEqual(2);
+    const expectedDefault = [...discovered].sort((a, b) => {
+      const lowerA = a.toLowerCase();
+      const lowerB = b.toLowerCase();
+      return lowerA < lowerB ? -1 : lowerA > lowerB ? 1 : a < b ? -1 : a > b ? 1 : 0;
+    })[0];
+    const priorEvents = readNdjson().length;
+    const stopPlayback = await reportPlayback(request, id);
+    try {
+      await expect
+        .poll(
+          async () => {
+            const selected = await (await request.get(listUrl, { headers: headers() })).json();
+            return selected.globalSelectedTrack;
+          },
+          { timeout: 8000 }
+        )
+        .toBe(expectedDefault);
+      await expect
+        .poll(
+          () =>
+            readNdjson()
+              .slice(priorEvents)
+              .some((line) => {
+                const color = commanded(line);
+                return (
+                  line.event === 'command_received' &&
+                  color.r === 10 &&
+                  color.g === 20 &&
+                  color.b === 30 &&
+                  color.brightness === 40
+                );
+              }),
+          { timeout: 8000 }
+        )
+        .toBe(true);
+    } finally {
+      await stopPlayback();
+    }
+  }
+);
+
 requirement('SAVE-003 @fullstack save writes the project sidecar', async ({ request }) => {
   const body = {
     version: 1,

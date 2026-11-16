@@ -52,3 +52,39 @@ export interface StudioSettings {
   photosensitivityMode: boolean;
   mappingProfile: Record<string, string[]>;
 }
+
+export interface GenerationZone {
+  channelId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface GenerationOptions {
+  sampleRateFps: number;
+  sceneCutThreshold: number;
+  centerExclusionPercent: number;
+  zones: GenerationZone[];
+}
+
+export interface GeneratedKeyframe {
+  id: string;
+  channelId: string;
+  timestampMs: number;
+  r: number;
+  g: number;
+  b: number;
+  transitionMs: number;
+  powerOn: boolean;
+}
+
+export interface GenerationJob {
+  jobId: string;
+  state: 'pending' | 'processing' | 'done' | 'failed';
+  error: string;
+  progress: number;
+  throughMs: number;
+  sequence: number;
+  keyframes: GeneratedKeyframe[];
+}

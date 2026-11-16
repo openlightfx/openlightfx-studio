@@ -8,9 +8,19 @@ import type {
   ProxyInfo,
   StudioSettings,
   TrackSummary,
+  GenerationOptions,
+  GenerationJob,
 } from './types';
 
-export type { Bulb, LibraryItem, MediaInfo, StudioSettings, TrackSummary };
+export type {
+  Bulb,
+  LibraryItem,
+  MediaInfo,
+  StudioSettings,
+  TrackSummary,
+  GenerationOptions,
+  GenerationJob,
+};
 
 /** A copy whose buffer is a plain ArrayBuffer, which fetch and Blob accept. */
 export function bytesAsBuffer(bytes: Uint8Array): ArrayBuffer {
@@ -346,4 +356,41 @@ export function fetchFrame(
     `/OpenLightFX/Studio/Items/${encodeURIComponent(itemId)}/Frame?timeMs=${Math.round(timeMs)}`,
     { signal }
   );
+}
+
+export async function startKeyframeGeneration(
+  itemId: string,
+  options: GenerationOptions
+): Promise<GenerationJob> {
+  const response = await postJson(
+    `/OpenLightFX/Studio/Items/${encodeURIComponent(itemId)}/Generate`,
+    options
+  );
+  if (!response.ok) throw new Error(await responseMessage(response, 'Could not start generation'));
+  return response.json();
+}
+
+export async function fetchKeyframeGeneration(
+  jobId: string,
+  afterSequence: number
+): Promise<GenerationJob> {
+  const query = new URLSearchParams({ afterSequence: String(afterSequence) });
+  const response = await send(
+    `/OpenLightFX/Studio/Generation/${encodeURIComponent(jobId)}?${query}`
+  );
+  if (!response.ok)
+    throw new Error(await responseMessage(response, 'Could not read generation progress'));
+  return response.json();
+}
+
+async function responseMessage(response: Response, fallback: string): Promise<string> {
+  try {
+    const body = await response.json();
+    if (typeof body?.message === 'string') return body.message;
+    if (typeof body?.Message === 'string') return body.Message;
+    if (typeof body?.error === 'string') return body.error;
+    return fallback;
+  } catch {
+    return fallback;
+  }
 }

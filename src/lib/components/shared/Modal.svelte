@@ -6,6 +6,7 @@
     title,
     onclose,
     size = 'md',
+    dismissible = true,
     children,
     footer,
   }: {
@@ -13,6 +14,7 @@
     title: string;
     onclose: () => void;
     size?: 'sm' | 'md' | 'lg';
+    dismissible?: boolean;
     children: Snippet;
     footer?: Snippet;
   } = $props();
@@ -41,7 +43,7 @@
     function handleKeydown(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         e.preventDefault();
-        onclose();
+        if (dismissible) onclose();
         return;
       }
       if (e.key !== 'Tab' || !dialogEl) return;
@@ -72,7 +74,7 @@
   });
 
   function handleBackdropClick(e: MouseEvent) {
-    if (e.target === dialogEl) {
+    if (dismissible && e.target === dialogEl) {
       onclose();
     }
   }
@@ -93,13 +95,15 @@
       <!-- Header -->
       <div class="flex items-center justify-between border-b border-surface2 px-5 py-3">
         <h2 class="text-sm font-semibold text-text-base">{title}</h2>
-        <button
-          onclick={onclose}
-          class="flex h-7 w-7 items-center justify-center rounded text-textMuted transition-colors hover:bg-surface2 hover:text-text-base"
-          aria-label="Close"
-        >
-          ✕
-        </button>
+        {#if dismissible}
+          <button
+            onclick={onclose}
+            class="flex h-7 w-7 items-center justify-center rounded text-textMuted transition-colors hover:bg-surface2 hover:text-text-base"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        {/if}
       </div>
 
       <!-- Body -->
