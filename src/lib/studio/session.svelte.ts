@@ -1027,6 +1027,13 @@ export class StudioSession {
     }
   }
 
+  /** Reload cuts saved by generation or by Detect scenes, and draw them on the timeline. */
+  reloadSceneCuts(): void {
+    const itemId = this.item?.itemId;
+    if (!itemId) return;
+    this.beginSceneCuts(itemId);
+  }
+
   private beginSceneCuts(itemId: string): void {
     const token = ++this.sceneCutToken;
     this.sceneCutBusy = false;

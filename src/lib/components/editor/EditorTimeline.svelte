@@ -729,6 +729,20 @@
           style={`left:${session.auditionRange.startMs * session.pxPerMs}px;width:${(session.auditionRange.endMs - session.auditionRange.startMs) * session.pxPerMs}px`}
         ></div>
       {/if}
+      {#each sceneCutLines as timeMs (timeMs)}
+        <button
+          type="button"
+          class="scene-transition"
+          aria-label={`Scene transition at ${format(timeMs)}`}
+          title={`Scene transition · ${format(timeMs)}`}
+          style={`left:${timeMs * session.pxPerMs}px`}
+          onpointerdown={(event) => event.stopPropagation()}
+          onclick={(event) => {
+            event.stopPropagation();
+            session.seek(timeMs);
+          }}>▾</button
+        >
+      {/each}
       {#each session.projectSidecar.sceneMarkers as marker (marker.id)}
         <button
           class="scene-marker"
@@ -959,7 +973,8 @@
     background: color-mix(in srgb, var(--accent) 15%, transparent);
     pointer-events: none;
   }
-  .scene-marker {
+  .scene-marker,
+  .scene-transition {
     position: absolute;
     top: 13px;
     transform: translateX(-50%);
@@ -969,6 +984,12 @@
     color: var(--accent);
     background: var(--surface);
     z-index: 3;
+  }
+  .scene-transition {
+    top: 1px;
+    color: var(--text);
+    font-size: 12px;
+    line-height: 14px;
   }
   .snap-guide {
     position: absolute;

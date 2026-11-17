@@ -34,7 +34,6 @@
   let imageAspect = $state('16 / 9');
   let activeChannelId = $state('');
   let zones = $state<Record<string, GenerationZone>>({});
-  let sampleRateFps = $state(1);
   let sceneCutThreshold = $state(0.27);
   let centerExclusionPercent = $state(0);
   let frame = $state<HTMLElement>();
@@ -173,7 +172,7 @@
   function start() {
     if (busy || !channels.length || channels.some((channel) => !zones[channel.id])) return;
     onstart({
-      sampleRateFps: Math.max(0.1, Math.min(5, sampleRateFps)),
+      sampleRateFps: 1,
       sceneCutThreshold: Math.max(0.01, Math.min(1, sceneCutThreshold)),
       centerExclusionPercent: Math.max(0, Math.min(90, centerExclusionPercent)),
       zones: channels.map((channel) => zones[channel.id]),
@@ -204,13 +203,17 @@
           >{clock(throughMs)} / {clock(durationMs)}</span
         >
       </div>
-      <p>Generated keyframes are appearing on the timeline as analysis proceeds.</p>
+      <p>
+        Each scene is filled with its dominant color as the scene finishes. Scene transitions are
+        marked on the timeline.
+      </p>
       {#if error}<p class="error" role="alert">{error}</p>{/if}
     </div>
   {:else}
     <div class="setup">
       <p class="intro">
-        Choose the part of the picture that should drive each track channel. Drag a box on the
+        Choose the part of the picture that should drive each track channel. On each scene
+        transition, the track is prefilled with the dominant color in that zone. Drag a box on the
         frame; suggested zones are shown for the current layout.
       </p>
       <div class="channel-list" role="group" aria-label="Track channels">
@@ -275,20 +278,6 @@
       </p>
       <div class="settings">
         <label
-          >Samples per second
-          <input
-            aria-label="Samples per second"
-            type="number"
-            min="0.1"
-            max="5"
-            step="0.1"
-            bind:value={sampleRateFps}
-          />
-          <small
-            >How often each zone’s color is sampled. Scene changes are detected separately.</small
-          >
-        </label>
-        <label
           >Scene-cut threshold
           <input
             aria-label="Scene-cut threshold"
@@ -300,7 +289,7 @@
           />
           <small
             >PySceneDetect content threshold divided by 100. 0.27 is the usual setting (threshold
-            27). Lower values add more keyframes.</small
+            27). Lower values add more scene transitions and keyframes.</small
           >
         </label>
         <label
@@ -421,7 +410,7 @@
   }
   .settings {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
   }
   .settings label {
