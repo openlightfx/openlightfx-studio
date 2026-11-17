@@ -1,7 +1,7 @@
 <script lang="ts">
   import StudioIcon from '$lib/components/shared/StudioIcon.svelte';
   import { onMount, untrack } from 'svelte';
-  import { sampleChannel } from '$lib/domain';
+  import { effectActiveAt, samplePreviewChannel } from '$lib/domain';
   import PluginFramePicker from './PluginFramePicker.svelte';
   import EditorInspector from './editor/EditorInspector.svelte';
   import EditorTimeline from './editor/EditorTimeline.svelte';
@@ -490,7 +490,19 @@
       .finally(() => {
         if (previewAlive) roomsLoaded = true;
       });
-    const timer = window.setInterval(() => pushPreviewFrame(), 100);
+    let lastPreviewPushAt = 0;
+    let previewingEffect = false;
+    const timer = window.setInterval(() => {
+      const track = (session.draftTrack ?? session.track) as Track | null;
+      const effectActive = !!track && effectActiveAt(track.effects, session.playheadMs);
+      const now = Date.now();
+      const effectEnded = previewingEffect && !effectActive;
+      const interval = effectActive ? 50 : 100;
+      if (!effectEnded && now - lastPreviewPushAt < interval) return;
+      previewingEffect = effectActive;
+      lastPreviewPushAt = now;
+      pushPreviewFrame();
+    }, 50);
     const leavePage = () => {
       void screen.disconnect();
     };
@@ -755,19 +767,22 @@
     if (!previewAlive || !previewDesiredOn || !track) return;
     const hasSolo = Object.values(session.solo).some(Boolean);
     const states: PreviewChannelState[] = track.channels.map((channel) => {
-      const sample = sampleChannel(
-        track.keyframes.filter((keyframe: Keyframe) => keyframe.channelId === channel.id),
-        session.playheadMs
+      const keyframes = track.keyframes.filter(
+        (keyframe: Keyframe) => keyframe.channelId === channel.id
       );
+      const effects = track.effects.filter(
+        (effect: EffectKeyframe) => effect.channelId === channel.id
+      );
+      const sample = samplePreviewChannel(keyframes, effects, session.playheadMs);
       const audible = !session.mute[channel.id] && (!hasSolo || session.solo[channel.id]);
       return {
         channelId: channel.id,
         r: audible ? sample.r : 0,
         g: audible ? sample.g : 0,
         b: audible ? sample.b : 0,
-        colorTemperature: audible && sample.mode === 'COLOR_TEMPERATURE' ? sample.kelvin : 0,
+        colorTemperature: audible ? sample.kelvin : 0,
         brightness: audible ? sample.brightness : 0,
-        transitionMs: 0,
+        transitionMs: audible ? sample.transitionMs : 0,
       };
     });
     const signature = JSON.stringify(states);

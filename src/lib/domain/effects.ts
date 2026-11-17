@@ -30,6 +30,12 @@ export interface EffectSampleContext {
   supportsRgb: boolean;
   minTransitionMs: number;
   brightnessCap: number;
+  /**
+   * Scene colour under a lightning effect. The afterglow steps toward it
+   * instead of fading to black. Omitted in the shared fixture.
+   */
+  sceneColor?: Rgb | null;
+  sceneBrightness?: number;
 }
 
 const FAST_CONTEXT: EffectSampleContext = {
@@ -104,30 +110,82 @@ function trunc(value: number): number {
   return Math.trunc(value);
 }
 
+function mixByte(from: number, to: number, step: number, span: number): number {
+  return trunc((from * (span - step) + to * step) / span) & 255;
+}
+
+function mixBrightness(
+  from: number,
+  to: number,
+  step: number,
+  span: number,
+  floor: number
+): number {
+  return Math.max(floor, trunc((from * (span - step) + to * step) / span));
+}
+
+/**
+ * Peaks and dips are 120 ms so a bulb limited to about 10 commands/s still
+ * shows the flash. The tail steps from amber toward the scene colour and
+ * never ends at brightness 0, which WiZ treats as power off.
+ * Mirror of OpenLightFX.Emby Effects/Renderers/LightningRenderer.cs.
+ */
 function lightning(input: EffectInput, context: EffectSampleContext): EffectCommand[] {
   const intensity = input.intensity > 0 ? input.intensity : 100;
   const cap = context.brightnessCap;
   let flashCount = trunc(param(input, 'flash_count', 1));
-  const decayMs = trunc(param(input, 'decay_ms', 500));
   const peak = scaleBrightness(100, intensity, cap);
-  if (simplify(context)) {
-    return [
-      cmd(0, { r: 255, g: 255, b: 255 }, peak, 0),
-      cmd(50, { r: 255, g: 255, b: 255 }, 0, 500),
-    ];
+  const floor = peak === 0 ? 0 : 1;
+  const dip = peak === 0 ? 0 : Math.max(floor, scaleBrightness(30, intensity, cap));
+  const afterglow = scaleBrightness(40, intensity, cap);
+  const white = { r: 255, g: 255, b: 255 };
+  const glow = { r: 255, g: 180, b: 80 };
+  const scene = context.sceneColor ?? glow;
+  const sceneBrightness = context.sceneColor
+    ? peak === 0
+      ? 0
+      : Math.max(floor, Math.min(100, trunc(context.sceneBrightness ?? 0)))
+    : peak === 0
+      ? 0
+      : Math.max(floor, scaleBrightness(15, intensity, cap));
+  const steps = 4;
+  const span = steps - 1;
+
+  function tail(start: number): EffectCommand[] {
+    const commands: EffectCommand[] = [];
+    let offset = start;
+    for (let step = 0; step < steps; step++) {
+      commands.push(
+        cmd(
+          offset,
+          {
+            r: mixByte(glow.r, scene.r, step, span),
+            g: mixByte(glow.g, scene.g, step, span),
+            b: mixByte(glow.b, scene.b, step, span),
+          },
+          mixBrightness(afterglow, sceneBrightness, step, span, floor),
+          120
+        )
+      );
+      offset += 120;
+    }
+    return commands;
   }
+
+  if (simplify(context)) return [cmd(0, white, peak, 0), cmd(120, white, dip, 0), ...tail(240)];
+
   flashCount = Math.min(4, Math.max(1, flashCount));
   const commands: EffectCommand[] = [];
   let offset = 0;
   for (let i = 0; i < flashCount; i++) {
-    commands.push(cmd(offset, { r: 255, g: 255, b: 255 }, peak, 0));
-    offset += 50;
-    commands.push(cmd(offset, { r: 255, g: 255, b: 255 }, 0, 0));
-    offset += 50;
+    commands.push(cmd(offset, white, peak, 0));
+    offset += 120;
+    if (i < flashCount - 1) {
+      commands.push(cmd(offset, white, dip, 0));
+      offset += 120;
+    }
   }
-  const afterglow = scaleBrightness(40, intensity, cap);
-  commands.push(cmd(offset, { r: 255, g: 180, b: 80 }, afterglow, 50));
-  commands.push(cmd(offset + 50, { r: 255, g: 180, b: 80 }, 0, decayMs));
+  commands.push(...tail(offset));
   return commands;
 }
 
