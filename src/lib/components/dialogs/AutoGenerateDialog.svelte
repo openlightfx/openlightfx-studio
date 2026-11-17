@@ -35,7 +35,7 @@
   let activeChannelId = $state('');
   let zones = $state<Record<string, GenerationZone>>({});
   let sampleRateFps = $state(1);
-  let sceneCutThreshold = $state(0.35);
+  let sceneCutThreshold = $state(0.27);
   let centerExclusionPercent = $state(0);
   let frame = $state<HTMLElement>();
   let dragStart: { x: number; y: number } | null = null;
@@ -284,12 +284,14 @@
             step="0.1"
             bind:value={sampleRateFps}
           />
-          <small>Higher rates can catch scene changes sooner, but take longer to analyze.</small>
+          <small
+            >How often each zone’s color is sampled. Scene changes are detected separately.</small
+          >
         </label>
         <label
-          >Scene-cut sensitivity
+          >Scene-cut threshold
           <input
-            aria-label="Scene-cut sensitivity"
+            aria-label="Scene-cut threshold"
             type="number"
             min="0.01"
             max="1"
@@ -297,7 +299,8 @@
             bind:value={sceneCutThreshold}
           />
           <small
-            >A keyframe is added when a channel’s sampled color change reaches this threshold.</small
+            >PySceneDetect content threshold divided by 100. 0.27 is the usual setting (threshold
+            27). Lower values add more keyframes.</small
           >
         </label>
         <label
