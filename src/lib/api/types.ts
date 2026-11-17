@@ -66,6 +66,28 @@ export interface GenerationOptions {
   sceneCutThreshold: number;
   centerExclusionPercent: number;
   zones: GenerationZone[];
+  /** Ramp zone keyframes through fades. Lightning and siren are skipped when their channel lists are empty. */
+  fades?: boolean;
+  lightningChannels?: string[];
+  sirenChannels?: string[];
+}
+
+export interface GeneratedEffect {
+  id: string;
+  channelId: string;
+  timestampMs: number;
+  durationMs: number;
+  effectType: 'LIGHTNING' | 'SIREN';
+  intensity: number;
+  r: number;
+  g: number;
+  b: number;
+  secondaryR: number;
+  secondaryG: number;
+  secondaryB: number;
+  pulseRateHz: number;
+  flashCount: number;
+  decayMs: number;
 }
 
 export interface GeneratedKeyframe {
@@ -77,6 +99,7 @@ export interface GeneratedKeyframe {
   b: number;
   transitionMs: number;
   powerOn: boolean;
+  brightness?: number;
 }
 
 export interface GenerationJob {
@@ -87,6 +110,8 @@ export interface GenerationJob {
   throughMs: number;
   sequence: number;
   keyframes: GeneratedKeyframe[];
+  /** Full set of prefilled lightning and siren effects so far. */
+  effects?: GeneratedEffect[];
 }
 
 export type {

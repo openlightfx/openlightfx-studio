@@ -6,7 +6,14 @@
   import EditorInspector from './editor/EditorInspector.svelte';
   import EditorTimeline from './editor/EditorTimeline.svelte';
   import EffectPicker from './editor/EffectPicker.svelte';
-  import type { Channel, EffectKeyframe, Keyframe, Track } from '$lib/domain';
+  import {
+    computeSafety,
+    type Channel,
+    type EffectKeyframe,
+    type EffectType,
+    type Keyframe,
+    type Track,
+  } from '$lib/domain';
   import { fetchKeyframeGeneration, startKeyframeGeneration } from '$lib/api/client';
   import { ScreenLink } from '$lib/studio/screen-link.svelte';
   import type { GenerationJob, GenerationOptions } from '$lib/api/types';
@@ -126,6 +133,7 @@
   let generationSequence = 0;
   let generationBaseTrack: Track | null = null;
   let generatedFrames: Keyframe[] = [];
+  let generatedEffects: EffectKeyframe[] = [];
   let manualTimesByChannel = new Map<string, number[]>();
   let lastGeneratedByChannel = new Map<string, number>();
   let leavePrompt = $state(false);
@@ -226,10 +234,36 @@
       colorMode: 'RGB',
       color: { r: frame.r, g: frame.g, b: frame.b },
       colorTemperature: 0,
-      brightness: 100,
+      brightness: typeof frame.brightness === 'number' ? frame.brightness : 100,
       transitionMs: frame.transitionMs,
       interpolation: 'LINEAR',
       powerOn: frame.powerOn,
+    };
+  }
+
+  function generatedEffect(
+    raw: NonNullable<GenerationJob['effects']>[number]
+  ): EffectKeyframe | null {
+    if (raw.effectType !== 'LIGHTNING' && raw.effectType !== 'SIREN') return null;
+    const effectType = raw.effectType as EffectType;
+    const params: Record<string, number> =
+      effectType === 'LIGHTNING'
+        ? { flash_count: raw.flashCount || 2, decay_ms: raw.decayMs || 500 }
+        : { pulse_rate_hz: raw.pulseRateHz || 2 };
+    return {
+      id: raw.id,
+      channelId: raw.channelId,
+      timestampMs: raw.timestampMs,
+      durationMs: raw.durationMs,
+      effectType,
+      intensity: raw.intensity,
+      primaryColor: { r: raw.r, g: raw.g, b: raw.b },
+      secondaryColor: { r: raw.secondaryR, g: raw.secondaryG, b: raw.secondaryB },
+      params,
+      requiredCapability:
+        effectType === 'LIGHTNING' ? 'CAPABILITY_FAST_TRANSITION' : 'CAPABILITY_ANY',
+      fallbackColor: { r: raw.r, g: raw.g, b: raw.b },
+      fallbackBrightness: 80,
     };
   }
 
@@ -241,12 +275,16 @@
     generationThroughMs = 0;
     generationSequence = 0;
     generatedFrames = [];
+    generatedEffects = [];
     lastGeneratedByChannel = new Map();
     const originalTrack = session.track;
     const baseTrack: Track = {
       ...originalTrack,
       keyframes: originalTrack.keyframes.filter(
         (frame: Keyframe) => !frame.id.startsWith('ai-gen-')
+      ),
+      effects: originalTrack.effects.filter(
+        (effect: EffectKeyframe) => !effect.id.startsWith('ai-gen-')
       ),
     };
     generationBaseTrack = baseTrack;
@@ -307,28 +345,37 @@
           lastGeneratedByChannel.set(frame.channelId, frame.timestampMs);
         }
         generatedFrames = [...generatedFrames, ...incoming];
+      }
+      if (update.effects) {
+        generatedEffects = update.effects
+          .map(generatedEffect)
+          .filter((effect): effect is EffectKeyframe => effect != null);
+      }
+      if (update.keyframes.length || update.effects) {
         const merged = {
           ...generationBaseTrack!,
           keyframes: [...generationBaseTrack!.keyframes, ...generatedFrames],
+          effects: [...generationBaseTrack!.effects, ...generatedEffects],
         };
-        session.updateEdit(merged);
+        session.updateEdit({ ...merged, safety: computeSafety(merged) });
       }
       if (update.throughMs > session.playheadMs + 250) session.seek(update.throughMs);
       generationSequence = update.sequence;
       if (update.state === 'done') {
-        if (generatedFrames.length) session.commitEdit();
+        if (generatedFrames.length || generatedEffects.length) session.commitEdit();
         else session.cancelEdit();
         session.reloadSceneCuts();
         generationBusy = false;
         generationOpen = false;
-        session.status = generatedFrames.length
-          ? `Generated ${generatedFrames.length} keyframes`
-          : 'No new keyframes were generated; existing track content was kept';
+        session.status =
+          generatedFrames.length || generatedEffects.length
+            ? `Generated ${generatedFrames.length} keyframes and ${generatedEffects.length} effects`
+            : 'No new keyframes were generated; existing track content was kept';
         return;
       }
       if (update.state === 'failed') {
         generationError = update.error || 'Keyframe generation failed';
-        if (generatedFrames.length) session.commitEdit();
+        if (generatedFrames.length || generatedEffects.length) session.commitEdit();
         else session.cancelEdit();
         generationBusy = false;
         return;
