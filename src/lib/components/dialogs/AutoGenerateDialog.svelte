@@ -36,6 +36,31 @@
   let zones = $state<Record<string, GenerationZone>>({});
   let sceneCutThreshold = $state(0.27);
   let centerExclusionPercent = $state(0);
+  let fades = $state(true);
+  let lightningIds = $state<string[]>([]);
+  let sirenIds = $state<string[]>([]);
+  let prefillLoaded = '';
+
+  const PREFILL_KEY = 'openlightfx.prefill-effects.v1';
+
+  function readPrefill(): { fades: boolean; lightning: string[]; siren: string[] } | null {
+    try {
+      const raw = localStorage.getItem(PREFILL_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as {
+        fades?: boolean;
+        lightning?: string[];
+        siren?: string[];
+      };
+      return {
+        fades: parsed.fades !== false,
+        lightning: Array.isArray(parsed.lightning) ? parsed.lightning : [],
+        siren: Array.isArray(parsed.siren) ? parsed.siren : [],
+      };
+    } catch {
+      return null;
+    }
+  }
   let frame = $state<HTMLElement>();
   let dragStart: { x: number; y: number } | null = null;
   let draftZone = $state<GenerationZone | null>(null);
@@ -173,13 +198,47 @@
     zones = { ...zones, [activeChannelId]: next };
   }
 
+  $effect(() => {
+    if (!open) {
+      prefillLoaded = '';
+      return;
+    }
+    const key = channels.map((channel) => channel.id).join('|');
+    if (prefillLoaded === key) return;
+    prefillLoaded = key;
+    const saved = readPrefill();
+    const ids = new Set(channels.map((channel) => channel.id));
+    fades = saved?.fades ?? true;
+    lightningIds = (saved?.lightning ?? []).filter((id) => ids.has(id));
+    sirenIds = (saved?.siren ?? []).filter((id) => ids.has(id));
+  });
+
+  function toggleChannel(list: string[], id: string, assign: (next: string[]) => void) {
+    assign(list.includes(id) ? list.filter((item) => item !== id) : [...list, id]);
+  }
+
   function start() {
     if (busy || !channels.length || channels.some((channel) => !zones[channel.id])) return;
+    const lightningChannels = lightningIds.filter((id) =>
+      channels.some((channel) => channel.id === id)
+    );
+    const sirenChannels = sirenIds.filter((id) => channels.some((channel) => channel.id === id));
+    try {
+      localStorage.setItem(
+        PREFILL_KEY,
+        JSON.stringify({ fades, lightning: lightningChannels, siren: sirenChannels })
+      );
+    } catch {
+      // The prefill still runs if the browser refuses storage.
+    }
     onstart({
       sampleRateFps: 1,
       sceneCutThreshold: Math.max(0.01, Math.min(1, sceneCutThreshold)),
       centerExclusionPercent: Math.max(0, Math.min(90, centerExclusionPercent)),
       zones: channels.map((channel) => zones[channel.id]),
+      fades,
+      lightningChannels,
+      sirenChannels,
     });
   }
 
@@ -217,8 +276,9 @@
     <div class="setup">
       <p class="intro">
         Choose the part of the picture that should drive each track channel. On each scene
-        transition, the track is prefilled with the dominant color in that zone. Drag a box on the
-        frame; suggested zones are shown for the current layout.
+        transition, the track is prefilled with the dominant color in that zone. Lightning and
+        sirens are written on the channels you pick. Drag a box on the frame; suggested zones are
+        shown for the current layout.
       </p>
       <div class="channel-list" role="group" aria-label="Track channels">
         {#each channels as channel (channel.id)}
@@ -309,6 +369,47 @@
           <small>Useful when foreground subjects dominate the selected region.</small>
         </label>
       </div>
+      <fieldset class="effects">
+        <legend>Effects</legend>
+        <p class="hint">
+          A track names channels. Bulbs follow the room mapping at playback, so pick channels here.
+          An effect type with no channel is skipped. Two siren channels swap red and blue; one
+          channel alternates on its own; more than two split across the two colors.
+        </p>
+        <label class="check">
+          <input type="checkbox" bind:checked={fades} />
+          Fade scene color in and out
+        </label>
+        <div class="effect-targets">
+          <div>
+            <h3>Lightning</h3>
+            {#each channels as channel (channel.id)}
+              <label class="check">
+                <input
+                  type="checkbox"
+                  checked={lightningIds.includes(channel.id)}
+                  onchange={() =>
+                    toggleChannel(lightningIds, channel.id, (next) => (lightningIds = next))}
+                />
+                {channel.displayName}
+              </label>
+            {/each}
+          </div>
+          <div>
+            <h3>Siren</h3>
+            {#each channels as channel (channel.id)}
+              <label class="check">
+                <input
+                  type="checkbox"
+                  checked={sirenIds.includes(channel.id)}
+                  onchange={() => toggleChannel(sirenIds, channel.id, (next) => (sirenIds = next))}
+                />
+                {channel.displayName}
+              </label>
+            {/each}
+          </div>
+        </div>
+      </fieldset>
       {#if error}<p class="error" role="alert">{error}</p>{/if}
     </div>
   {/if}
@@ -411,6 +512,35 @@
     background: var(--surface);
     font-size: 10px;
     white-space: nowrap;
+  }
+  .effects {
+    margin: 0;
+    padding: 12px;
+    border: 1px solid var(--border);
+    display: grid;
+    gap: 8px;
+  }
+  .effects legend,
+  .effects h3 {
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .effects h3 {
+    margin: 0 0 4px;
+  }
+  .effect-targets {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 500;
   }
   .settings {
     display: grid;
