@@ -65,6 +65,7 @@ import {
   changeTrackLayout,
   upgradeLegacyTrackLayout,
 } from '$lib/domain';
+import { adjacentSceneStopMs, type SceneCutJob, type SceneCuts } from '$lib/domain/scene-cuts';
 import {
   bytesAsBuffer,
   fetchBulbs,
@@ -73,7 +74,11 @@ import {
   fetchItem,
   fetchMediaInfo,
   fetchProjectSidecar,
+  fetchSceneCutJob,
+  fetchSceneCuts,
   ProjectSidecarLoadError,
+  SceneCutAlreadyRunningError,
+  SceneCutForbiddenError,
   restartProxy,
   fetchSettings,
   fetchTrackBytes,
@@ -81,11 +86,13 @@ import {
   postJson,
   putBytes,
   putJson,
+  startSceneCutDetection,
   type Bulb,
   type LibraryItem,
   type MediaInfo,
   type TrackSummary,
 } from '$lib/api/client';
+import { mergeSceneCuts, readSceneCutCache, writeSceneCutCache } from '$lib/studio/scene-cut-cache';
 import { failedProxyMessage, proxyPlayReason, seekPastHorizon } from '$lib/studio/proxy-playback';
 import { setPendingImport, takePendingImport } from '$lib/studio/pending-import';
 import { framePosition } from '$lib/studio/frame-position';
@@ -244,6 +251,12 @@ export class StudioSession {
   sidecarLoadError = $state('');
   sidecarReady = $state(false);
   private sidecarLoadAbort: AbortController | null = null;
+  sceneCuts = $state<SceneCuts | null>(null);
+  sceneCutBusy = $state(false);
+  sceneCutProgress = $state(0);
+  sceneCutError = $state('');
+  sceneCutDenied = $state(false);
+  private sceneCutToken = 0;
   private adoptionSequence = 0;
   private revisionSequence = 0;
   private savedCheckpoint: SaveCheckpoint | null = null;
@@ -344,6 +357,12 @@ export class StudioSession {
     this.sidecarLoadAbort?.abort();
     this.sidecarLoadAbort = null;
     this.adoptionSequence++;
+    this.sceneCutToken++;
+    this.sceneCuts = null;
+    this.sceneCutBusy = false;
+    this.sceneCutProgress = 0;
+    this.sceneCutError = '';
+    this.sceneCutDenied = false;
     this.sidecarLoadError = '';
     this.sidecarReady = false;
     this.sidecarState = null;
@@ -411,6 +430,7 @@ export class StudioSession {
 
   cancelBoot(): void {
     this.bootToken++;
+    this.sceneCutToken++;
     this.seekScheduler.dispose();
     this.sidecarLoadAbort?.abort();
     this.sidecarLoadAbort = null;
@@ -445,6 +465,8 @@ export class StudioSession {
     imported?: { fileName: string; bytes: Uint8Array },
     token = this.bootToken
   ): Promise<void> {
+    if (token !== this.bootToken) return;
+    this.beginSceneCuts(itemId);
     // Resolve only the routed movie, not the entire library. Keep editing available
     // if Emby's details endpoint is unavailable.
     const item = this.items.find((candidate) => candidate.itemId === itemId) ??
@@ -936,6 +958,124 @@ export class StudioSession {
       this.selectedMarkerId === id
     )
       this.selectedMarkerId = null;
+  }
+
+  sceneNavigationReason(direction: -1 | 1): string | undefined {
+    const cuts = this.sceneCuts?.cuts ?? [];
+    if (!cuts.length) return 'No scene cuts for this movie';
+    return adjacentSceneStopMs(cuts, this.playheadMs, direction, this.durationMs()) == null
+      ? direction < 0
+        ? 'No earlier scene'
+        : 'No later scene'
+      : undefined;
+  }
+
+  canNavigateScene(direction: -1 | 1): boolean {
+    return this.sceneNavigationReason(direction) == null;
+  }
+
+  navigateScene(direction: -1 | 1): void {
+    const time = adjacentSceneStopMs(
+      this.sceneCuts?.cuts ?? [],
+      this.playheadMs,
+      direction,
+      this.durationMs()
+    );
+    if (time == null) {
+      this.status = this.sceneNavigationReason(direction) ?? 'No scene cuts for this movie';
+      return;
+    }
+    this.seek(time);
+    this.revealNavigationPosition(time);
+  }
+
+  async detectSceneCuts(sceneCutThreshold?: number): Promise<void> {
+    const itemId = this.item?.itemId;
+    if (!itemId || this.sceneCutBusy) return;
+    const token = this.sceneCutToken;
+    this.sceneCutBusy = true;
+    this.sceneCutError = '';
+    this.sceneCutProgress = 0;
+    try {
+      let job: SceneCutJob | null = await startSceneCutDetection(itemId, sceneCutThreshold);
+      while (token === this.sceneCutToken && job?.state === 'processing') {
+        this.sceneCutProgress = job.progress;
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        if (token !== this.sceneCutToken) return;
+        job = await fetchSceneCutJob(job.jobId);
+      }
+      if (token !== this.sceneCutToken) return;
+      if (job?.state === 'failed') {
+        this.sceneCutError = job.error || 'Scene detection failed';
+        return;
+      }
+      await this.refreshSceneCuts(itemId, token, this.sceneCuts);
+    } catch (error) {
+      if (token !== this.sceneCutToken) return;
+      if (error instanceof SceneCutForbiddenError) {
+        this.sceneCutDenied = true;
+        this.sceneCutError = '';
+        return;
+      }
+      if (error instanceof SceneCutAlreadyRunningError) {
+        await this.pollSceneCutDocument(itemId, token);
+        return;
+      }
+      this.sceneCutError = (error as Error).message || 'Scene detection failed';
+    } finally {
+      if (token === this.sceneCutToken) this.sceneCutBusy = false;
+    }
+  }
+
+  private beginSceneCuts(itemId: string): void {
+    const token = ++this.sceneCutToken;
+    this.sceneCutBusy = false;
+    this.sceneCutProgress = 0;
+    this.sceneCutError = '';
+    const storage = sceneCutStorage();
+    const local = storage ? readSceneCutCache(storage, itemId) : null;
+    this.sceneCuts = local;
+    void this.refreshSceneCuts(itemId, token, local);
+  }
+
+  private async refreshSceneCuts(
+    itemId: string,
+    token: number,
+    local: SceneCuts | null
+  ): Promise<void> {
+    try {
+      const remote = await fetchSceneCuts(itemId);
+      if (token !== this.sceneCutToken) return;
+      this.rememberSceneCuts(itemId, mergeSceneCuts(local, remote));
+      if (remote.status === 'running') await this.pollSceneCutDocument(itemId, token);
+    } catch {
+      // Offline or a missing route keeps the cached cuts and leaves the editor usable.
+      if (token === this.sceneCutToken && !local) this.sceneCuts = null;
+    }
+  }
+
+  private async pollSceneCutDocument(itemId: string, token: number): Promise<void> {
+    const started = Date.now();
+    while (token === this.sceneCutToken && Date.now() - started < 15 * 60_000) {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      if (token !== this.sceneCutToken) return;
+      let remote: SceneCuts;
+      try {
+        remote = await fetchSceneCuts(itemId);
+      } catch {
+        return;
+      }
+      if (token !== this.sceneCutToken) return;
+      this.rememberSceneCuts(itemId, mergeSceneCuts(this.sceneCuts, remote));
+      if (remote.status !== 'running') return;
+    }
+  }
+
+  private rememberSceneCuts(itemId: string, next: SceneCuts | null): void {
+    if (next && next.itemId !== itemId) return;
+    this.sceneCuts = next;
+    const storage = sceneCutStorage();
+    if (next && storage) writeSceneCutCache(storage, next);
   }
 
   navigateMarker(direction: -1 | 1): void {
@@ -2679,6 +2819,14 @@ export class StudioSession {
     samples.sort((a, b) => a - b);
     const index = Math.max(0, Math.ceil(samples.length * 0.95) - 1);
     this.frameP95 = samples[index] ?? 8;
+  }
+}
+
+function sceneCutStorage(): Pick<Storage, 'getItem' | 'setItem'> | null {
+  try {
+    return typeof localStorage === 'undefined' ? null : localStorage;
+  } catch {
+    return null;
   }
 }
 

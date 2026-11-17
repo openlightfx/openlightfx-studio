@@ -27,6 +27,8 @@ export interface EditorCommandContext {
     step(direction: number): void;
     navigateKeyframe(direction: number): void;
     canNavigateKeyframe(direction: number): boolean;
+    navigateScene(direction: number): void;
+    canNavigateScene(direction: number): boolean;
     seekBoundary(end: boolean): void;
     eyedrop(): Promise<unknown>;
     zoomKey(key: string, modified: boolean): void;
@@ -238,6 +240,20 @@ export const EDITOR_COMMANDS: readonly EditorCommand[] = [
     execute: ({ session }) => session.navigateKeyframe(1),
   },
   {
+    id: 'previous-scene',
+    label: 'Previous scene',
+    chords: ['Shift+PageUp'],
+    scope: 'editor',
+    execute: ({ session }) => session.navigateScene(-1),
+  },
+  {
+    id: 'next-scene',
+    label: 'Next scene',
+    chords: ['Shift+PageDown'],
+    scope: 'editor',
+    execute: ({ session }) => session.navigateScene(1),
+  },
+  {
     id: 'movie-start',
     label: 'Go to movie start',
     chords: ['Home'],
@@ -354,17 +370,19 @@ export function dispatchEditorCommand(
         ? `Shift+${key.toUpperCase()}`
         : event.shiftKey && (key === 'ArrowLeft' || key === 'ArrowRight')
           ? `Shift+${key === 'ArrowLeft' ? '←' : '→'}`
-          : key === 'ArrowLeft'
-            ? '←'
-            : key === 'ArrowRight'
-              ? '→'
-              : key === ' ' || key === 'Spacebar'
-                ? 'Space'
-                : key === '/' && event.shiftKey
-                  ? '?'
-                  : key.length === 1
-                    ? key.toUpperCase()
-                    : key;
+          : event.shiftKey && (key === 'PageUp' || key === 'PageDown')
+            ? `Shift+${key}`
+            : key === 'ArrowLeft'
+              ? '←'
+              : key === 'ArrowRight'
+                ? '→'
+                : key === ' ' || key === 'Spacebar'
+                  ? 'Space'
+                  : key === '/' && event.shiftKey
+                    ? '?'
+                    : key.length === 1
+                      ? key.toUpperCase()
+                      : key;
   const command = commandForChord(chord);
   if (!command) return false;
   if (context.activeGesture || context.modal || context.menu) return false;
@@ -397,6 +415,8 @@ export function dispatchEditorCommand(
     command.id === 'play-pause' ||
     command.id === 'previous-keyframe' ||
     command.id === 'next-keyframe' ||
+    command.id === 'previous-scene' ||
+    command.id === 'next-scene' ||
     command.id === 'movie-start' ||
     command.id === 'movie-end'
   )

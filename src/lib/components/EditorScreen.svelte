@@ -1302,7 +1302,46 @@
           ><span>5s</span><StudioIcon name="forward" size={17} /></button
         >
         <time>{timeLabel}</time>
+        <button
+          aria-label="Previous scene"
+          disabled={!session.canNavigateScene(-1)}
+          title={session.sceneNavigationReason(-1) ??
+            `Previous scene (${commandChord('previous-scene')})`}
+          onclick={() => runCommand('previous-scene')}>Previous scene</button
+        >
+        <button
+          aria-label="Next scene"
+          disabled={!session.canNavigateScene(1)}
+          title={session.sceneNavigationReason(1) ?? `Next scene (${commandChord('next-scene')})`}
+          onclick={() => runCommand('next-scene')}>Next scene</button
+        >
       </div>
+      {#if session.sceneCutBusy || session.sceneCuts?.status === 'running'}
+        <p class="scene-cut-status" role="status">
+          Detecting scenes{session.sceneCutProgress > 0
+            ? `… ${Math.round(session.sceneCutProgress * 100)}%`
+            : '…'}
+        </p>
+      {:else if session.sceneCuts?.status === 'none' || session.sceneCuts?.status === 'stale'}
+        <p class="scene-cut-status">
+          {session.sceneCuts.status === 'stale'
+            ? 'Scene cuts are out of date.'
+            : 'No scene cuts for this movie.'}
+          {#if !session.sceneCutDenied && !session.nonAdmin}
+            <button
+              type="button"
+              disabled={!session.canManage}
+              title={session.canManage
+                ? 'Detect scenes for this movie'
+                : 'Admin is required to detect scenes'}
+              onclick={() => void session.detectSceneCuts()}>Detect scenes</button
+            >
+          {/if}
+        </p>
+      {/if}
+      {#if session.sceneCutError}<p class="scene-cut-status" role="alert">
+          {session.sceneCutError}
+        </p>{/if}
     </section>
     <WorkspaceSplitter
       label="Inspector width"
@@ -1919,6 +1958,15 @@
   .transport time {
     font: 11px var(--font-mono);
     color: var(--text-muted);
+    margin-left: 8px;
+  }
+  .scene-cut-status {
+    margin: 0 0 8px;
+    color: var(--text-muted);
+    font-size: 12px;
+    text-align: center;
+  }
+  .scene-cut-status button {
     margin-left: 8px;
   }
   .transport button {

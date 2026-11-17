@@ -88,3 +88,10 @@ export interface GenerationJob {
   sequence: number;
   keyframes: GeneratedKeyframe[];
 }
+
+export type {
+  SceneCuts,
+  SceneCutDetector,
+  SceneCutJob,
+  SceneCutStatus,
+} from '$lib/domain/scene-cuts';

@@ -532,6 +532,8 @@ requirement('KEYB-001 @unit the registry is the safe L1 map', () => {
     'skip-forward',
     'previous-keyframe',
     'next-keyframe',
+    'previous-scene',
+    'next-scene',
     'movie-start',
     'movie-end',
     'zoom-in',
