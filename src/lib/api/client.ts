@@ -1,5 +1,12 @@
 import { libraryItemFromApi } from './items';
 import { parseProjectSidecar } from '$lib/domain/save';
+import {
+  emptySceneCuts,
+  parseSceneCutJob,
+  parseSceneCuts,
+  type SceneCutJob,
+  type SceneCuts,
+} from '$lib/domain/scene-cuts';
 import type { ProjectSidecar } from '$lib/domain/types';
 import type {
   Bulb,
@@ -20,7 +27,35 @@ export type {
   TrackSummary,
   GenerationOptions,
   GenerationJob,
+  SceneCuts,
+  SceneCutJob,
 };
+
+/**
+ * Scene-cut routes from openlightfx-emby#15.
+ * GET document is any signed-in user. POST start and GET job are Admin.
+ */
+export const SCENE_CUT_ROUTES = {
+  document: (itemId: string) => `/OpenLightFX/Studio/Items/${encodeURIComponent(itemId)}/SceneCuts`,
+  start: (itemId: string) => `/OpenLightFX/Studio/Items/${encodeURIComponent(itemId)}/SceneCuts`,
+  job: (jobId: string) => `/OpenLightFX/Studio/SceneCuts/${encodeURIComponent(jobId)}`,
+} as const;
+
+export class SceneCutForbiddenError extends Error {
+  readonly status = 403;
+  constructor() {
+    super('Admin is required to detect scenes');
+    this.name = 'SceneCutForbiddenError';
+  }
+}
+
+export class SceneCutAlreadyRunningError extends Error {
+  readonly status = 409;
+  constructor() {
+    super('Scene detection is already running');
+    this.name = 'SceneCutAlreadyRunningError';
+  }
+}
 
 /** A copy whose buffer is a plain ArrayBuffer, which fetch and Blob accept. */
 export function bytesAsBuffer(bytes: Uint8Array): ArrayBuffer {
@@ -417,6 +452,49 @@ export async function startKeyframeGeneration(
   );
   if (!response.ok) throw new Error(await responseMessage(response, 'Could not start generation'));
   return response.json();
+}
+
+export async function fetchSceneCuts(itemId: string, signal?: AbortSignal): Promise<SceneCuts> {
+  const response = await send(SCENE_CUT_ROUTES.document(itemId), { signal });
+  if (response.status === 404) return emptySceneCuts(itemId);
+  if (!response.ok)
+    throw new Error(await responseMessage(response, `Scene cuts ${response.status}`));
+  const parsed = parseSceneCuts(await response.json());
+  if (!parsed || parsed.itemId !== itemId)
+    throw new Error('Scene cuts response did not match this movie');
+  return parsed;
+}
+
+export async function startSceneCutDetection(
+  itemId: string,
+  sceneCutThreshold?: number
+): Promise<SceneCutJob> {
+  const body =
+    sceneCutThreshold == null
+      ? {}
+      : { sceneCutThreshold: Math.max(0.01, Math.min(1, sceneCutThreshold)) };
+  const response = await postJson(SCENE_CUT_ROUTES.start(itemId), body);
+  if (response.status === 403) throw new SceneCutForbiddenError();
+  if (response.status === 409) throw new SceneCutAlreadyRunningError();
+  if (!response.ok)
+    throw new Error(await responseMessage(response, 'Could not start scene detection'));
+  const job = parseSceneCutJob(await response.json());
+  if (!job) throw new Error('Scene detection did not return a job');
+  return job;
+}
+
+export async function fetchSceneCutJob(
+  jobId: string,
+  signal?: AbortSignal
+): Promise<SceneCutJob | null> {
+  const response = await send(SCENE_CUT_ROUTES.job(jobId), { signal });
+  if (response.status === 404) return null;
+  if (response.status === 403) throw new SceneCutForbiddenError();
+  if (!response.ok)
+    throw new Error(await responseMessage(response, 'Could not read scene detection progress'));
+  const job = parseSceneCutJob(await response.json());
+  if (!job) throw new Error('Scene detection progress was not a job');
+  return job;
 }
 
 export async function fetchKeyframeGeneration(

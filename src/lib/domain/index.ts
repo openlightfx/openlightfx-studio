@@ -17,4 +17,5 @@ export * from './keyframe-clipboard';
 export * from './media';
 export * from './effects';
 export * from './preview';
+export * from './scene-cuts';
 export * from './editor-selection';

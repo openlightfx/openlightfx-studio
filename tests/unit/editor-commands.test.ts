@@ -26,6 +26,7 @@ function fixture() {
       'zoomKey',
       'zoomFitSelection',
       'zoomFrameDetail',
+      'navigateScene',
       'selectAllKeyframes',
       'clearSelection',
       'toggleOverlay',
@@ -78,6 +79,29 @@ describe('ED2-006 @unit editor command registry', () => {
     expect(commandForChord('I')?.id).toBe('eyedropper');
     expect(commandForChord('Ctrl/⌘ A')?.id).toBe('select-all');
     expect(commandForChord('Escape')?.id).toBe('clear-selection');
+    expect(commandForChord('Shift+PageUp')?.id).toBe('previous-scene');
+    expect(commandForChord('Shift+PageDown')?.id).toBe('next-scene');
+    expect(commandForChord('PageUp')?.id).toBe('previous-keyframe');
+  });
+
+  it('Shift+PageUp seeks the previous scene without taking PageUp from keyframes', () => {
+    const session = fixture();
+    const context = {
+      session,
+      target: {
+        tagName: 'BODY',
+        closest: () => null,
+        matches: () => false,
+      } as unknown as HTMLElement,
+      modal: false,
+      menu: false,
+    };
+    const scene = event('PageUp', { shiftKey: true });
+    expect(dispatchEditorCommand(scene, context)).toBe(true);
+    expect(scene.preventDefault).toHaveBeenCalled();
+    expect(session.navigateScene).toHaveBeenCalledWith(-1);
+    expect(dispatchEditorCommand(event('PageDown', { shiftKey: true }), context)).toBe(true);
+    expect(session.navigateScene).toHaveBeenLastCalledWith(1);
   });
 
   it('dispatches V only as a visual preference action, outside native/modal scopes', () => {

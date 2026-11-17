@@ -15,6 +15,7 @@
     planSharedKeyframeMove,
     applyKeyframeMovePlan,
     quantizeProxyFrameTime,
+    sceneCutLineTimesMs,
   } from '$lib/domain';
   import type {
     Channel,
@@ -98,6 +99,7 @@
   const activePointers = new Set<number>();
   const pointerTargets = new Map<number, HTMLElement>();
   const duration = $derived(Math.max(session.durationMs(), 1));
+  const sceneCutLines = $derived(sceneCutLineTimesMs(session.sceneCuts?.cuts ?? [], duration));
   const timelineWidth = $derived(duration * session.pxPerMs);
   $effect(() => {
     const container = timelineContainer;
@@ -700,7 +702,7 @@
         if (event.buttons & 1) scrub(event);
       }}
       onkeydown={(event) => {
-        if (event.key === 'PageUp' || event.key === 'PageDown') {
+        if ((event.key === 'PageUp' || event.key === 'PageDown') && !event.shiftKey) {
           event.preventDefault();
           event.stopPropagation();
           session.navigateKeyframe(event.key === 'PageUp' ? -1 : 1);
@@ -762,6 +764,14 @@
         <span>{snapGuide.label} {format(snapGuide.timeMs)}</span>
       </div>
     {/if}
+    {#each sceneCutLines as timeMs (timeMs)}
+      <i
+        class="scene-cut"
+        aria-hidden="true"
+        title={`Scene cut ${format(timeMs)}`}
+        style={`left:${headerWidth + timeMs * session.pxPerMs}px;height:${30 + session.channels.length * 40}px`}
+      ></i>
+    {/each}
     <i
       class="playhead"
       aria-hidden="true"
@@ -1088,9 +1098,17 @@
   .tick.major:not(:empty) {
     padding-top: 2px;
   }
-  .playhead {
+  .scene-cut {
     position: absolute;
     z-index: 1;
+    top: 0;
+    width: 1px;
+    background: color-mix(in srgb, var(--text) 45%, transparent);
+    pointer-events: none;
+  }
+  .playhead {
+    position: absolute;
+    z-index: 2;
     top: 0;
     width: 2px;
     background: var(--timeline-playhead);
