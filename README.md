@@ -37,7 +37,6 @@ The editor improvements are still in progress and are not release-ready. Full-br
 - **Undo / redo** — 200-deep command stack, preserved across project saves
 - **Auto-save** — localStorage snapshots every 60 seconds
 - **Photosensitivity safety** — auto-computed SafetyInfo tracks flash frequency and max brightness delta
-- **Scene detection** — histogram-based analysis via Web Worker
 - **Lighting overlay** — real-time preview on the video with spatial glow positioning
 - **Color tools** — HSL wheel, RGB sliders, hex input, color temperature (1000 K–10 000 K), eyedropper
 - **Keyboard shortcuts** — full shortcut system for professional workflow
@@ -90,7 +89,7 @@ docker compose -f docker-compose.ci.yml run build-linux
 
 ## Architecture
 
-OpenLightFX Studio is a **SvelteKit + Svelte 5** single-page application built with the static adapter (SPA mode). Heavy computation (scene detection, snapshot generation) runs in **Web Workers** to keep the UI thread free. The timeline is entirely **canvas-based** for consistent 60 fps performance even with thousands of keyframes.
+OpenLightFX Studio is a **SvelteKit + Svelte 5** single-page application built with the static adapter (SPA mode). Snapshot generation runs in a **Web Worker** to keep the UI thread free. The timeline is entirely **canvas-based** for consistent 60 fps performance even with thousands of keyframes.
 
 ### Tech Stack
 
@@ -109,7 +108,7 @@ OpenLightFX Studio is a **SvelteKit + Svelte 5** single-page application built w
 src/
 ├── lib/
 │   ├── components/       # Svelte components by domain
-│   │   ├── layout/       # AppShell, MenuBar, Toolbar, PanelSplitter
+│   │   ├── layout/       # AppShell, Toolbar, PanelSplitter
 │   │   ├── video/        # VideoPanel, PlaybackControls, LightingOverlay, Eyedropper
 │   │   ├── timeline/     # Canvas timeline, interaction, minimap
 │   │   ├── properties/   # Context-sensitive property editors
@@ -122,7 +121,7 @@ src/
 │   ├── services/         # Business logic (protobuf, validation, I/O)
 │   ├── effects/          # 13 effect renderers + registry
 │   ├── types/            # TypeScript type definitions
-│   └── workers/          # Web Workers (scene detection, snapshots)
+│   └── workers/          # Web Workers (snapshots)
 ├── routes/               # SvelteKit routes (SPA)
 └── electron/             # Future Electron integration
 ```

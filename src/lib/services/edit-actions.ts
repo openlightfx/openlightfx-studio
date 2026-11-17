@@ -1,6 +1,5 @@
 // ============================================================
 // Edit actions — shared clipboard, delete, and selection helpers
-// Used by both keyboard shortcuts (+page.svelte) and MenuBar.
 // ============================================================
 
 import { projectStore } from '$lib/stores/project.svelte.js';
