@@ -264,6 +264,7 @@ requirement(
   'ED2-029 @browser audition range validates boundaries loops decoded playback and stays paused after stepping',
   async ({ page }) => {
     await openEditor(page);
+    await page.getByText('Audition range', { exact: true }).click();
     await expect(page.getByRole('button', { name: 'Loop', exact: true })).toBeDisabled();
     await page.getByLabel('Range start', { exact: true }).fill('00:00:01.000');
     await page.getByLabel('Range start', { exact: true }).blur();

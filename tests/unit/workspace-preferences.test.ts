@@ -10,7 +10,7 @@ describe('ED2-026 workspace preferences', () => {
   it('clamps finite sizes and rejects invalid values', () => {
     expect(clampWorkspaceValue('inspectorWidth', 900, 1200)).toBe(520);
     expect(clampWorkspaceValue('timelineHeight', 100, 800)).toBe(210);
-    expect(clampWorkspaceValue('timelineHeight', Number.NaN, 800)).toBe(300);
+    expect(clampWorkspaceValue('timelineHeight', Number.NaN, 800)).toBe(340);
   });
 
   it('round-trips only versioned local workspace sizes and falls back on corrupt data', () => {
@@ -29,7 +29,7 @@ describe('ED2-026 workspace preferences', () => {
     expect(readWorkspacePreferences(storage)).toEqual({
       version: 1,
       inspectorWidth: 340,
-      timelineHeight: 300,
+      timelineHeight: 340,
     });
     values.set(WORKSPACE_PREFERENCES_KEY, '{"version":99,"inspectorWidth":500}');
     expect(readWorkspacePreferences(storage).inspectorWidth).toBe(340);

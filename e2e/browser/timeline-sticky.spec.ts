@@ -42,6 +42,7 @@ for (const width of [1280, 390]) {
         has: page.getByRole('button', { name: 'Right', exact: true }),
       });
       const name = right.locator('.lane-name');
+      await name.scrollIntoViewIfNeeded();
       const bounds = (await name.boundingBox())!;
       expect(
         await page.evaluate(
@@ -50,6 +51,7 @@ for (const width of [1280, 390]) {
         )
       ).toBe(true);
       await name.click();
+      if (width <= 750) await page.getByRole('button', { name: 'Show inspector' }).click();
       await expect(
         page
           .getByRole('complementary', { name: 'Inspector' })
@@ -68,6 +70,7 @@ for (const width of [1280, 390]) {
       expect(counts).toBe(4);
 
       // The unpinned time axis must retain its true scrolled coordinates for seeking.
+      await ruler.scrollIntoViewIfNeeded();
       const view = (await viewport.boundingBox())!;
       const header = (await headers.first().boundingBox())!;
       const axis = (await ruler.boundingBox())!;

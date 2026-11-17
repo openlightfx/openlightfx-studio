@@ -29,6 +29,44 @@ async function snapshot(page: import('@playwright/test').Page, name: string) {
 }
 
 requirement(
+  'ED2-025 @browser simultaneous editor errors make space without hiding timeline controls',
+  async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await installBackend(page, {
+      rooms: [livingRoom],
+      projectReadErrors: [{ status: 500, message: 'Project storage unavailable' }],
+    });
+    await page.route('**/OpenLightFX/Studio/Rooms/*/Routing', (route) =>
+      route.fulfill({ status: 500, json: { message: `Routing ${'unavailable'.repeat(30)}` } })
+    );
+    await page.goto('/emby/OpenLightFX/studio/?api_key=browser-test#/edit/42/proxy-fixture');
+    const messages = page.getByRole('region', { name: 'Editor messages' });
+    await expect(messages.getByRole('alert')).toHaveCount(2);
+    const alerts = messages.getByRole('alert');
+    const first = (await alerts.nth(0).boundingBox())!;
+    const second = (await alerts.nth(1).boundingBox())!;
+    const workspace = (await page.locator('.workspace').boundingBox())!;
+    expect(first.y + first.height).toBeLessThanOrEqual(second.y);
+    expect(
+      (await messages.boundingBox())!.y + (await messages.boundingBox())!.height
+    ).toBeLessThanOrEqual(workspace.y);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      390
+    );
+    await expect(alerts.first().getByRole('button', { name: 'Retry project load' })).toBeVisible();
+    await expect(messages).toHaveScreenshot('editor-stacked-errors-narrow.png');
+    await page.getByRole('button', { name: 'Show inspector' }).click();
+    await expect(page.getByRole('button', { name: 'Hide inspector' })).toBeVisible();
+    await page.getByRole('button', { name: 'Hide inspector' }).click();
+    await expect(page.getByRole('slider', { name: 'Timeline ruler' })).toBeVisible();
+    await page.getByText('Audition range', { exact: true }).click();
+    await expect(page.getByLabel('Range start', { exact: true })).toBeVisible();
+    await page.getByText('Audition range', { exact: true }).click();
+    await expect(page.getByLabel('Range start', { exact: true })).toBeHidden();
+  }
+);
+
+requirement(
   'ED2-025 @browser visual overlay preference is independent of track history and physical preview',
   async ({ page }) => {
     const backend = await openFixtureEditor(page, { rooms: [livingRoom] });

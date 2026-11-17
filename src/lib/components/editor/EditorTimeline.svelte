@@ -50,7 +50,7 @@
   }>();
   let timelineContainer = $state<HTMLDivElement>();
   let ruler: HTMLDivElement;
-  let headerWidth = $state(180);
+  let headerWidth = $state(240);
   let visibleWidth = $state(0);
   let labelWidth = $state(64);
   let timeDraft = $state('00:00:00.000');
@@ -137,7 +137,7 @@
     if (!context) return;
     context.font = `11px ${getComputedStyle(document.documentElement).getPropertyValue('--font-mono')}`;
     const longest =
-      [0, duration / 3_600_000, duration / 60_000, duration / 1000]
+      [0, duration / 2, duration]
         .map((time) => format(time))
         .sort((a, b) => b.length - a.length)[0] ?? '';
     labelWidth = context.measureText(longest).width;
@@ -543,130 +543,137 @@
   onpointercancel={endPointerGesture}
   onlostpointercapture={endPointerGesture}
 >
-  <div class="timeline-tools">
-    <label class="layout-picker"
-      >Layout
-      <select
-        aria-label="Track layout"
-        value={session.track?.metadata.channelLayout ?? 'LAYOUT_2_0'}
-        onchange={onLayout}
+  <p class="tools-hint" aria-hidden="true">Timeline controls · scroll for more</p>
+  <div class="timeline-tools" role="region" aria-label="Timeline controls">
+    <div class="tool-group" role="group" aria-label="Timeline editing">
+      <label class="layout-picker"
+        >Layout
+        <select
+          aria-label="Track layout"
+          value={session.track?.metadata.channelLayout ?? 'LAYOUT_2_0'}
+          onchange={onLayout}
+        >
+          <option value="LAYOUT_AMBIENT">Ambient</option><option value="LAYOUT_2_0">2.0</option
+          ><option value="LAYOUT_3_0">3.0</option><option value="LAYOUT_5_0">5.0</option>
+        </select>
+      </label>
+      <label class="snap-toggle"
+        ><input
+          type="checkbox"
+          aria-label="Magnetic snapping"
+          checked={session.snapEnabled}
+          onchange={(event) =>
+            session.setSnapEnabled((event.currentTarget as HTMLInputElement).checked)}
+        />Snap</label
       >
-        <option value="LAYOUT_AMBIENT">Ambient</option><option value="LAYOUT_2_0">2.0</option
-        ><option value="LAYOUT_3_0">3.0</option><option value="LAYOUT_5_0">5.0</option>
-      </select>
-    </label>
-    <label class="snap-toggle"
-      ><input
-        type="checkbox"
-        aria-label="Magnetic snapping"
-        checked={session.snapEnabled}
-        onchange={(event) =>
-          session.setSnapEnabled((event.currentTarget as HTMLInputElement).checked)}
-      />Snap</label
-    >
-    <label class="spacing-picker"
-      >Spacing
-      <select
-        aria-label="Minimum cue spacing"
-        value={session.minSpacingMs}
-        onchange={(event) => session.setSpacing((event.currentTarget as HTMLSelectElement).value)}
+      <label class="spacing-picker"
+        >Spacing
+        <select
+          aria-label="Minimum cue spacing"
+          value={session.minSpacingMs}
+          onchange={(event) => session.setSpacing((event.currentTarget as HTMLSelectElement).value)}
+        >
+          <option value="0">No extra spacing</option><option value="100">100 ms</option><option
+            value="200">200 ms</option
+          ><option value="1000">1 s</option>
+        </select>
+      </label>
+      <button
+        disabled={!session.activeChannelId}
+        title={session.activeChannelId ? 'Add at the playhead (K)' : 'Select a lane first'}
+        onclick={() => session.addAtPlayhead()}>Add keyframe</button
       >
-        <option value="0">No extra spacing</option><option value="100">100 ms</option><option
-          value="200">200 ms</option
-        ><option value="1000">1 s</option>
-      </select>
-    </label>
-    <button
-      disabled={!session.activeChannelId}
-      title={session.activeChannelId ? 'Add at the playhead (K)' : 'Select a lane first'}
-      onclick={() => session.addAtPlayhead()}>Add keyframe</button
-    >
-    <button
-      aria-label="Nudge earlier"
-      disabled={!session.selection.length}
-      title={session.selection.length
-        ? 'Nudge selected keyframes one frame earlier (,)'
-        : 'Select keyframes first'}
-      onclick={() => session.nudgeSelection(-1)}>‹ frame</button
-    >
-    <button
-      aria-label="Nudge later"
-      disabled={!session.selection.length}
-      title={session.selection.length
-        ? 'Nudge selected keyframes one frame later (.)'
-        : 'Select keyframes first'}
-      onclick={() => session.nudgeSelection(1)}>frame ›</button
-    >
-    <button aria-label="Zoom out" onclick={() => session.zoomKey('[', false)}>−</button>
-    <button aria-label="Zoom in" onclick={() => session.zoomKey(']', false)}>+</button>
-    <button aria-label="Fit movie" onclick={fitTimeline}>Fit movie</button>
-    <button
-      aria-label="Fit selection"
-      disabled={!session.selection.length}
-      title={session.selection.length
-        ? 'Fit selected keyframes'
-        : 'Select one or more keyframes first'}
-      onclick={() => runTimelineCommand('zoom-fit-selection')}>Fit selection</button
-    >
-    <button
-      aria-label="Frame detail"
-      title="Zoom to one proxy frame per pixel"
-      onclick={() => runTimelineCommand('zoom-frame-detail')}>Frame detail</button
-    >
-    <button
-      aria-label="Follow playhead"
-      aria-pressed={session.followPlayhead}
-      onclick={() => (session.followPlayhead = !session.followPlayhead)}>Follow playhead</button
-    >
-    <button aria-label="Reveal playhead" onclick={revealPlayhead}>Reveal playhead</button>
-    <button
-      aria-label="All lanes"
-      aria-pressed={!session.activeChannelId}
-      title={session.activeChannelId
-        ? 'Search all lanes for keyframes'
-        : 'Keyframe navigation searches all lanes'}
-      onclick={() => session.clearActiveChannel()}>All lanes</button
-    >
-    <label class="goto-time"
-      >Go to time
-      <input
-        bind:this={timeInput}
-        aria-label="Go to time"
-        placeholder="hh:mm:ss.mmm"
-        aria-invalid={Boolean(timeError)}
-        aria-describedby="goto-time-error"
-        bind:value={timeDraft}
-        onkeydown={(event) => {
-          if (event.key === 'Enter') {
-            event.preventDefault();
-            commitTime();
-          } else if (event.key === 'Escape') {
-            event.preventDefault();
-            timeError = '';
-            timeDraft = formatElapsedTime(Math.round(session.playheadMs));
-          }
-        }}
-      />
-    </label>
-    <span id="goto-time-error"
-      >{#if timeError}<span class="time-error" role="alert">{timeError}</span>{/if}</span
-    >
-    <button
-      aria-label="Previous keyframe"
-      title={session.canNavigateKeyframe(-1)
-        ? `Previous keyframe (PageUp), ${session.activeChannelId ? 'active lane' : 'all lanes'}`
-        : `No earlier keyframe in ${session.activeChannelId ? 'this lane' : 'any lane'}`}
-      disabled={!session.canNavigateKeyframe(-1)}
-      onclick={() => session.navigateKeyframe(-1)}>Previous key</button
-    >
-    <button
-      aria-label="Next keyframe"
-      title={session.canNavigateKeyframe(1)
-        ? `Next keyframe (PageDown), ${session.activeChannelId ? 'active lane' : 'all lanes'}`
-        : `No later keyframe in ${session.activeChannelId ? 'this lane' : 'any lane'}`}
-      disabled={!session.canNavigateKeyframe(1)}
-      onclick={() => session.navigateKeyframe(1)}>Next key</button
-    >
+      <button
+        aria-label="Nudge earlier"
+        disabled={!session.selection.length}
+        title={session.selection.length
+          ? 'Nudge selected keyframes one frame earlier (,)'
+          : 'Select keyframes first'}
+        onclick={() => session.nudgeSelection(-1)}>‹ frame</button
+      >
+      <button
+        aria-label="Nudge later"
+        disabled={!session.selection.length}
+        title={session.selection.length
+          ? 'Nudge selected keyframes one frame later (.)'
+          : 'Select keyframes first'}
+        onclick={() => session.nudgeSelection(1)}>frame ›</button
+      >
+    </div>
+    <div class="tool-group" role="group" aria-label="Timeline view">
+      <button aria-label="Zoom out" onclick={() => session.zoomKey('[', false)}>−</button>
+      <button aria-label="Zoom in" onclick={() => session.zoomKey(']', false)}>+</button>
+      <button aria-label="Fit movie" onclick={fitTimeline}>Fit movie</button>
+      <button
+        aria-label="Fit selection"
+        disabled={!session.selection.length}
+        title={session.selection.length
+          ? 'Fit selected keyframes'
+          : 'Select one or more keyframes first'}
+        onclick={() => runTimelineCommand('zoom-fit-selection')}>Fit selection</button
+      >
+      <button
+        aria-label="Frame detail"
+        title="Zoom to one proxy frame per pixel"
+        onclick={() => runTimelineCommand('zoom-frame-detail')}>Frame detail</button
+      >
+      <button
+        aria-label="Follow playhead"
+        aria-pressed={session.followPlayhead}
+        onclick={() => (session.followPlayhead = !session.followPlayhead)}>Follow playhead</button
+      >
+      <button aria-label="Reveal playhead" onclick={revealPlayhead}>Reveal playhead</button>
+    </div>
+    <div class="tool-group" role="group" aria-label="Keyframe navigation">
+      <button
+        aria-label="All lanes"
+        aria-pressed={!session.activeChannelId}
+        title={session.activeChannelId
+          ? 'Search all lanes for keyframes'
+          : 'Keyframe navigation searches all lanes'}
+        onclick={() => session.clearActiveChannel()}>All lanes</button
+      >
+      <label class="goto-time"
+        >Go to time
+        <input
+          bind:this={timeInput}
+          aria-label="Go to time"
+          placeholder="hh:mm:ss.mmm"
+          aria-invalid={Boolean(timeError)}
+          aria-describedby="goto-time-error"
+          bind:value={timeDraft}
+          onkeydown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              commitTime();
+            } else if (event.key === 'Escape') {
+              event.preventDefault();
+              timeError = '';
+              timeDraft = formatElapsedTime(Math.round(session.playheadMs));
+            }
+          }}
+        />
+      </label>
+      <span id="goto-time-error"
+        >{#if timeError}<span class="time-error" role="alert">{timeError}</span>{/if}</span
+      >
+      <button
+        aria-label="Previous keyframe"
+        title={session.canNavigateKeyframe(-1)
+          ? `Previous keyframe (PageUp), ${session.activeChannelId ? 'active lane' : 'all lanes'}`
+          : `No earlier keyframe in ${session.activeChannelId ? 'this lane' : 'any lane'}`}
+        disabled={!session.canNavigateKeyframe(-1)}
+        onclick={() => session.navigateKeyframe(-1)}>Previous key</button
+      >
+      <button
+        aria-label="Next keyframe"
+        title={session.canNavigateKeyframe(1)
+          ? `Next keyframe (PageDown), ${session.activeChannelId ? 'active lane' : 'all lanes'}`
+          : `No later keyframe in ${session.activeChannelId ? 'this lane' : 'any lane'}`}
+        disabled={!session.canNavigateKeyframe(1)}
+        onclick={() => session.navigateKeyframe(1)}>Next key</button
+      >
+    </div>
   </div>
   <EditorAuditionRange {session} />
   <EditorMarkers {session} />
@@ -1021,11 +1028,12 @@
     grid-column: 1 / -1;
     min-width: 0;
     min-height: 0;
-    display: flex;
-    flex-direction: column;
     border-top: 1px solid var(--border-strong);
     background: var(--surface);
     padding: 8px 16px;
+  }
+  .tools-hint {
+    display: none;
   }
   .timeline-tools {
     display: flex;
@@ -1037,8 +1045,19 @@
     min-width: 0;
     flex: 0 0 auto;
   }
+  .tool-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding-right: 8px;
+    border-right: 1px solid var(--border);
+  }
+  .tool-group:last-child {
+    border-right: 0;
+  }
   .layout-picker {
-    margin-right: auto;
     min-width: 0;
   }
   .goto-time {
@@ -1063,6 +1082,15 @@
     border-color: var(--danger);
   }
   @media (max-width: 750px) {
+    .tools-hint {
+      display: block;
+      margin: 0 0 4px;
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+    .tool-group[aria-label='Timeline view'] {
+      order: -1;
+    }
     .timeline-tools {
       height: auto;
       max-height: 108px;
@@ -1225,9 +1253,6 @@
       height: auto;
       min-height: 0;
       flex: 1 1 auto;
-    }
-    .ruler span:not(:first-child):not(:nth-child(5)) {
-      display: none;
     }
   }
   @media (max-width: 750px) {

@@ -43,11 +43,15 @@
   $effect(() => {
     const visible = open;
     const id = itemId;
+    const movieDurationMs = durationMs;
     if (!visible || !id) return;
     const controller = new AbortController();
     let url = '';
     imageError = '';
-    void fetchFrame(id, 0, controller.signal)
+    imageUrl = '';
+    imageAspect = '16 / 9';
+    const previewTimeMs = Math.min(130_000, Math.max(0, movieDurationMs - 1_000));
+    void fetchFrame(id, previewTimeMs, controller.signal)
       .then(async (response) => {
         if (!response.ok) throw new Error('The movie frame could not be loaded');
         const blob = await response.blob();

@@ -2,6 +2,7 @@
   import { parseElapsedTime, type Channel, type EffectKeyframe, type Keyframe } from '$lib/domain';
   import type { StudioSession } from '$lib/studio/session.svelte';
   import { inspectorSelection, type SelectionValue } from '$lib/domain/inspector-selection';
+  import { onMount } from 'svelte';
 
   function display<T>(field: SelectionValue<T>): T | '' {
     return field.kind === 'uniform' ? field.value : '';
@@ -26,6 +27,11 @@
     positionLabel: (value: string | null | undefined) => string;
     onPickSource: () => void;
   }>();
+
+  let collapsed = $state(false);
+  onMount(() => {
+    collapsed = window.matchMedia('(max-width: 750px)').matches;
+  });
 
   const fields = $derived(
     inspectorSelection((session.draftTrack ?? session.track)?.keyframes ?? [], session.selection)
@@ -141,7 +147,14 @@
   }
 </script>
 
-<aside class="inspector" aria-label="Inspector">
+<aside class="inspector" class:collapsed aria-label="Inspector">
+  <button
+    class="inspector-toggle"
+    aria-expanded={!collapsed}
+    onclick={() => (collapsed = !collapsed)}
+  >
+    {collapsed ? 'Show inspector' : 'Hide inspector'}
+  </button>
   {#if selectedEffect}
     <h2>{selectedEffect.effectType}</h2>
     <p>Effect editing comes in a later version. This effect is kept as is.</p>
@@ -386,6 +399,21 @@
 </aside>
 
 <style>
+  .inspector-toggle {
+    display: none;
+  }
+  @media (max-width: 750px) {
+    .inspector-toggle {
+      display: block;
+      margin-bottom: 8px;
+    }
+    .inspector.collapsed > :not(.inspector-toggle) {
+      display: none;
+    }
+    .inspector.collapsed .inspector-toggle {
+      margin-bottom: 0;
+    }
+  }
   .inspector {
     padding: var(--space-5);
     border-left: 1px solid var(--border);
@@ -409,6 +437,7 @@
     font-size: 12px;
     line-height: 1.6;
     margin-top: var(--space-5);
+    overflow-wrap: anywhere;
   }
   .inspector button,
   .inspector input,
@@ -432,6 +461,8 @@
   }
   .inspector label input,
   .inspector label select {
+    min-width: 0;
+    max-width: 100%;
     color: var(--text);
   }
   .inspector label input[type='range'] + input {

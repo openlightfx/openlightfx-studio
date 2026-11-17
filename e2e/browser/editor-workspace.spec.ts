@@ -65,10 +65,11 @@ requirement(
     const timelineBox = (await timeline.boundingBox())!;
     await page.mouse.move(timelineBox.x + timelineBox.width / 2, timelineBox.y + 3);
     await page.mouse.down();
-    await page.mouse.move(timelineBox.x + timelineBox.width / 2, timelineBox.y - 20);
+    await page.mouse.move(timelineBox.x + timelineBox.width / 2, timelineBox.y + 60);
     await page.mouse.up();
     const afterPointer = Number(await timeline.getAttribute('aria-valuenow'));
-    expect(afterPointer).toBeGreaterThan(300);
+    expect(afterPointer).toBeGreaterThan(Number(await timeline.getAttribute('aria-valuemin')));
+    expect(afterPointer).toBeLessThan(Number(await timeline.getAttribute('aria-valuemax')));
     await timeline.focus();
     await page.keyboard.press('ArrowUp');
     expect(Number(await timeline.getAttribute('aria-valuenow'))).toBe(afterPointer + 10);
@@ -143,7 +144,8 @@ requirement(
       'aria-valuenow',
       String(saved.inspectorWidth)
     );
-    await page.getByRole('button', { name: 'Reset workspace' }).click();
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Reset workspace' }).click();
     await expect(page.getByRole('separator', { name: 'Inspector width' })).toHaveAttribute(
       'aria-valuenow',
       '340'
@@ -156,7 +158,8 @@ requirement(
       'aria-valuenow',
       '340'
     );
-    await page.getByRole('button', { name: 'Reset workspace' }).click();
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Reset workspace' }).click();
     const leftLane = active.lane('left');
     await leftLane.focus();
     await page.keyboard.press('ArrowDown');

@@ -1,4 +1,4 @@
-export const WORKSPACE_DEFAULTS = { inspectorWidth: 340, timelineHeight: 300 } as const;
+export const WORKSPACE_DEFAULTS = { inspectorWidth: 340, timelineHeight: 340 } as const;
 export const WORKSPACE_BOUNDS = {
   inspectorWidth: { min: 280, max: 520 },
   timelineHeight: { min: 210, max: 520 },

@@ -1046,6 +1046,13 @@
                     if (session.track) settingsOpen = true;
                   }}>Track settings…</button
                 >
+                <button
+                  role="menuitem"
+                  onclick={() => {
+                    menu = '';
+                    resetWorkspace();
+                  }}>Reset workspace</button
+                >
               {:else}
                 <button
                   role="menuitem"
@@ -1115,6 +1122,14 @@
           ? 'Unsaved changes'
           : 'Saved'}</span
     >
+    {#if session.status && !['Saved', 'Saving…', 'Unsaved changes'].includes(session.status)}
+      <span
+        class="editor-feedback"
+        role="status"
+        aria-label="Editor feedback"
+        title={session.status}>{session.status}</span
+      >
+    {/if}
     {#if safetyFlags.intense}<span class="safety-badge">Intense</span>{/if}
     {#if safetyFlags.flashing}<span class="safety-badge">Flashing</span>{/if}
     {#if safetyFlags.strobing}<span class="safety-badge">Strobing</span>{/if}
@@ -1209,12 +1224,12 @@
     style={`--inspector-width:${inspectorWidth}px;--timeline-height:${timelineHeight}px`}
   >
     <section class="movie-column" aria-label="Movie preview">
+      {#if session.videoError}
+        <div class="alert video-error" role="alert">
+          {session.videoError}<button onclick={() => session.retryProxy()}>Retry</button>
+        </div>
+      {/if}
       <div class="video-stage">
-        {#if session.videoError}
-          <div class="error">
-            {session.videoError}<button onclick={() => session.retryProxy()}>Retry</button>
-          </div>
-        {/if}
         {#if session.playReason}<p class="play-reason">{session.playReason}</p>{/if}
         <!-- svelte-ignore a11y_media_has_caption -->
         <video
@@ -1391,15 +1406,7 @@
       onCloseMenus={() => (menu = '')}
       onGestureChange={setEditorGesture}
     />
-    <button class="workspace-reset" onclick={resetWorkspace}>Reset workspace</button>
   </main>
-  {#if previewState === 'on' && session.photosensitivity}<p
-      class="photosensitivity-notice"
-      role="status"
-      aria-label="Photosensitivity"
-    >
-      {session.photosensitivity}
-    </p>{/if}
   {#if session.menuChannel}
     <div class="channel-context-menu" role="menu" aria-label="Channel actions">
       <button
@@ -1424,50 +1431,56 @@
       >
     </div>
   {/if}
-  {#if session.sidecarLoadError}
-    <div class="alert" role="alert" aria-label="Project sidecar unavailable">
-      Project notes could not be loaded ({session.sidecarLoadError}). Saving is blocked to protect
-      existing project data; track editing and export remain available.
-      <button onclick={() => void session.retryProjectSidecarLoad()}>Retry project load</button>
-    </div>
-  {/if}
-  {#if session.recoveryUnavailable}
-    <div class="alert" role="alert" aria-label="Local recovery unavailable">
-      Local recovery unavailable. Your edits and exports still work, but this browser cannot save a
-      recovery copy.
-      <button onclick={() => void session.retryLocalRecovery()}>Retry</button>
-    </div>
-  {/if}
-  {#if session.restored}<p class="crash-recovery" role="status" aria-label="Crash recovery">
-      {session.restored} <button onclick={() => (session.restored = '')}>Dismiss</button>
-    </p>{/if}
-  {#if session.status && !['Saved', 'Saving…', 'Unsaved changes'].includes(session.status)}
-    <p class="editor-feedback" role="status" aria-label="Editor feedback">{session.status}</p>
-  {/if}
-  {#if session.alert}<div class="alert" role="alert">
-      {session.alert}
-      {#if session.saveConflict}
-        <button
-          onclick={() => {
-            if (window.confirm('Reload the server track and discard your unsaved changes?'))
-              void session.reloadFromServer();
-          }}>Reload</button
-        >
-        <button onclick={() => void session.saveAsNewTrack()}>Save as new track</button>
+  {#if session.sidecarLoadError || session.recoveryUnavailable || session.restored || session.alert || session.importWarning || previewError || routingError || screen.error || (previewState === 'on' && session.photosensitivity)}
+    <section class="editor-messages" aria-label="Editor messages">
+      {#if previewState === 'on' && session.photosensitivity}
+        <p class="photosensitivity-notice" role="status" aria-label="Photosensitivity">
+          {session.photosensitivity}
+        </p>
       {/if}
-    </div>{/if}
-  {#if session.importWarning}<div class="watch-confirmation" role="status">
-      The imported track's duration differs from this movie. <button
-        onclick={() => session.useMovieDuration()}>Use movie duration</button
-      >
-    </div>{/if}
-  {#if previewError}<div class="alert" role="alert">{previewError}</div>{/if}
-  {#if routingError}<div class="alert" role="alert">{routingError}</div>{/if}
-  {#if screen.error}
-    <div class="alert" role="alert">
-      {screen.error}
-      <button aria-label="Dismiss screen error" onclick={() => (screen.error = '')}>×</button>
-    </div>
+      {#if session.sidecarLoadError}
+        <div class="alert" role="alert" aria-label="Project sidecar unavailable">
+          Project notes could not be loaded ({session.sidecarLoadError}). Saving is blocked to
+          protect existing project data; track editing and export remain available.
+          <button onclick={() => void session.retryProjectSidecarLoad()}>Retry project load</button>
+        </div>
+      {/if}
+      {#if session.recoveryUnavailable}
+        <div class="alert" role="alert" aria-label="Local recovery unavailable">
+          Local recovery unavailable. Your edits and exports still work, but this browser cannot
+          save a recovery copy.
+          <button onclick={() => void session.retryLocalRecovery()}>Retry</button>
+        </div>
+      {/if}
+      {#if session.restored}<p class="crash-recovery" role="status" aria-label="Crash recovery">
+          {session.restored} <button onclick={() => (session.restored = '')}>Dismiss</button>
+        </p>{/if}
+      {#if session.alert}<div class="alert" role="alert">
+          {session.alert}
+          {#if session.saveConflict}
+            <button
+              onclick={() => {
+                if (window.confirm('Reload the server track and discard your unsaved changes?'))
+                  void session.reloadFromServer();
+              }}>Reload</button
+            >
+            <button onclick={() => void session.saveAsNewTrack()}>Save as new track</button>
+          {/if}
+        </div>{/if}
+      {#if session.importWarning}<div class="watch-confirmation" role="status">
+          The imported track's duration differs from this movie. <button
+            onclick={() => session.useMovieDuration()}>Use movie duration</button
+          >
+        </div>{/if}
+      {#if previewError}<div class="alert" role="alert">{previewError}</div>{/if}
+      {#if routingError}<div class="alert" role="alert">{routingError}</div>{/if}
+      {#if screen.error}
+        <div class="alert" role="alert">
+          {screen.error}
+          <button aria-label="Dismiss screen error" onclick={() => (screen.error = '')}>×</button>
+        </div>
+      {/if}
+    </section>
   {/if}
   {#if session.helpOpen}
     <div class="modal-backdrop">
@@ -1719,7 +1732,8 @@
   .editor {
     height: 100dvh;
     display: grid;
-    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto minmax(0, 1fr);
     background: var(--bg);
     font-size: 13px;
   }
@@ -1814,15 +1828,19 @@
   .preview-status,
   .preview-reason {
     max-width: 190px;
+    min-width: 0;
+    overflow-wrap: anywhere;
     color: var(--text-muted);
     font-size: 11px;
     line-height: 1.3;
   }
   .preview-status {
-    white-space: nowrap;
+    overflow-wrap: anywhere;
   }
   .preview-reason {
     flex-basis: 100%;
+    max-height: 4em;
+    overflow: auto;
     margin-left: auto;
     text-align: right;
   }
@@ -1863,7 +1881,7 @@
   }
   .workspace {
     position: relative;
-    grid-row: 3;
+    grid-row: 4;
     min-height: 0;
     display: grid;
     grid-template-columns: minmax(0, 1fr) 7px var(--inspector-width);
@@ -1877,6 +1895,11 @@
     display: flex;
     flex-direction: column;
     padding: var(--space-4);
+  }
+  .video-error {
+    flex: 0 0 auto;
+    max-height: 35%;
+    overflow: auto;
   }
   .video-stage {
     flex: 1;
@@ -1995,9 +2018,7 @@
     font-size: 11px;
   }
   .photosensitivity-notice {
-    position: fixed;
-    right: 12px;
-    bottom: 32px;
+    margin: 0;
     padding: 6px 10px;
     color: var(--text);
     background: var(--surface2);
@@ -2020,12 +2041,6 @@
   .workspace > :global(.splitter:not(.vertical)) {
     grid-area: hsplit;
   }
-  .workspace-reset {
-    position: absolute;
-    right: 8px;
-    bottom: 8px;
-    z-index: 4;
-  }
   .quick-action {
     min-width: 28px;
     padding: 3px 5px;
@@ -2044,10 +2059,18 @@
   .channel-context-menu button {
     text-align: left;
   }
+  .editor-messages {
+    grid-row: 3;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    min-width: 0;
+    max-height: min(30vh, 240px);
+    overflow: auto;
+    padding: 8px 16px;
+  }
   .crash-recovery {
-    position: fixed;
-    left: 12px;
-    bottom: 30px;
+    margin: 0;
     padding: 8px;
     color: var(--text);
     background: var(--surface2);
@@ -2055,21 +2078,16 @@
     font-size: 12px;
   }
   .editor-feedback {
-    position: fixed;
-    left: 12px;
-    bottom: 0;
-    margin: 0;
-    padding: 6px 10px;
-    color: var(--text);
-    background: var(--header-bg);
+    max-width: min(220px, 100%);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-muted);
     font-size: 12px;
-    pointer-events: none;
   }
   .alert {
-    position: fixed;
-    z-index: 15;
-    right: 12px;
-    bottom: 12px;
+    min-width: 0;
+    overflow-wrap: anywhere;
     padding: 10px;
     color: var(--danger);
     background: var(--surface2);
@@ -2135,13 +2153,10 @@
     .workspace > :global(.splitter) {
       display: none;
     }
-    .workspace-reset {
-      position: static;
-      justify-self: end;
-      grid-row: 4;
-    }
     .track-title {
-      display: none;
+      flex: 1 1 180px;
+      max-width: 100%;
+      min-width: 0;
     }
     .menubar {
       gap: 5px;

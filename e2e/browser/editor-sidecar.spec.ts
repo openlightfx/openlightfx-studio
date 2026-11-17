@@ -129,6 +129,7 @@ requirement(
   async ({ page }) => {
     const backend = await openFixtureEditor(page, { empty: true });
     await expect(page.getByRole('alert', { name: 'Project sidecar unavailable' })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Editor messages' })).toHaveCount(0);
     expect(backend.projectReadAttempts).toEqual([{ itemId: '42', trackId: 'proxy-fixture' }]);
     await page.getByLabel('Track title', { exact: true }).fill('Create project from empty');
     await menu(page, 'File', '^Save');
@@ -158,6 +159,12 @@ for (const failure of [
       });
       const warning = page.getByRole('alert', { name: 'Project sidecar unavailable' });
       await expect(warning).toBeVisible();
+      const messageBox = await warning.boundingBox();
+      const workspaceBox = await page.locator('.workspace').boundingBox();
+      expect(messageBox).not.toBeNull();
+      expect(workspaceBox).not.toBeNull();
+      expect(messageBox!.y + messageBox!.height).toBeLessThanOrEqual(workspaceBox!.y);
+      await expect(page.getByRole('slider', { name: 'Timeline ruler' })).toBeVisible();
       if (failure.name === 'forbidden') {
         const retry = warning.getByRole('button', { name: 'Retry project load' });
         await retry.focus();
