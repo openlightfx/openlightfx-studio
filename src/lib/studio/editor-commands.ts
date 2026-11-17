@@ -15,6 +15,7 @@ export interface EditorCommandContext {
     togglePlay(): void;
     addAtPlayhead(): void;
     addMarker(): void;
+    openEffectPicker(channelId?: string | null): void;
     setRangeBoundary(boundary: 'startMs' | 'endMs'): void;
     nudgeSelection(direction: -1 | 1, frames?: number, grouped?: boolean): void;
     deleteSelection(): void;
@@ -126,6 +127,13 @@ export const EDITOR_COMMANDS: readonly EditorCommand[] = [
     chords: ['M'],
     scope: 'timeline',
     execute: ({ session }) => session.addMarker(),
+  },
+  {
+    id: 'effect-picker',
+    label: 'Add effect',
+    chords: ['E'],
+    scope: 'editor',
+    execute: ({ session }) => session.openEffectPicker(),
   },
   {
     id: 'nudge-earlier',
@@ -413,6 +421,7 @@ export function dispatchEditorCommand(
     command.id.startsWith('step-') ||
     command.id.startsWith('skip-') ||
     command.id === 'play-pause' ||
+    command.id === 'effect-picker' ||
     command.id === 'previous-keyframe' ||
     command.id === 'next-keyframe' ||
     command.id === 'previous-scene' ||

@@ -23,6 +23,12 @@ import {
   clampRecoveryPosition,
   classifyLocalFile,
   computeSafety,
+  buildEffectKeyframe,
+  clampEffectMove,
+  effectPreset,
+  effectSafetyNote,
+  sceneCutLineTimesMs,
+  snapEffectStart,
   crashKey,
   createHistory,
   createEditTransaction,
@@ -66,6 +72,7 @@ import {
   upgradeLegacyTrackLayout,
 } from '$lib/domain';
 import { adjacentSceneStopMs, type SceneCutJob, type SceneCuts } from '$lib/domain/scene-cuts';
+import type { EffectKeyframe, EffectType } from '$lib/domain/types';
 import {
   bytesAsBuffer,
   fetchBulbs,
@@ -230,6 +237,8 @@ export class StudioSession {
   kelvinError = $state('');
   brightnessText = $state('—');
   helpOpen = $state(false);
+  effectPickerOpen = $state(false);
+  effectPickerChannelId = $state<string | null>(null);
   adding = $state(false);
   channelIdDraft = $state('');
   mappingOpen = $state(false);
@@ -1630,6 +1639,131 @@ export class StudioSession {
       return;
     }
     this.insertAt(time, channel);
+  }
+
+  openEffectPicker(channelId?: string | null): void {
+    this.effectPickerChannelId = channelId ?? this.activeChannelId;
+    if (this.effectPickerChannelId) this.activeChannelId = this.effectPickerChannelId;
+    this.effectPickerOpen = true;
+  }
+
+  addEffect(
+    type: EffectType,
+    options?: { channelId?: string | null; timeMs?: number; allChannels?: boolean }
+  ): void {
+    if (!this.track) return;
+    const channels = options?.allChannels
+      ? this.track.channels.map((channel) => channel.id)
+      : [options?.channelId || this.activeChannelId || this.track.channels[0]?.id].filter(
+          (id): id is string => Boolean(id)
+        );
+    if (!channels.length) {
+      this.status = 'Add a channel before adding an effect';
+      return;
+    }
+    const duration = this.durationMs();
+    const anchors = [Math.round(this.playheadMs), ...this.sceneCutAnchors()];
+    const created = channels.map((channelId) =>
+      buildEffectKeyframe({
+        id: this.allocateId('fx'),
+        type,
+        channelId,
+        timestampMs: options?.timeMs ?? this.playheadMs,
+        movieDurationMs: duration,
+        keyframes: this.track!.keyframes,
+        anchorsMs: anchors,
+      })
+    );
+    const effects = [...this.track.effects, ...created];
+    this.activeChannelId = created[0].channelId;
+    this.edit(
+      {
+        ...this.track,
+        effects,
+        safety: computeSafety({ keyframes: this.track.keyframes, effects }),
+      },
+      `Added ${effectPreset(type).name}`
+    );
+    const note = effectSafetyNote(type);
+    if (note) this.status = note;
+    this.effectPickerOpen = false;
+  }
+
+  previewEffect(
+    id: string,
+    patch: Partial<Pick<EffectKeyframe, 'timestampMs' | 'durationMs'>>
+  ): void {
+    if (!this.track) return;
+    const current = this.track.effects.find((effect) => effect.id === id);
+    if (!current) return;
+    const placed = clampEffectMove(
+      patch.timestampMs ?? current.timestampMs,
+      patch.durationMs ?? current.durationMs,
+      this.durationMs()
+    );
+    const snapped =
+      patch.timestampMs == null
+        ? placed
+        : {
+            ...placed,
+            timestampMs: snapEffectStart(placed.timestampMs, [
+              Math.round(this.playheadMs),
+              ...this.sceneCutAnchors(),
+            ]),
+          };
+    const limited = clampEffectMove(snapped.timestampMs, snapped.durationMs, this.durationMs());
+    const effects = this.track.effects.map((effect) =>
+      effect.id === id ? { ...effect, ...limited } : effect
+    );
+    if (!this.transaction.active) this.beginEdit('Adjust effect');
+    this.updateEdit({
+      ...this.track,
+      effects,
+      safety: computeSafety({ keyframes: this.track.keyframes, effects }),
+    });
+  }
+
+  updateEffect(
+    id: string,
+    patch: Partial<Pick<EffectKeyframe, 'durationMs' | 'intensity' | 'primaryColor'>>
+  ): void {
+    if (!this.track) return;
+    const effects = this.track.effects.map((effect) => {
+      if (effect.id !== id) return effect;
+      const durationMs = patch.durationMs ?? effect.durationMs;
+      const intensity = patch.intensity ?? effect.intensity;
+      return {
+        ...effect,
+        durationMs: Math.max(1, Math.min(60 * 60_000, Math.round(durationMs))),
+        intensity: Math.max(0, Math.min(100, Math.round(intensity))),
+        primaryColor: patch.primaryColor ?? effect.primaryColor,
+      };
+    });
+    this.edit(
+      {
+        ...this.track,
+        effects,
+        safety: computeSafety({ keyframes: this.track.keyframes, effects }),
+      },
+      'Edit effect'
+    );
+  }
+
+  private sceneCutAnchors(): number[] {
+    return sceneCutLineTimesMs(this.sceneCuts?.cuts ?? [], this.durationMs());
+  }
+
+  deleteEffect(id: string): void {
+    if (!this.track) return;
+    const effects = this.track.effects.filter((effect) => effect.id !== id);
+    this.edit(
+      {
+        ...this.track,
+        effects,
+        safety: computeSafety({ keyframes: this.track.keyframes, effects }),
+      },
+      'Delete effect'
+    );
   }
 
   selectAt(x: number, y: number, laneHeight: number): void {

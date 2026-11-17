@@ -157,7 +157,62 @@
   </button>
   {#if selectedEffect}
     <h2>{selectedEffect.effectType}</h2>
-    <p>Effect editing comes in a later version. This effect is kept as is.</p>
+    <p>Drag the block to move it. Drag its right edge to change length.</p>
+    <label
+      >Duration (ms)
+      <input
+        aria-label="Effect duration"
+        type="number"
+        min="1"
+        value={selectedEffect.durationMs}
+        onchange={(event) =>
+          session.updateEffect(selectedEffect.id, {
+            durationMs: Number((event.currentTarget as HTMLInputElement).value),
+          })}
+      /></label
+    >
+    <label
+      >Intensity
+      <input
+        aria-label="Effect intensity"
+        type="number"
+        min="0"
+        max="100"
+        value={selectedEffect.intensity}
+        onchange={(event) =>
+          session.updateEffect(selectedEffect.id, {
+            intensity: Number((event.currentTarget as HTMLInputElement).value),
+          })}
+      /></label
+    >
+    <label
+      >Color
+      <input
+        aria-label="Effect colour"
+        type="color"
+        value={'#' +
+          [
+            selectedEffect.primaryColor?.r ?? 255,
+            selectedEffect.primaryColor?.g ?? 255,
+            selectedEffect.primaryColor?.b ?? 255,
+          ]
+            .map((channel) => channel.toString(16).padStart(2, '0'))
+            .join('')}
+        onchange={(event) => {
+          const hex = (event.currentTarget as HTMLInputElement).value.slice(1);
+          session.updateEffect(selectedEffect.id, {
+            primaryColor: {
+              r: Number.parseInt(hex.slice(0, 2), 16),
+              g: Number.parseInt(hex.slice(2, 4), 16),
+              b: Number.parseInt(hex.slice(4, 6), 16),
+            },
+          });
+        }}
+      /></label
+    >
+    <button type="button" onclick={() => session.deleteEffect(selectedEffect.id)}
+      >Delete effect</button
+    >
   {:else if selected}
     <h2>
       {session.selection.length > 1 ? `${session.selection.length} selected keyframes` : 'Keyframe'}
