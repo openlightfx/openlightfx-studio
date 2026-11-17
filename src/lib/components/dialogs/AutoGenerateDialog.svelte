@@ -204,7 +204,7 @@
         >
       </div>
       <p>
-        Each scene is filled with its dominant colour as the scene finishes. Scene transitions are
+        Each scene is filled with its dominant color as the scene finishes. Scene transitions are
         marked on the timeline.
       </p>
       {#if error}<p class="error" role="alert">{error}</p>{/if}
@@ -213,7 +213,7 @@
     <div class="setup">
       <p class="intro">
         Choose the part of the picture that should drive each track channel. On each scene
-        transition, the track is prefilled with the dominant colour in that zone. Drag a box on the
+        transition, the track is prefilled with the dominant color in that zone. Drag a box on the
         frame; suggested zones are shown for the current layout.
       </p>
       <div class="channel-list" role="group" aria-label="Track channels">
