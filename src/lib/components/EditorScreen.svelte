@@ -317,6 +317,7 @@
       if (update.state === 'done') {
         if (generatedFrames.length) session.commitEdit();
         else session.cancelEdit();
+        session.reloadSceneCuts();
         generationBusy = false;
         generationOpen = false;
         session.status = generatedFrames.length
