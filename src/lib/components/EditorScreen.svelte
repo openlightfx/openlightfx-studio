@@ -5,6 +5,7 @@
   import PluginFramePicker from './PluginFramePicker.svelte';
   import EditorInspector from './editor/EditorInspector.svelte';
   import EditorTimeline from './editor/EditorTimeline.svelte';
+  import EffectPicker from './editor/EffectPicker.svelte';
   import type { Channel, EffectKeyframe, Keyframe, Track } from '$lib/domain';
   import { fetchKeyframeGeneration, startKeyframeGeneration } from '$lib/api/client';
   import { ScreenLink } from '$lib/studio/screen-link.svelte';
@@ -1429,8 +1430,17 @@
         >Mute {session.channels.find((channel: Channel) => channel.id === session.menuChannel)
           ?.displayName}</button
       >
+      <button
+        role="menuitem"
+        onclick={() => {
+          const channelId = session.menuChannel;
+          session.menuChannel = null;
+          session.openEffectPicker(channelId);
+        }}>Add effect</button
+      >
     </div>
   {/if}
+  {#if session.effectPickerOpen}<EffectPicker {session} />{/if}
   {#if session.sidecarLoadError || session.recoveryUnavailable || session.restored || session.alert || session.importWarning || previewError || routingError || screen.error || (previewState === 'on' && session.photosensitivity)}
     <section class="editor-messages" aria-label="Editor messages">
       {#if previewState === 'on' && session.photosensitivity}

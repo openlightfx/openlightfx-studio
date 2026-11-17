@@ -1,5 +1,6 @@
 <script lang="ts">
   import TimelineLane from '../TimelineLane.svelte';
+  import EffectStrip from './EffectStrip.svelte';
   import EditorMarkers from './EditorMarkers.svelte';
   import EditorAuditionRange from './EditorAuditionRange.svelte';
   import { onDestroy, onMount, untrack } from 'svelte';
@@ -16,7 +17,9 @@
     applyKeyframeMovePlan,
     quantizeProxyFrameTime,
     sceneCutLineTimesMs,
+    snapEffectStart,
   } from '$lib/domain';
+  import type { EffectType } from '$lib/domain';
   import type {
     Channel,
     SceneMarker,
@@ -516,6 +519,57 @@
     const context = { session, target: null, modal: false, menu: false };
     if (command && !commandEnabledReason(command, context)) void command.execute(context);
   }
+  function effectAnchors(): number[] {
+    return [Math.round(session.playheadMs), ...sceneCutLines];
+  }
+
+  function acceptEffectDrag(event: DragEvent) {
+    if (![...(event.dataTransfer?.types ?? [])].includes('application/x-openlightfx-effect'))
+      return;
+    event.preventDefault();
+  }
+
+  function dropEffect(event: DragEvent, channelId: string) {
+    const type = event.dataTransfer?.getData('application/x-openlightfx-effect') as EffectType;
+    if (!type) return;
+    event.preventDefault();
+    const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const time = clientXToTimelineTime(event.clientX, {
+      originClientX: bounds.left,
+      scrollX: 0,
+      pxPerMs: session.pxPerMs,
+      durationMs: duration,
+    });
+    if (time === null) return;
+    session.addEffect(type, {
+      channelId,
+      timeMs: snapEffectStart(time, effectAnchors()),
+    });
+  }
+
+  function beginEffectGesture(
+    event: PointerEvent,
+    id: string,
+    mode: 'move' | 'resize',
+    origin: { timestampMs: number; durationMs: number }
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const move = (next: PointerEvent) => {
+      const delta = (next.clientX - startX) / session.pxPerMs;
+      if (mode === 'move') session.previewEffect(id, { timestampMs: origin.timestampMs + delta });
+      else session.previewEffect(id, { durationMs: origin.durationMs + delta });
+    };
+    const finish = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', finish);
+      session.commitEdit();
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', finish);
+  }
+
   function timelineWheel(event: WheelEvent) {
     if (
       (event.ctrlKey || event.metaKey) &&
@@ -543,6 +597,7 @@
   onpointercancel={endPointerGesture}
   onlostpointercapture={endPointerGesture}
 >
+  <EffectStrip {session} />
   <p class="tools-hint" aria-hidden="true">Timeline controls · scroll for more</p>
   <div class="timeline-tools" role="region" aria-label="Timeline controls">
     <div class="tool-group" role="group" aria-label="Timeline editing">
@@ -848,6 +903,12 @@
         <div
           class="lane"
           role="presentation"
+          ondragover={acceptEffectDrag}
+          ondrop={(event) => dropEffect(event, channel.id)}
+          oncontextmenu={(event) => {
+            event.preventDefault();
+            session.menuChannel = channel.id;
+          }}
           onpointerdown={(event) => {
             beginPan(event);
             if (event.target === event.currentTarget) beginLane(event, channel.id);
@@ -872,18 +933,36 @@
             <span class="lane-empty">Click to add a keyframe</span>
           {/if}
           {#each session.track?.effects.filter((effect: EffectKeyframe) => effect.channelId === channel.id) ?? [] as effect (effect.id)}
-            <button
+            <div
               class="effect-block"
-              aria-label={`${effect.effectType} effect, editing comes later`}
-              title="Effect editing comes in a later version. This effect is kept as is."
-              style={`left:${timeToContentX(effect.timestampMs, session.pxPerMs, duration) ?? 0}px;width:${Math.max(1, effect.durationMs * session.pxPerMs)}px`}
-              onclick={(event) => {
-                event.stopPropagation();
-                onEffectSelected(effect.id);
-                session.clearSelection();
-                session.activeChannelId = channel.id;
-              }}>{effect.effectType}</button
+              style={`left:${timeToContentX(effect.timestampMs, session.pxPerMs, duration) ?? 0}px;width:${Math.max(24, effect.durationMs * session.pxPerMs)}px`}
             >
+              <button
+                type="button"
+                class="effect-body"
+                aria-label={`${effect.effectType} effect at ${format(effect.timestampMs)}`}
+                title="Drag to move. Use the edge to change duration."
+                onpointerdown={(event) => {
+                  onEffectSelected(effect.id);
+                  session.clearSelection();
+                  session.activeChannelId = channel.id;
+                  beginEffectGesture(event, effect.id, 'move', effect);
+                }}
+                onclick={(event) => {
+                  event.stopPropagation();
+                  onEffectSelected(effect.id);
+                  session.clearSelection();
+                  session.activeChannelId = channel.id;
+                }}>{effect.effectType}</button
+              >
+              <button
+                type="button"
+                class="effect-resize"
+                aria-label={`Resize ${effect.effectType}`}
+                title="Drag to change duration"
+                onpointerdown={(event) => beginEffectGesture(event, effect.id, 'resize', effect)}
+              ></button>
+            </div>
           {/each}
           <!-- Only the focused selection gets a DOM focus target; all marks are canvas pixels. -->
           {#each laneKeyframes
@@ -1234,13 +1313,32 @@
     position: absolute;
     top: 5px;
     bottom: 5px;
+    display: flex;
     min-width: 24px;
-    padding: 0;
     overflow: hidden;
-    min-height: 0;
     background: var(--effect-bg);
-    border-color: var(--effect-border);
+    border: 1px solid var(--effect-border);
     border-radius: 4px;
+    z-index: 2;
+  }
+  .effect-body {
+    flex: 1;
+    min-width: 0;
+    padding: 0 4px;
+    overflow: hidden;
+    color: var(--text);
+    background: transparent;
+    border: 0;
+    font-size: 10px;
+    text-align: left;
+    cursor: grab;
+  }
+  .effect-resize {
+    flex: 0 0 8px;
+    padding: 0;
+    background: var(--effect-border);
+    border: 0;
+    cursor: ew-resize;
   }
   @media (max-width: 500px) {
     .timeline-tools {
