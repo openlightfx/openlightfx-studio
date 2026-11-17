@@ -102,14 +102,19 @@
   }
 
   onMount(() => {
-    const itemId = decodeURIComponent(location.hash.split('/')[2] ?? '');
-    void Promise.all([loadRooms(), fetchItem(itemId).catch(() => null)])
+    const routeId = decodeURIComponent(location.hash.split('/')[2] ?? '');
+    void Promise.all([loadRooms(), fetchItem(routeId).catch(() => null)])
       .then(async ([loadedRooms, movie]) => {
         rooms = loadedRooms;
         roomId = rooms[0]?.id ?? '';
-        // Item details are fetched by the route's known ID. If Emby's details
-        // endpoint is unavailable, the track/media APIs can still serve the page.
-        item = movie ?? { itemId, name: itemId, year: 0, runtimeMs: 0 };
+        if (!movie?.itemId) {
+          failed = 'Movie not found. It may have been removed from Emby.';
+          return;
+        }
+        // The route may be a numeric Emby id or an older guid. Later calls use the
+        // id the library list uses.
+        item = movie;
+        const itemId = movie.itemId;
         if (!item.runtimeMs) {
           try {
             const media = await fetchMediaInfo(itemId);

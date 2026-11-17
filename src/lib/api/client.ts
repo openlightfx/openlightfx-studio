@@ -263,14 +263,56 @@ function embyUserIdFromSession(): string | null {
   return null;
 }
 
+/** Emby guid, with or without hyphens. The library id is the numeric internal id instead. */
+function isItemGuid(value: string): boolean {
+  return (
+    /^[0-9a-f]{32}$/i.test(value) ||
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+  );
+}
+
+function movieFromRecord(raw: unknown, requestedId: string): LibraryItem | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const record = raw as Record<string, unknown>;
+  const type = typeof record.Type === 'string' ? record.Type : typeof record.type === 'string' ? record.type : '';
+  if (type && type !== 'Movie') return null;
+  const item = libraryItemFromApi(record);
+  if (!item.itemId) return null;
+  // A guid link is an older Emby id. The response carries the numeric id the library uses.
+  if (item.itemId === requestedId || isItemGuid(requestedId)) return item;
+  return null;
+}
+
+function movieFromBody(body: unknown, requestedId: string): LibraryItem | null {
+  if (Array.isArray(body)) return body.length === 1 ? movieFromRecord(body[0], requestedId) : null;
+  if (!body || typeof body !== 'object') return null;
+  const record = body as Record<string, unknown>;
+  const list = Array.isArray(record.Items) ? record.Items : Array.isArray(record.items) ? record.items : null;
+  if (list) return list.length === 1 ? movieFromRecord(list[0], requestedId) : null;
+  return movieFromRecord(record, requestedId);
+}
+
 export async function fetchItem(itemId: string): Promise<LibraryItem | null> {
-  const query = new URLSearchParams({ Fields: 'DateCreated,MediaSources,ProviderIds' });
+  if (!itemId) return null;
+  const fields = new URLSearchParams({ Fields: 'DateCreated,MediaSources,ProviderIds' });
+  const ids = new URLSearchParams({
+    Ids: itemId,
+    Fields: 'DateCreated,MediaSources,ProviderIds',
+    IncludeItemTypes: 'Movie',
+    Limit: '1',
+  });
   const userId = embyUserIdFromSession();
+  const encoded = encodeURIComponent(itemId);
   const paths = [
     ...(userId
-      ? [`/emby/Users/${encodeURIComponent(userId)}/Items/${encodeURIComponent(itemId)}?${query}`]
+      ? [
+          `/emby/Users/${encodeURIComponent(userId)}/Items/${encoded}?${fields}`,
+          `/emby/Users/${encodeURIComponent(userId)}/Items?${ids}`,
+        ]
       : []),
-    `/emby/Items/${encodeURIComponent(itemId)}?${query}`,
+    `/emby/Items/${encoded}?${fields}`,
+    `/emby/Items?${ids}`,
+    `/OpenLightFX/Studio/Items/${encoded}`,
   ];
   let lastError: Error | null = null;
   for (const path of paths) {
@@ -280,8 +322,8 @@ export async function fetchItem(itemId: string): Promise<LibraryItem | null> {
       lastError = new Error(`Item ${response.status}`);
       continue;
     }
-    const item = libraryItemFromApi(await response.json());
-    if (item.itemId === itemId) return item;
+    const item = movieFromBody(await response.json(), itemId);
+    if (item) return item;
     lastError = new Error('Emby returned details for a different movie');
   }
   if (lastError) throw lastError;
