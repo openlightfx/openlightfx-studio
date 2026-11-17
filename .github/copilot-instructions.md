@@ -28,7 +28,7 @@ Undo/redo uses the **command pattern**: every mutation is a `Command` with `exec
 - **Stores** (`src/lib/stores/*.svelte.ts`) — Class-based singletons using `$state()` runes. Central stores: `projectStore` (track data + commands), `timelineStore` (viewport/selection), `videoStore` (playback), `uiStore` (modals/prefs), `undoStore`, `toastStore`.
 - **Services** (`src/lib/services/`) — Pure functions for color math, interpolation, protobuf encoding/decoding, validation, safety analysis, keyboard shortcuts, and file I/O.
 - **Effects** (`src/lib/effects/`) — 13 lighting effect renderers implementing `IEffectRenderer.sample()`, registered in a `Map<EffectType, IEffectRenderer>` in `registry.ts`.
-- **Workers** (`src/lib/workers/`) — Web Workers for snapshot serialization and scene detection. Typed request/response messages via `postMessage`. Imported as `import Worker from './foo.worker?worker'`.
+- **Workers** (`src/lib/workers/`) — Web Worker for snapshot serialization. Typed request/response messages via `postMessage`. Imported as `import Worker from './foo.worker?worker'`.
 - **Types** (`src/lib/types/`) — All TypeScript interfaces. Core domain types in `track.ts`; effect types in `effects.ts`; project persistence in `project.ts`.
 - **Proto** (`proto/lightfx.proto`) — Protobuf v3 schema for the `.lightfx` binary track format. Compiled to `src/lib/proto/lightfx.{js,d.ts}` via `npm run proto:compile`. Never edit the generated files directly.
 

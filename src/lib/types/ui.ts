@@ -29,7 +29,6 @@ export type ModalType =
   | 'publish'
   | 'welcome'
   | 'keyboard-shortcuts'
-  | 'scene-detection'
   | 'channel-template'
   | 'channel-group'
   | 'confirm-delete'
