@@ -204,12 +204,53 @@ async function send(path: string, init: RequestInit = {}): Promise<Response> {
   });
 }
 
+function embyUserIdFromSession(): string | null {
+  if (typeof window === 'undefined') return null;
+  const apiClient = window as Window & {
+    ApiClient?: { getCurrentUserId?: () => string };
+  };
+  const currentUserId = apiClient.ApiClient?.getCurrentUserId?.();
+  if (currentUserId) return currentUserId;
+
+  try {
+    const token = authHeaders()['X-Emby-Token'];
+    if (!token) return null;
+    const credentials = JSON.parse(
+      window.localStorage.getItem('servercredentials3') ?? '{}'
+    ) as EmbyStoredCredentials;
+    for (const server of credentials.Servers ?? []) {
+      const user = server.Users?.find((candidate) => candidate.AccessToken === token);
+      if (user?.UserId) return user.UserId;
+    }
+  } catch {
+    // The item endpoint without an explicit user ID remains available as a fallback.
+  }
+  return null;
+}
+
 export async function fetchItem(itemId: string): Promise<LibraryItem | null> {
-  const query = new URLSearchParams({ fields: 'DateCreated,MediaSources,ProviderIds' });
-  const response = await send(`/emby/Items/${encodeURIComponent(itemId)}?${query}`);
-  if (response.status === 404) return null;
-  if (!response.ok) throw new Error(`Item ${response.status}`);
-  return libraryItemFromApi(await response.json());
+  const query = new URLSearchParams({ Fields: 'DateCreated,MediaSources,ProviderIds' });
+  const userId = embyUserIdFromSession();
+  const paths = [
+    ...(userId
+      ? [`/emby/Users/${encodeURIComponent(userId)}/Items/${encodeURIComponent(itemId)}?${query}`]
+      : []),
+    `/emby/Items/${encodeURIComponent(itemId)}?${query}`,
+  ];
+  let lastError: Error | null = null;
+  for (const path of paths) {
+    const response = await send(path);
+    if (response.status === 404) continue;
+    if (!response.ok) {
+      lastError = new Error(`Item ${response.status}`);
+      continue;
+    }
+    const item = libraryItemFromApi(await response.json());
+    if (item.itemId === itemId) return item;
+    lastError = new Error('Emby returned details for a different movie');
+  }
+  if (lastError) throw lastError;
+  return null;
 }
 
 export async function fetchItems(search = '', signal?: AbortSignal): Promise<LibraryItem[]> {

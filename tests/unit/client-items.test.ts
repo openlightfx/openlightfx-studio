@@ -1,7 +1,30 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { fetchItems } from '$lib/api/client';
+import { fetchItem, fetchItems } from '$lib/api/client';
 
 afterEach(() => vi.unstubAllGlobals());
+
+it('LIB-001 @unit fetches one Emby item by ID and maps its title', async () => {
+  vi.stubGlobal('location', { search: '?api_key=unit-test' });
+  const requests: string[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://studio.test');
+      requests.push(url.pathname);
+      if (url.pathname === '/OpenLightFX/Studio/Session')
+        return Response.json({ accessToken: 'unit-test' });
+      return Response.json({ Id: 'movie-42', Name: 'A Known Movie', ProductionYear: 2024 });
+    })
+  );
+
+  await expect(fetchItem('movie-42')).resolves.toMatchObject({
+    itemId: 'movie-42',
+    name: 'A Known Movie',
+    year: 2024,
+  });
+  expect(requests).toContain('/emby/Items/movie-42');
+  expect(requests).not.toContain('/OpenLightFX/Studio/Items');
+});
 
 it('LIB-001 @unit item listing follows every API page', async () => {
   vi.stubGlobal('location', { search: '' });

@@ -70,6 +70,7 @@ import {
   fetchBulbs,
   fetchFrame,
   fetchItems,
+  fetchItem,
   fetchMediaInfo,
   fetchProjectSidecar,
   ProjectSidecarLoadError,
@@ -177,6 +178,14 @@ export class StudioSession {
   canRedo = $state(false);
   playheadMs = $state(0);
   playing = $state(false);
+  screenTransport = $state<{
+    ready: boolean;
+    canSeek: boolean;
+    togglePlay(): void;
+    pause(): void;
+    seek(positionMs: number, final?: boolean): void;
+    flushSeek(): void;
+  } | null>(null);
   auditionRange = $state(emptyAuditionRange());
   private auditionLoop = new AuditionLoop();
   private loopSuspendedForNavigation = false;
@@ -281,6 +290,8 @@ export class StudioSession {
   }
 
   get playReason(): string {
+    if (this.screenTransport)
+      return this.screenTransport.ready ? '' : 'Waiting for room screen playback';
     return proxyPlayReason({
       hasItem: Boolean(this.item),
       blob: this.videoSrc.startsWith('blob:'),
@@ -293,6 +304,7 @@ export class StudioSession {
   }
 
   get canPlay(): boolean {
+    if (this.screenTransport) return this.screenTransport.ready;
     return (
       Boolean(this.videoSrc) &&
       this.videoReady &&
@@ -433,15 +445,16 @@ export class StudioSession {
     imported?: { fileName: string; bytes: Uint8Array },
     token = this.bootToken
   ): Promise<void> {
-    // The editor is opened with an item ID from the route; fetching the whole Emby
-    // library just to resolve its title/runtime is unnecessary. MediaInfo and the
-    // track API provide the editor data we need.
-    const item = this.items.find((candidate) => candidate.itemId === itemId) ?? {
-      itemId,
-      name: itemId,
-      year: 0,
-      runtimeMs: 0,
-    };
+    // Resolve only the routed movie, not the entire library. Keep editing available
+    // if Emby's details endpoint is unavailable.
+    const item = this.items.find((candidate) => candidate.itemId === itemId) ??
+      (await fetchItem(itemId).catch(() => null)) ?? {
+        itemId,
+        name: itemId,
+        year: 0,
+        runtimeMs: 0,
+      };
+    if (token !== this.bootToken) return;
     this.item = item;
     this.videoError = '';
     this.pendingSeekMs = null;
@@ -1056,6 +1069,7 @@ export class StudioSession {
   }
 
   get loopReason(): string {
+    if (this.screenTransport) return 'Loop is available with local preview only.';
     return rangeReason(this.auditionRange, this.durationMs());
   }
 
@@ -1084,6 +1098,10 @@ export class StudioSession {
   }
 
   togglePlay(): void {
+    if (this.screenTransport) {
+      this.screenTransport.togglePlay();
+      return;
+    }
     const video = this.video;
     if (!video || !this.canPlay) {
       this.status = this.playReason || 'Choose a movie';
@@ -1102,12 +1120,20 @@ export class StudioSession {
   }
 
   pause(): void {
+    if (this.screenTransport) {
+      this.screenTransport.pause();
+      return;
+    }
     this.auditionLoop.cancel();
     this.video?.pause();
     this.playing = false;
   }
 
   step(direction: 1 | -1): void {
+    if (this.screenTransport) {
+      this.status = 'Frame stepping is available with local preview only.';
+      return;
+    }
     const fps = this.media?.proxy.fps;
     this.seek(adjacentProxyFrameTime(this.playheadMs, direction, fps ?? FPS, this.durationMs()));
   }
@@ -1154,6 +1180,32 @@ export class StudioSession {
   }
 
   seek(ms: number, fromLoop = false): void {
+    if (this.screenTransport) {
+      this.screenTransport.seek(Math.min(Math.max(0, ms), this.durationMs() || ms), true);
+      return;
+    }
+    this.seekLocal(ms, fromLoop);
+  }
+
+  applyScreenPlayback(positionMs: number, paused: boolean): void {
+    if (!this.screenTransport) return;
+    this.video?.pause();
+    const position = Math.min(Math.max(0, positionMs), this.durationMs() || positionMs);
+    // Keep the proxy silent and paused; never let its native clock drive the room.
+    if (this.video && Math.abs(this.video.currentTime * 1000 - position) > (paused ? 30 : 250))
+      this.seekLocal(position);
+    this.playheadMs = position;
+    this.playing = !paused;
+    if (
+      this.playing &&
+      this.followPlayhead &&
+      !this.manualFollowSuspended &&
+      position * this.pxPerMs - this.scrollX >= this.laneWidth * 0.75
+    )
+      this.revealNavigationPosition(position);
+  }
+
+  private seekLocal(ms: number, fromLoop = false): void {
     if (!fromLoop) {
       this.loopSuspendedForNavigation = true;
       this.auditionLoop.cancel();
@@ -1192,6 +1244,10 @@ export class StudioSession {
   }
 
   scrub(ms: number, final = false): void {
+    if (this.screenTransport) {
+      this.screenTransport.seek(Math.min(Math.max(0, ms), this.durationMs() || ms), final);
+      return;
+    }
     this.loopSuspendedForNavigation = true;
     this.auditionLoop.cancel();
     const time = Math.min(Math.max(0, ms), this.durationMs() || ms);
@@ -1202,6 +1258,10 @@ export class StudioSession {
   }
 
   flushSeek(): void {
+    if (this.screenTransport) {
+      this.screenTransport.flushSeek();
+      return;
+    }
     if (this.pendingSeekMs != null) this.seekScheduler.request(this.pendingSeekMs, true);
   }
 
@@ -1217,7 +1277,7 @@ export class StudioSession {
     this.onVideoMetadata();
     if (this.resumeProxy) {
       this.resumeProxy = false;
-      void this.video?.play();
+      if (!this.screenTransport) void this.video?.play();
     }
   }
 
@@ -1245,7 +1305,7 @@ export class StudioSession {
   }
 
   onVideoTimeUpdate(): void {
-    if (!this.video) return;
+    if (this.screenTransport || !this.video) return;
     this.playing = !this.video.paused;
     const nativeTime = this.video.currentTime * 1000;
     if (this.loopSuspendedForNavigation && nativeTime < (this.auditionRange.endMs ?? 0))
@@ -1264,7 +1324,7 @@ export class StudioSession {
   }
 
   syncFromVideo(): void {
-    if (!this.video || this.video.paused) return;
+    if (this.screenTransport || !this.video || this.video.paused) return;
     this.onVideoTimeUpdate();
     if (this.pendingSeekMs != null || !this.followPlayhead || this.manualFollowSuspended) return;
     const position = this.playheadMs * this.pxPerMs;
@@ -1284,7 +1344,7 @@ export class StudioSession {
     // A growing file can stall. The poll reports a real failure, which replaces this.
     if (this.media?.proxy.state === 'building') return;
     this.videoError = 'The edit proxy failed to play';
-    this.playing = false;
+    if (!this.screenTransport) this.playing = false;
   }
 
   async retryProxy(): Promise<void> {
