@@ -275,10 +275,11 @@
   {:else}
     <div class="setup">
       <p class="intro">
-        Choose the part of the picture that should drive each track channel. On each scene
-        transition, the track is prefilled with the dominant color in that zone. Lightning and
-        sirens are written on the channels you pick. Drag a box on the frame; suggested zones are
-        shown for the current layout.
+        The preview is taken around 2:10 into the movie (near the end for shorter movies). Choose
+        the part of the picture that should drive each track channel. On each scene transition, the
+        track is prefilled with the dominant color in that zone. Lightning and sirens are written on
+        the channels you pick. Drag a box on the frame; suggested zones are shown for the current
+        layout.
       </p>
       <div class="channel-list" role="group" aria-label="Track channels">
         {#each channels as channel (channel.id)}

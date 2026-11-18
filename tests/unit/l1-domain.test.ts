@@ -517,6 +517,7 @@ requirement('KEYB-001 @unit the registry is the safe L1 map', () => {
     'range-start',
     'range-end',
     'add-marker',
+    'effect-picker',
     'nudge-earlier',
     'nudge-later',
     'nudge-earlier-ten',

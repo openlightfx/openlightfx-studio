@@ -274,7 +274,12 @@ function isItemGuid(value: string): boolean {
 function movieFromRecord(raw: unknown, requestedId: string): LibraryItem | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const record = raw as Record<string, unknown>;
-  const type = typeof record.Type === 'string' ? record.Type : typeof record.type === 'string' ? record.type : '';
+  const type =
+    typeof record.Type === 'string'
+      ? record.Type
+      : typeof record.type === 'string'
+        ? record.type
+        : '';
   if (type && type !== 'Movie') return null;
   const item = libraryItemFromApi(record);
   if (!item.itemId) return null;
@@ -287,7 +292,11 @@ function movieFromBody(body: unknown, requestedId: string): LibraryItem | null {
   if (Array.isArray(body)) return body.length === 1 ? movieFromRecord(body[0], requestedId) : null;
   if (!body || typeof body !== 'object') return null;
   const record = body as Record<string, unknown>;
-  const list = Array.isArray(record.Items) ? record.Items : Array.isArray(record.items) ? record.items : null;
+  const list = Array.isArray(record.Items)
+    ? record.Items
+    : Array.isArray(record.items)
+      ? record.items
+      : null;
   if (list) return list.length === 1 ? movieFromRecord(list[0], requestedId) : null;
   return movieFromRecord(record, requestedId);
 }
