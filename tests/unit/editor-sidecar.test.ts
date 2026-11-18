@@ -46,6 +46,21 @@ describe('ED2-027 sidecar contract', () => {
     expect(serialized).not.toHaveProperty('api_key');
   });
 
+  it('rebinds a stale movie ID only when explicitly enabled and the track ID matches', () => {
+    const recovered = parseProjectSidecar({ ...sidecar, itemId: 'old-emby-item' }, identity, {
+      allowItemIdRebind: true,
+    });
+    expect(recovered.itemId).toBe(identity.itemId);
+    expect(recovered.trackId).toBe(identity.trackId);
+    expect(() =>
+      parseProjectSidecar(
+        { ...sidecar, itemId: 'old-emby-item', trackId: 'different-track' },
+        identity,
+        { allowItemIdRebind: true }
+      )
+    ).toThrow(/identity/);
+  });
+
   it('rejects malformed, unsupported and cross-track sidecars', () => {
     expect(() => parseProjectSidecar({ ...sidecar, version: 2 }, identity)).toThrow(
       InvalidProjectSidecarError

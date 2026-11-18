@@ -36,6 +36,7 @@
   --effect-border: #6fa69c;
   --timeline-ruler-bg: #202020;
   --timeline-lane-bg: #242424;
+  --timeline-unavailable-bg: var(--video-bg);
   --timeline-lane-alt-bg: #292929;
   --timeline-grid-line: rgba(255, 255, 255, 0.06);
   --timeline-playhead: #f2b66e;

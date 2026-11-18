@@ -291,6 +291,10 @@ export async function installBackend(page: Page, options: BrowserBackendOptions 
       json: state.items.filter((item) => item.name.toLowerCase().includes(search)),
     });
   });
+  await page.route('**/OpenLightFX/Studio/Items/42', (route) => {
+    const item = state.items.find((candidate) => candidate.itemId === '42');
+    return item ? route.fulfill({ json: item }) : route.fulfill({ status: 404 });
+  });
   await page.route('**/OpenLightFX/Studio/Items/42/MediaInfo', (route) =>
     route.fulfill({ json: state.media })
   );

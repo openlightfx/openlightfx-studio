@@ -222,7 +222,10 @@ export async function fetchProjectSidecar(
     );
   }
   try {
-    return parseProjectSidecar(body, { itemId, trackId });
+    // A movie can receive a new Emby item ID after a library rescan or restore.
+    // The sidecar is stored beside this movie's track, so preserve it when its
+    // track ID matches and rebind its movie ID to the current item on load.
+    return parseProjectSidecar(body, { itemId, trackId }, { allowItemIdRebind: true });
   } catch (error) {
     throw new ProjectSidecarLoadError(
       (error as Error).message || 'Project sidecar is invalid',
@@ -379,6 +382,23 @@ export async function fetchTracks(itemId: string): Promise<TrackSummary[]> {
   const response = await send(`/OpenLightFX/Studio/Tracks?itemId=${encodeURIComponent(itemId)}`);
   if (!response.ok) throw new Error(`Tracks ${response.status}`);
   return response.json();
+}
+
+export async function deleteTrack(trackId: string, itemId: string): Promise<void> {
+  const response = await send(
+    `/OpenLightFX/Studio/Tracks/${encodeURIComponent(trackId)}?itemId=${encodeURIComponent(itemId)}`,
+    { method: 'DELETE' }
+  );
+  if (response.ok) return;
+
+  let message = `Delete track failed (${response.status})`;
+  try {
+    const body = (await response.json()) as { message?: string; error?: string };
+    message = body.message || body.error || message;
+  } catch {
+    // Keep the status message for non-JSON errors.
+  }
+  throw new Error(message);
 }
 
 export async function setActiveTrack(

@@ -1,7 +1,9 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import StudioHeader from '$lib/components/layout/StudioHeader.svelte';
+  import { Button, Modal } from '$lib/components/shared/index.js';
   import {
+    deleteTrack as deleteTrackApi,
     fetchActiveTrackPath,
     fetchItem,
     fetchMediaInfo,
@@ -40,6 +42,9 @@
   let layout = $state('LAYOUT_2_0');
   let roomId = $state('');
   let opening = $state(false);
+  let deletingTrackId = $state('');
+  let pendingDeleteTrack = $state<TrackSummary | null>(null);
+  let deleteError = $state('');
   let fileError = $state('');
   let fileInput = $state<HTMLInputElement | undefined>();
   let titleInput = $state<HTMLInputElement | undefined>();
@@ -185,6 +190,36 @@
     location.hash = `#/edit/${encodeURIComponent(item!.itemId)}/${encodeURIComponent(track.trackId)}`;
   }
 
+  function requestDeleteTrack(track: TrackSummary) {
+    deleteError = '';
+    pendingDeleteTrack = track;
+  }
+
+  function cancelDeleteTrack() {
+    if (deletingTrackId) return;
+    pendingDeleteTrack = null;
+    deleteError = '';
+  }
+
+  async function removeTrack() {
+    const track = pendingDeleteTrack;
+    if (!item || !track || deletingTrackId) return;
+    deletingTrackId = track.trackId;
+    deleteError = '';
+    try {
+      await deleteTrackApi(track.trackId, item.itemId);
+      tracks = tracks.filter((candidate) => candidate.trackId !== track.trackId);
+      const remainingDetails = { ...trackDetails };
+      delete remainingDetails[track.trackId];
+      trackDetails = remainingDetails;
+      pendingDeleteTrack = null;
+    } catch (error) {
+      deleteError = (error as Error).message || 'Track could not be deleted.';
+    } finally {
+      deletingTrackId = '';
+    }
+  }
+
   function createTrack() {
     if (!item || !item.runtimeMs || opening) return;
     opening = true;
@@ -282,11 +317,20 @@
                     : 'Not saved'}
                 </p>
               </div>
-              {#if detail?.layout}<button class="primary" onclick={() => openTrack(track)}
-                  >Open</button
+              <div class="track-actions">
+                {#if detail?.layout}
+                  <button class="primary" onclick={() => openTrack(track)}>Open</button>
+                {:else if detail}<span class="invalid" role="status"
+                    >Can't open: {detail.author}</span
+                  >{/if}
+                <button
+                  class="danger"
+                  aria-label={`Delete ${track.title || 'Untitled track'}`}
+                  disabled={Boolean(deletingTrackId)}
+                  onclick={() => requestDeleteTrack(track)}
+                  >{deletingTrackId === track.trackId ? 'Deleting…' : 'Delete'}</button
                 >
-              {:else if detail}<span class="invalid" role="status">Can't open: {detail.author}</span
-                >{/if}
+              </div>
             </article>
           {/each}
           <div class="other">
@@ -371,6 +415,41 @@
       </div>
     {/if}
   </main>
+  <Modal
+    open={pendingDeleteTrack != null}
+    title="Delete track?"
+    onclose={cancelDeleteTrack}
+    size="sm"
+    dismissible={!deletingTrackId}
+  >
+    {#if pendingDeleteTrack}
+      <div class="flex flex-col gap-3">
+        <p class="text-sm text-text-base">
+          Permanently delete <strong>{pendingDeleteTrack.title || 'Untitled track'}</strong> and its
+          Studio project data from {item?.name}?
+        </p>
+        {#if pendingDeleteTrack.active}
+          <p class="text-sm text-warning">
+            This track is selected for playback in Emby and will be unselected.
+          </p>
+        {/if}
+        <p class="text-xs text-textMuted">The movie and its edit proxy will not be deleted.</p>
+        {#if deleteError}<p class="error" role="alert">{deleteError}</p>{/if}
+      </div>
+    {/if}
+    {#snippet footer()}
+      <Button variant="ghost" onclick={cancelDeleteTrack} disabled={Boolean(deletingTrackId)}
+        >Cancel</Button
+      >
+      <Button
+        variant="danger"
+        onclick={() => void removeTrack()}
+        disabled={Boolean(deletingTrackId)}
+      >
+        {deletingTrackId ? 'Deleting…' : 'Delete track'}
+      </Button>
+    {/snippet}
+  </Modal>
 </div>
 
 <style>
@@ -442,6 +521,12 @@
   .track-row p {
     font-size: 12px;
     margin: 5px 0 0;
+  }
+  .track-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: var(--space-2);
   }
   .badge {
     display: inline-block;

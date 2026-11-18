@@ -104,6 +104,12 @@
   const duration = $derived(Math.max(session.durationMs(), 1));
   const sceneCutLines = $derived(sceneCutLineTimesMs(session.sceneCuts?.cuts ?? [], duration));
   const timelineWidth = $derived(duration * session.pxPerMs);
+  const proxyProcessedMs = $derived(
+    session.media?.proxy.state === 'ready'
+      ? duration
+      : Math.min(duration, Math.max(0, session.media?.proxy.encodedThroughMs ?? 0))
+  );
+  const proxyProcessedWidth = $derived(proxyProcessedMs * session.pxPerMs);
   $effect(() => {
     const container = timelineContainer;
     if (!container) return;
@@ -746,13 +752,14 @@
   >
     <div
       class="ruler"
-      style={`width:${timelineWidth}px;margin-left:${headerWidth}px`}
+      style={`--proxy-horizon:${proxyProcessedWidth}px;width:${timelineWidth}px;margin-left:${headerWidth}px`}
       bind:this={ruler}
       role="slider"
       aria-label="Timeline ruler"
       aria-valuemin="0"
       aria-valuemax={duration}
       aria-valuenow={Math.round(session.playheadMs)}
+      aria-valuetext={`${format(Math.round(session.playheadMs))}; proxy processed through ${format(proxyProcessedMs)}`}
       tabindex="0"
       onpointerdown={(event) => {
         beginPan(event);
@@ -902,6 +909,7 @@
         </div>
         <div
           class="lane"
+          style={`--proxy-horizon:${proxyProcessedWidth}px`}
           role="presentation"
           ondragover={acceptEffectDrag}
           ondrop={(event) => dropEffect(event, channel.id)}
@@ -925,6 +933,7 @@
               ...channel.defaultColor,
               brightness: channel.defaultBrightness,
             })}
+            processedThroughMs={proxyProcessedMs}
             choose={(event, id) => chooseKeyframe(event, id)}
             begin={beginDiamond}
             beginBlank={(event) => beginLane(event, channel.id)}
@@ -1203,7 +1212,11 @@
     position: relative;
     align-items: center;
     border-bottom: 1px solid var(--border-strong);
-    background: var(--timeline-ruler-bg);
+    background: linear-gradient(
+      to right,
+      var(--timeline-ruler-bg) 0 var(--proxy-horizon),
+      var(--timeline-unavailable-bg) var(--proxy-horizon) 100%
+    );
     cursor: ew-resize;
     touch-action: none;
   }
@@ -1278,7 +1291,11 @@
   .lane {
     touch-action: none;
     position: relative;
-    background: var(--timeline-lane-bg);
+    background: linear-gradient(
+      to right,
+      var(--timeline-lane-bg) 0 var(--proxy-horizon),
+      var(--timeline-unavailable-bg) var(--proxy-horizon) 100%
+    );
     cursor: crosshair;
   }
   .lane-empty {

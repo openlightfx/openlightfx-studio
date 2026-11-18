@@ -100,8 +100,10 @@ for (const screen of ['bulbs', 'rooms', 'library', 'movie/42']) {
         await expect(page.getByLabel('Room name', { exact: true })).toHaveValue('Living Room');
       if (screen === 'library')
         await expect(page.getByRole('link', { name: 'The Quiet Coast, 2020' })).toBeVisible();
-      if (screen === 'movie/42')
+      if (screen === 'movie/42') {
         await expect(page.getByRole('button', { name: 'Open', exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Delete Proxy Fixture' })).toBeVisible();
+      }
       await expect(page.locator('nav [aria-current="page"]')).toHaveCount(1);
       await assertNoHorizontalOverflow(page);
       await expect(page).toHaveScreenshot(`foundation-${screen.replace('/', '-')}.png`, {
@@ -192,8 +194,10 @@ for (const screen of ['bulbs', 'rooms', 'library', 'movie/42', 'edit/42/proxy-fi
         await expect(page.getByRole('heading', { name: 'Your bulbs' })).toBeVisible();
       if (screen === 'library')
         await expect(page.getByRole('link', { name: 'The Quiet Coast, 2020' })).toBeVisible();
-      if (screen === 'movie/42')
+      if (screen === 'movie/42') {
         await expect(page.getByRole('button', { name: 'Open', exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Delete Proxy Fixture' })).toBeInViewport();
+      }
     }
     await assertNoHorizontalOverflow(page);
     await expect(page).toHaveScreenshot(`narrow-${screen.replaceAll('/', '-')}.png`, {

@@ -105,13 +105,19 @@ export class InvalidProjectSidecarError extends Error {
 /** Validate the plugin's v1 contract while retaining its allowed opaque top-level fields. */
 export function parseProjectSidecar(
   value: unknown,
-  identity: { itemId: string; trackId: string }
+  identity: { itemId: string; trackId: string },
+  options: { allowItemIdRebind?: boolean } = {}
 ): ProjectSidecar {
   if (!value || typeof value !== 'object' || Array.isArray(value))
     throw new InvalidProjectSidecarError('Project sidecar must be a JSON object');
   const input = value as Record<string, unknown>;
   if (input.version !== 1) throw new InvalidProjectSidecarError('Project sidecar version is not 1');
-  if (input.itemId !== identity.itemId || input.trackId !== identity.trackId)
+  if (input.trackId !== identity.trackId)
+    throw new InvalidProjectSidecarError('Project sidecar identity does not match this track');
+  if (
+    input.itemId !== identity.itemId &&
+    (!options.allowItemIdRebind || typeof input.itemId !== 'string' || input.itemId.length === 0)
+  )
     throw new InvalidProjectSidecarError('Project sidecar identity does not match this track');
   const sceneMarkers = input.sceneMarkers ?? [];
   const channelGroups = input.channelGroups ?? [];

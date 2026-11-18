@@ -27,9 +27,14 @@ async function openMovie(page: Page, tracks: unknown[] = []) {
   await page.route('**/OpenLightFX/Studio/Rooms', (route) => route.fulfill({ json: [room] }));
   await page.route('**/OpenLightFX/Studio/Items**', (route) => route.fulfill({ json: movies }));
   await page.route('**/OpenLightFX/Studio/Tracks?*', (route) => route.fulfill({ json: tracks }));
-  await page.route('**/OpenLightFX/Studio/Tracks/*', (route) =>
-    route.fulfill({ body: trackBytes, contentType: 'application/octet-stream' })
-  );
+  await page.route('**/OpenLightFX/Studio/Tracks/*', (route) => {
+    if (route.request().method() === 'DELETE') {
+      const trackId = new URL(route.request().url()).pathname.split('/').at(-1);
+      tracks = tracks.filter((track) => (track as { trackId?: string }).trackId !== trackId);
+      return route.fulfill({ status: 204 });
+    }
+    return route.fulfill({ body: trackBytes, contentType: 'application/octet-stream' });
+  });
   await page.route('**/OpenLightFX/Tracks/ByItem?*', (route) =>
     route.fulfill({ json: { globalSelectedTrack: '/movies/Clip Short/lightfx/track-a.lightfx' } })
   );
@@ -56,6 +61,15 @@ requirement(
     await expect(page.locator('.track-row').first()).toContainText('2.0');
     await expect(page.locator('.track-row').first()).toContainText('studio');
     await expect(page.locator('.track-row').first()).not.toContainText('Not saved');
+    await expect(
+      page.locator('.track-row').first().getByRole('button', { name: 'Open' })
+    ).toBeVisible();
+    await expect(
+      page.locator('.track-row').first().getByRole('button', { name: 'Delete First track' })
+    ).toBeVisible();
+    await expect(page.locator('.panel.tracks')).toHaveScreenshot('movie-track-actions.png', {
+      animations: 'disabled',
+    });
   }
 );
 
@@ -76,6 +90,37 @@ requirement(
     await expect(
       page.locator('.track-row').filter({ hasText: 'First track' }).locator('.badge')
     ).toHaveText('Plays in Emby');
+  }
+);
+
+requirement(
+  'TRACK-001 @browser deleting a track confirms and removes its row after the server succeeds',
+  async ({ page }) => {
+    await openMovie(page, [
+      { trackId: 'track-a', title: 'First track', itemId: 'm1', active: true },
+    ]);
+    let deleteMethod = '';
+    let deleteUrl = '';
+    await page.route('**/OpenLightFX/Studio/Tracks/track-a?*', async (route) => {
+      if (route.request().method() !== 'DELETE') return route.fallback();
+      deleteMethod = route.request().method();
+      deleteUrl = route.request().url();
+      return route.fulfill({ status: 204 });
+    });
+
+    await page.getByRole('button', { name: 'Delete First track' }).click();
+    await expect(page.getByRole('dialog')).toContainText('selected for playback in Emby');
+    await expect(page.getByRole('dialog')).toContainText('edit proxy will not be deleted');
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(page.locator('.track-row')).toHaveCount(1);
+
+    await page.getByRole('button', { name: 'Delete First track' }).click();
+    await page.getByRole('button', { name: 'Delete track', exact: true }).click();
+
+    await expect(page.locator('.track-row')).toHaveCount(0);
+    await expect(page.getByText('No tracks for this movie yet.')).toBeVisible();
+    expect(deleteMethod).toBe('DELETE');
+    expect(deleteUrl).toContain('/Tracks/track-a?itemId=m1');
   }
 );
 

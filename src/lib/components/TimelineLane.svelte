@@ -7,19 +7,31 @@
   } from '$lib/domain';
   import type { Keyframe, LanePaintPoint } from '$lib/domain';
   import { createChannelSampler } from '$lib/domain/sample';
-  let { frames, scale, scroll, width, selected, label, defaultRgb, choose, begin, beginBlank } =
-    $props<{
-      frames: Keyframe[];
-      scale: number;
-      scroll: number;
-      width: number;
-      selected: string[];
-      label: string;
-      defaultRgb: string;
-      choose: (event: MouseEvent | KeyboardEvent, id: string) => void;
-      begin: (event: PointerEvent, id: string) => void;
-      beginBlank: (event: PointerEvent) => void;
-    }>();
+  let {
+    frames,
+    scale,
+    scroll,
+    width,
+    selected,
+    label,
+    defaultRgb,
+    processedThroughMs,
+    choose,
+    begin,
+    beginBlank,
+  } = $props<{
+    frames: Keyframe[];
+    scale: number;
+    scroll: number;
+    width: number;
+    selected: string[];
+    label: string;
+    defaultRgb: string;
+    processedThroughMs: number;
+    choose: (event: MouseEvent | KeyboardEvent, id: string) => void;
+    begin: (event: PointerEvent, id: string) => void;
+    beginBlank: (event: PointerEvent) => void;
+  }>();
   let canvas = $state<HTMLCanvasElement>();
   // Cache scalar paint data when authoring changes, not on every zoom/playback frame.
   const points: LanePaintPoint[] = $derived(projectLanePoints(frames));
@@ -47,6 +59,7 @@
       selection = selectedIds;
     const start = scroll,
       viewWidth = Math.max(1, width),
+      processedWidth = Math.max(0, Math.min(viewWidth, processedThroughMs * scale - start)),
       ratio = Math.min(devicePixelRatio || 1, 2);
     const node = canvas;
     const context = node?.getContext('2d');
@@ -62,7 +75,7 @@
     let previousColor = '';
     for (let pixel = 0; pixel <= Math.ceil(viewWidth); pixel++) {
       const color =
-        pixel < viewWidth ? `rgb(${displayedRgb(sample((start + pixel) / scale))})` : '';
+        pixel < processedWidth ? `rgb(${displayedRgb(sample((start + pixel) / scale))})` : '';
       if (color !== previousColor) {
         if (previousColor) {
           context.fillStyle = previousColor;

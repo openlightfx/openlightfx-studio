@@ -29,7 +29,12 @@ const mediaInfo = {
   },
 };
 
-async function openEditor(page, rooms: unknown[] = [], bulbs: unknown[] = []) {
+async function openEditor(
+  page,
+  rooms: unknown[] = [],
+  bulbs: unknown[] = [],
+  media: typeof mediaInfo = mediaInfo
+) {
   await page.route('**/OpenLightFX/Studio/Session', (route) =>
     route.fulfill({ json: { accessToken: 'browser-test' } })
   );
@@ -38,8 +43,9 @@ async function openEditor(page, rooms: unknown[] = [], bulbs: unknown[] = []) {
   );
   await page.route('**/OpenLightFX/Studio/Bulbs', (route) => route.fulfill({ json: bulbs }));
   await page.route('**/OpenLightFX/Studio/Items?*', (route) => route.fulfill({ json: [movie] }));
+  await page.route('**/OpenLightFX/Studio/Items/m1', (route) => route.fulfill({ json: movie }));
   await page.route('**/OpenLightFX/Studio/Items/m1/MediaInfo', (route) =>
-    route.fulfill({ json: mediaInfo })
+    route.fulfill({ json: media })
   );
   await page.route('**/OpenLightFX/Studio/Tracks?*', (route) => route.fulfill({ json: [] }));
   await page.route('**/OpenLightFX/Studio/Rooms', (route) => route.fulfill({ json: rooms }));
@@ -339,13 +345,26 @@ requirement(
 );
 
 requirement(
-  'EDIT-001 @browser the timeline ruler is the only time slider and moves the playhead',
+  'EDIT-001 @browser the timeline ruler is the only time slider, shows proxy progress and moves the playhead',
   async ({ page }) => {
-    await openEditor(page);
+    const buildingMedia = structuredClone(mediaInfo);
+    buildingMedia.proxy.state = 'building';
+    buildingMedia.proxy.encodedThroughMs = 5000;
+    await openEditor(page, [], [], buildingMedia);
     const ruler = page.getByRole('slider', { name: 'Timeline ruler' });
     await expect(page.getByRole('slider', { name: 'Timeline ruler' })).toHaveCount(1);
     await expect(page.locator('[data-minimap]')).toHaveCount(0);
     await expect(page.locator('video')).not.toHaveAttribute('controls', '');
+    const horizon = page.locator('.ruler');
+    const processedWidth = async () =>
+      Number.parseFloat(
+        await horizon.evaluate((node) => getComputedStyle(node).getPropertyValue('--proxy-horizon'))
+      );
+    await expect.poll(processedWidth).toBeGreaterThan(0);
+    await expect(page.locator('.timeline')).toHaveScreenshot('timeline-proxy-half-processed.png');
+    const before = await processedWidth();
+    buildingMedia.proxy.encodedThroughMs = 7500;
+    await expect.poll(processedWidth).toBeGreaterThan(before);
     const box = await ruler.boundingBox();
     expect(box).toBeTruthy();
     await page.mouse.click(box!.x + box!.width * 0.25, box!.y + box!.height / 2);
