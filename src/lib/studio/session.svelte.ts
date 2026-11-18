@@ -1054,6 +1054,7 @@ export class StudioSession {
       let job: SceneCutJob | null = await startSceneCutDetection(itemId, sceneCutThreshold);
       while (token === this.sceneCutToken && job?.state === 'processing') {
         this.sceneCutProgress = job.progress;
+        await this.refreshSceneCutSnapshot(itemId, token);
         await new Promise((resolve) => setTimeout(resolve, 400));
         if (token !== this.sceneCutToken) return;
         job = await fetchSceneCutJob(job.jobId);
@@ -1115,6 +1116,16 @@ export class StudioSession {
     }
   }
 
+  private async refreshSceneCutSnapshot(itemId: string, token: number): Promise<void> {
+    try {
+      const remote = await fetchSceneCuts(itemId);
+      if (token === this.sceneCutToken)
+        this.rememberSceneCuts(itemId, mergeSceneCuts(this.sceneCuts, remote));
+    } catch {
+      // Keep the latest partial cut list if the document is temporarily unavailable.
+    }
+  }
+
   private async pollSceneCutDocument(itemId: string, token: number): Promise<void> {
     const started = Date.now();
     while (token === this.sceneCutToken && Date.now() - started < 15 * 60_000) {
@@ -1134,9 +1145,15 @@ export class StudioSession {
 
   private rememberSceneCuts(itemId: string, next: SceneCuts | null): void {
     if (next && next.itemId !== itemId) return;
+    const previous = this.sceneCuts;
     this.sceneCuts = next;
+    const changed =
+      previous?.status !== next?.status ||
+      previous?.updatedAt !== next?.updatedAt ||
+      previous?.cuts.length !== next?.cuts.length ||
+      previous?.cuts.some((cut, index) => cut !== next?.cuts[index]);
     const storage = sceneCutStorage();
-    if (next && storage) writeSceneCutCache(storage, next);
+    if (changed && next && storage) writeSceneCutCache(storage, next);
   }
 
   navigateMarker(direction: -1 | 1): void {

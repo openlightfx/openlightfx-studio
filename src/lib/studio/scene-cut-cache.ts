@@ -68,11 +68,8 @@ export function mergeSceneCuts(
       return remote;
     return local;
   }
-  if (
-    (remote.status === 'running' || remote.status === 'stale') &&
-    remote.cuts.length === 0 &&
-    local.cuts.length > 0
-  )
+  if (remote.status === 'running') return remote;
+  if (remote.status === 'stale' && remote.cuts.length === 0 && local.cuts.length > 0)
     return { ...local, status: remote.status };
   return remote;
 }

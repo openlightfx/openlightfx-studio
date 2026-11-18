@@ -38,6 +38,9 @@ async function openEditor(page: Page) {
   await page.route('**/OpenLightFX/Studio/Session', (route) =>
     route.fulfill({ json: { accessToken: 'browser-test' } })
   );
+  await page.route('**/OpenLightFX/Studio/Items/*/SourceWorkspace', (route) =>
+    route.fulfill({ json: { required: false, state: 'ready', progressPercent: 100 } })
+  );
   await page.route('**/OpenLightFX/Settings', (route) =>
     route.fulfill({ json: { photosensitivityMode: false } })
   );
@@ -77,8 +80,9 @@ test('scene cuts draw on the timeline and previous/next scene seek the playhead'
   await expect(page.getByRole('button', { name: 'Detect scenes' })).toHaveCount(0);
 });
 
-test('a movie with no cuts can start detection without leaving the editor', async ({ page }) => {
+test('scene markers appear incrementally while detection is running', async ({ page }) => {
   let started = false;
+  let jobPolls = 0;
   await page.route('**/OpenLightFX/Studio/Items/m1/SceneCuts', async (route) => {
     if (route.request().method() === 'POST') {
       started = true;
@@ -86,33 +90,34 @@ test('a movie with no cuts can start detection without leaving the editor', asyn
         json: {
           jobId: 'job-1',
           itemId: 'm1',
-          state: 'done',
+          state: 'processing',
           error: '',
-          progress: 1,
-          throughMs: 10_000,
+          progress: 0.1,
+          throughMs: 1_000,
         },
       });
     }
-    return route.fulfill({
-      json: started ? cuts : { ...cuts, status: 'none', cuts: [] },
-    });
+    if (!started) return route.fulfill({ json: { ...cuts, status: 'none', cuts: [] } });
+    if (jobPolls > 1) return route.fulfill({ json: cuts });
+    return route.fulfill({ json: { ...cuts, status: 'running', cuts: [2] } });
   });
-  await page.route('**/OpenLightFX/Studio/SceneCuts/job-1', (route) =>
-    route.fulfill({
+  await page.route('**/OpenLightFX/Studio/SceneCuts/job-1', (route) => {
+    jobPolls++;
+    return route.fulfill({
       json: {
         jobId: 'job-1',
         itemId: 'm1',
-        state: 'done',
+        state: jobPolls > 1 ? 'done' : 'processing',
         error: '',
-        progress: 1,
-        throughMs: 10_000,
+        progress: jobPolls > 1 ? 1 : 0.5,
+        throughMs: jobPolls > 1 ? 10_000 : 5_000,
       },
-    })
-  );
+    });
+  });
   await openEditor(page);
   await expect(page.getByRole('button', { name: 'Detect scenes' })).toBeEnabled();
-  await expect(page.getByRole('slider', { name: 'Timeline ruler' })).toBeVisible();
   await page.getByRole('button', { name: 'Detect scenes' }).click();
+  await expect(page.locator('.scene-cut')).toHaveCount(1);
   await expect(page.locator('.scene-cut')).toHaveCount(2);
 });
 

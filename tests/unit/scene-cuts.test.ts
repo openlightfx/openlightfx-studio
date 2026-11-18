@@ -75,7 +75,7 @@ describe('scene cut cache', () => {
     expect(readSceneCutCache(cache, 'movie-42')).toBeNull();
   });
 
-  it('uses a newer ready copy and keeps the cuts a running or stale server still returns', () => {
+  it('uses a newer ready copy and prefers the server snapshot while running or stale', () => {
     const newer = { ...ready, cuts: [2], updatedAt: '2026-11-17T19:00:00.0000000Z' };
     expect(mergeSceneCuts(ready, newer)?.cuts).toEqual([2]);
     const stale = {
@@ -88,8 +88,8 @@ describe('scene cut cache', () => {
     const running = { ...ready, status: 'running' as const, cuts: [1, 5, 9] };
     expect(mergeSceneCuts({ ...ready, cuts: [1] }, running)).toEqual(running);
     expect(mergeSceneCuts(ready, { ...running, cuts: [] })).toEqual({
-      ...ready,
-      status: 'running',
+      ...running,
+      cuts: [],
     });
     const older = { ...ready, cuts: [4], updatedAt: '2026-11-17T17:00:00.000Z' };
     expect(mergeSceneCuts(ready, older)?.cuts).toEqual(ready.cuts);
