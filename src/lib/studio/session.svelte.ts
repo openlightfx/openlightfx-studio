@@ -506,7 +506,7 @@ export class StudioSession {
     const tracks = await fetchTracks(itemId);
     if (token !== this.bootToken) return;
     this.trackChoices = tracks;
-    if (!imported && (newTrack != null || (!requestedTrackId && tracks.length === 0))) {
+    if (!imported) {
       await this.prepareSourceWorkspace(itemId, token);
       if (token !== this.bootToken) return;
     }
@@ -518,6 +518,7 @@ export class StudioSession {
     }
     if (token !== this.bootToken) return;
     this.media = info;
+    this.beginSceneCuts(itemId);
     const resolved = resolveDuration(item.runtimeMs, info?.runtimeMs ?? null);
     this.movieMs = resolved.durationMs;
     this.durationKnown = resolved.durationMs !== null && resolved.durationMs > 0;

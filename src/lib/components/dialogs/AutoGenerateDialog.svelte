@@ -34,7 +34,6 @@
   let imageAspect = $state('16 / 9');
   let activeChannelId = $state('');
   let zones = $state<Record<string, GenerationZone>>({});
-  let sceneCutThreshold = $state(0.27);
   let centerExclusionPercent = $state(0);
   let fades = $state(true);
   let lightningIds = $state<string[]>([]);
@@ -233,7 +232,6 @@
     }
     onstart({
       sampleRateFps: 1,
-      sceneCutThreshold: Math.max(0.01, Math.min(1, sceneCutThreshold)),
       centerExclusionPercent: Math.max(0, Math.min(90, centerExclusionPercent)),
       zones: channels.map((channel) => zones[channel.id]),
       fades,
@@ -342,21 +340,6 @@
         arrow keys to move/resize it.
       </p>
       <div class="settings">
-        <label
-          >Scene-cut threshold
-          <input
-            aria-label="Scene-cut threshold"
-            type="number"
-            min="0.01"
-            max="1"
-            step="0.01"
-            bind:value={sceneCutThreshold}
-          />
-          <small
-            >PySceneDetect content threshold divided by 100. 0.27 is the usual setting (threshold
-            27). Lower values add more scene transitions and keyframes.</small
-          >
-        </label>
         <label
           >Ignore center of each zone (%)
           <input

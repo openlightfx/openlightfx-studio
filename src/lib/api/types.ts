@@ -63,7 +63,6 @@ export interface GenerationZone {
 
 export interface GenerationOptions {
   sampleRateFps: number;
-  sceneCutThreshold: number;
   centerExclusionPercent: number;
   zones: GenerationZone[];
   /** Ramp zone keyframes through fades. Lightning and siren are skipped when their channel lists are empty. */

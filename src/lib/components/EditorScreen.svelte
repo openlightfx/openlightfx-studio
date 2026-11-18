@@ -1109,10 +1109,19 @@
                 >
                 <button
                   role="menuitem"
-                  disabled={!session.track || !session.item || !canManage || generationBusy}
+                  disabled={!session.track ||
+                    !session.item ||
+                    !canManage ||
+                    generationBusy ||
+                    session.media?.proxy.state !== 'ready' ||
+                    session.sceneCuts?.status !== 'ready'}
                   title={!canManage
                     ? 'Only an Emby administrator can generate track keyframes'
-                    : ''}
+                    : session.media?.proxy.state !== 'ready'
+                      ? 'Wait for the edit proxy to finish processing'
+                      : session.sceneCuts?.status !== 'ready'
+                        ? 'Wait for scene detection to finish'
+                        : ''}
                   onclick={() => {
                     menu = '';
                     generationError = '';
