@@ -35,6 +35,9 @@ async function openEditor(
   bulbs: unknown[] = [],
   media: typeof mediaInfo = mediaInfo
 ) {
+  await page.route('**/OpenLightFX/Studio/Items/*/SourceWorkspace', (route) =>
+    route.fulfill({ json: { required: false, state: 'ready', progressPercent: 100 } })
+  );
   await page.route('**/OpenLightFX/Studio/Session', (route) =>
     route.fulfill({ json: { accessToken: 'browser-test' } })
   );

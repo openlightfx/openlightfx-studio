@@ -83,6 +83,9 @@ import {
   fetchProjectSidecar,
   fetchSceneCutJob,
   fetchSceneCuts,
+  fetchSourceWorkspace,
+  releaseSourceWorkspace,
+  startSourceWorkspace,
   ProjectSidecarLoadError,
   SceneCutAlreadyRunningError,
   SceneCutForbiddenError,
@@ -177,6 +180,8 @@ export class StudioSession {
   media = $state<MediaInfo | null>(null);
   editorLoading = $state(true);
   editorLoadError = $state('');
+  sourceCopyProgress = $state<number | null>(null);
+  sourceWorkspaceItemId = '';
   trackChoices = $state<TrackSummary[]>([]);
   track = $state<Track | null>(null);
   /** Transient authoring state; export, recovery and persistence continue to use `track`. */
@@ -347,6 +352,8 @@ export class StudioSession {
 
     this.editorLoading = true;
     this.editorLoadError = '';
+    this.sourceCopyProgress = null;
+    this.sourceWorkspaceItemId = '';
     this.item = null;
     this.media = null;
     this.trackChoices = [];
@@ -438,6 +445,7 @@ export class StudioSession {
   }
 
   cancelBoot(): void {
+    void this.releaseSourceWorkspaceCopy(true);
     this.bootToken++;
     this.sceneCutToken++;
     this.seekScheduler.dispose();
@@ -495,6 +503,13 @@ export class StudioSession {
     this.setSelectionState(emptyEditorSelection());
     this.pendingPointerSelectionId = null;
     this.menuChannel = null;
+    const tracks = await fetchTracks(itemId);
+    if (token !== this.bootToken) return;
+    this.trackChoices = tracks;
+    if (!imported && (newTrack != null || (!requestedTrackId && tracks.length === 0))) {
+      await this.prepareSourceWorkspace(itemId, token);
+      if (token !== this.bootToken) return;
+    }
     let info: MediaInfo | null = null;
     try {
       info = await fetchMediaInfo(itemId);
@@ -509,9 +524,6 @@ export class StudioSession {
     this.applyProxy(info);
     if (info && ['missing', 'building'].includes(info.proxy.state))
       void this.watchProxy(itemId, token);
-    const tracks = await fetchTracks(itemId);
-    if (token !== this.bootToken) return;
-    this.trackChoices = tracks;
     const requested = requestedTrackId
       ? tracks.find((track) => track.trackId === requestedTrackId)
       : null;
@@ -555,6 +567,38 @@ export class StudioSession {
     else if (tracks.length === 1) await this.openTrack(tracks[0], resolved.durationMs, token);
     else if (tracks.length === 0) await this.openNewTrack(item, resolved.durationMs);
     else throw new Error('Choose a track from this movie before opening the editor.');
+  }
+
+  private async prepareSourceWorkspace(itemId: string, token: number): Promise<void> {
+    this.sourceCopyProgress = null;
+    const first = await startSourceWorkspace(itemId);
+    if (!first.required) return;
+    this.sourceWorkspaceItemId = itemId;
+    this.sourceCopyProgress = first.progressPercent;
+    let progress = first;
+    while (progress.state === 'copying') {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      if (token !== this.bootToken) return;
+      progress = await fetchSourceWorkspace(itemId);
+      this.sourceCopyProgress = progress.progressPercent;
+    }
+    if (progress.state !== 'ready')
+      throw new Error(
+        progress.error || 'The movie could not be copied to the transcode temporary directory.'
+      );
+    this.sourceCopyProgress = null;
+  }
+
+  async releaseSourceWorkspaceCopy(keepalive = false): Promise<void> {
+    const itemId = this.sourceWorkspaceItemId;
+    if (!itemId) return;
+    this.sourceWorkspaceItemId = '';
+    this.sourceCopyProgress = null;
+    try {
+      await releaseSourceWorkspace(itemId, keepalive);
+    } catch {
+      /* Best effort; startup cleanup prunes abandoned copies. */
+    }
   }
 
   private applyProxy(info: MediaInfo | null): void {

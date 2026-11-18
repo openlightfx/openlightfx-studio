@@ -870,6 +870,7 @@
   }
   function closeEditor() {
     requestLeave(() => {
+      void session.releaseSourceWorkspaceCopy(true);
       location.hash = `#/movie/${encodeURIComponent(session.item?.itemId ?? '')}`;
     });
   }
@@ -932,6 +933,7 @@
 </script>
 
 <svelte:window
+  onpagehide={() => void session.releaseSourceWorkspaceCopy(true)}
   onkeyup={(event) => {
     if ([',', '.', '<', '>', 'Shift'].includes(event.key)) session.finishNudgeRun();
   }}
@@ -956,9 +958,24 @@
   ><title>{session.track?.metadata.title ?? 'Edit track'} · OpenLightFX Studio</title></svelte:head
 >
 {#if session.editorLoading}
-  <main class="route-status" role="status">
-    <strong>Opening {session.item?.name ?? 'movie'}…</strong>
-    <p>Loading the movie and track.</p>
+  <main class="route-status" role="status" aria-live="polite">
+    <strong
+      >{session.sourceCopyProgress !== null
+        ? 'Preparing movie for editing…'
+        : `Opening ${session.item?.name ?? 'movie'}…`}</strong
+    >
+    {#if session.sourceCopyProgress !== null}
+      <p>
+        Copying the source movie to the transcode temporary directory. The editor will open when the
+        copy is complete.
+      </p>
+      <progress max="100" value={session.sourceCopyProgress} aria-label="Movie copy progress">
+        {session.sourceCopyProgress}%
+      </progress>
+      <p>{session.sourceCopyProgress}% complete</p>
+    {:else}
+      <p>Loading the movie and track.</p>
+    {/if}
   </main>
 {:else if session.editorLoadError}
   <main class="route-status">

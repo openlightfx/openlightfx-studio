@@ -41,6 +41,38 @@ export const SCENE_CUT_ROUTES = {
   job: (jobId: string) => `/OpenLightFX/Studio/SceneCuts/${encodeURIComponent(jobId)}`,
 } as const;
 
+export interface SourceWorkspaceProgress {
+  required: boolean;
+  state: 'copying' | 'ready' | 'failed' | 'released';
+  error: string;
+  copiedBytes: number;
+  totalBytes: number;
+  progressPercent: number;
+}
+
+const sourceWorkspaceRoute = (itemId: string) =>
+  `/OpenLightFX/Studio/Items/${encodeURIComponent(itemId)}/SourceWorkspace`;
+
+export async function startSourceWorkspace(itemId: string): Promise<SourceWorkspaceProgress> {
+  const response = await send(sourceWorkspaceRoute(itemId), { method: 'POST' });
+  if (!response.ok) throw new Error(await responseMessage(response, 'Could not prepare the movie'));
+  return response.json();
+}
+
+export async function fetchSourceWorkspace(
+  itemId: string,
+  signal?: AbortSignal
+): Promise<SourceWorkspaceProgress> {
+  const response = await send(sourceWorkspaceRoute(itemId), { signal });
+  if (!response.ok)
+    throw new Error(await responseMessage(response, 'Could not read copy progress'));
+  return response.json();
+}
+
+export function releaseSourceWorkspace(itemId: string, keepalive = false): Promise<Response> {
+  return send(sourceWorkspaceRoute(itemId), { method: 'DELETE', keepalive });
+}
+
 export class SceneCutForbiddenError extends Error {
   readonly status = 403;
   constructor() {

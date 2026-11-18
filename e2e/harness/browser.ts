@@ -285,6 +285,9 @@ export async function installBackend(page: Page, options: BrowserBackendOptions 
       },
     });
   });
+  await page.route('**/OpenLightFX/Studio/Items/*/SourceWorkspace', (route) =>
+    route.fulfill({ json: { required: false, state: 'ready', progressPercent: 100 } })
+  );
   await page.route('**/OpenLightFX/Studio/Items?*', (route) => {
     const search = new URL(route.request().url()).searchParams.get('search')?.toLowerCase() ?? '';
     return route.fulfill({
