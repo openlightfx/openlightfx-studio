@@ -20,8 +20,14 @@ export interface ProxyInfo {
   editUrl?: string;
 }
 
+export interface MediaChapter {
+  timeMs: number;
+  title: string;
+}
+
 export interface MediaInfo {
   runtimeMs: number;
+  chapters?: MediaChapter[];
   width: number;
   height: number;
   videoCodec: string;

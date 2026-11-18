@@ -31,6 +31,7 @@
   } from '$lib/domain';
   import { magneticSnap, type SnapTarget } from '$lib/domain/magnetic-snap';
   import { createEdgeAutoscrollController } from '$lib/studio/edge-autoscroll';
+  import type { MediaChapter } from '$lib/api/types';
   import type { StudioSession } from '$lib/studio/session.svelte';
   import { commandForId, commandEnabledReason } from '$lib/studio/editor-commands';
 
@@ -103,6 +104,12 @@
   const pointerTargets = new Map<number, HTMLElement>();
   const duration = $derived(Math.max(session.durationMs(), 1));
   const sceneCutLines = $derived(sceneCutLineTimesMs(session.sceneCuts?.cuts ?? [], duration));
+  const chapterMarkers = $derived(
+    (session.media?.chapters ?? []).filter(
+      (chapter: MediaChapter) =>
+        Number.isSafeInteger(chapter.timeMs) && chapter.timeMs > 0 && chapter.timeMs < duration
+    )
+  );
   const timelineWidth = $derived(duration * session.pxPerMs);
   const proxyProcessedMs = $derived(
     session.media?.proxy.state === 'ready'
@@ -798,6 +805,20 @@
           style={`left:${session.auditionRange.startMs * session.pxPerMs}px;width:${(session.auditionRange.endMs - session.auditionRange.startMs) * session.pxPerMs}px`}
         ></div>
       {/if}
+      {#each chapterMarkers as chapter (chapter.timeMs)}
+        <button
+          type="button"
+          class="chapter-marker"
+          aria-label={`Chapter ${chapter.title} at ${format(chapter.timeMs)}`}
+          title={`${chapter.title} · ${format(chapter.timeMs)}`}
+          style={`left:${chapter.timeMs * session.pxPerMs}px`}
+          onpointerdown={(event) => event.stopPropagation()}
+          onclick={(event) => {
+            event.stopPropagation();
+            session.seek(chapter.timeMs);
+          }}>C</button
+        >
+      {/each}
       {#each sceneCutLines as timeMs (timeMs)}
         <button
           type="button"
@@ -847,6 +868,14 @@
         <span>{snapGuide.label} {format(snapGuide.timeMs)}</span>
       </div>
     {/if}
+    {#each chapterMarkers as chapter (chapter.timeMs)}
+      <i
+        class="chapter-line"
+        aria-hidden="true"
+        title={`${chapter.title} · ${format(chapter.timeMs)}`}
+        style={`left:${headerWidth + chapter.timeMs * session.pxPerMs}px;height:${30 + session.channels.length * 40}px`}
+      ></i>
+    {/each}
     {#each sceneCutLines as timeMs (timeMs)}
       <i
         class="scene-cut"
@@ -1086,6 +1115,22 @@
     font-size: 12px;
     line-height: 14px;
   }
+  .chapter-marker {
+    position: absolute;
+    top: 14px;
+    transform: translateX(-50%);
+    z-index: 4;
+    min-width: 16px;
+    min-height: 14px;
+    padding: 0 2px;
+    border: 1px solid var(--warning);
+    border-radius: 2px;
+    background: var(--surface);
+    color: var(--warning);
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 12px;
+  }
   .snap-guide {
     position: absolute;
     top: 0;
@@ -1245,6 +1290,14 @@
     top: 0;
     width: 1px;
     background: color-mix(in srgb, var(--text) 45%, transparent);
+    pointer-events: none;
+  }
+  .chapter-line {
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    width: 1px;
+    border-left: 1px dashed var(--warning);
     pointer-events: none;
   }
   .playhead {

@@ -56,7 +56,7 @@ There is no free-form "Add channel". Changing the layout adds or removes channel
 - **Video:** Studio never plays the source file. The plugin builds an H.264 fragmented-MP4 **edit proxy** (GOP ≤ 500 ms, HTTP Range) per movie and Studio plays it while it is still encoding (`MediaInfo.proxy.state`: missing, building with `encodedThroughMs`, ready, failed with `reason`). `src/lib/studio/proxy-playback.ts` handles this. Keep it.
 - **Preview:** Studio samples channel state at the playhead and POSTs coalesced frames to the plugin, which drives the bulbs through the same drivers as playback. Preview refuses while Emby playback owns the bulbs (409 `playback_active`) unless the person takes over.
 - **Track format:** `proto/lightfx.proto` (protobuf, format version 1). It must stay byte-identical to the plugin's `src/OpenLightFX.Emby/Proto/lightfx.proto`. Format proposals require agreement between the Studio and plugin implementations.
-- **Save:** `PUT /OpenLightFX/Studio/Tracks/{trackId}` writes `{movieDir}/lightfx/{trackId}.lightfx` after the plugin validates it (V- codes); `PUT …/Projects/{trackId}` writes the `.studio.json` editor sidecar. Crash copies go to IndexedDB.
+- **Save:** `PUT /OpenLightFX/Studio/Tracks/{trackId}` validates the track (V- codes) and writes it plus the `.studio.json` editor sidecar under the plugin-owned LightFX storage root. The root is configurable in the plugin settings and defaults to the plugin data directory; it must stay outside Emby media libraries. Crash copies go to IndexedDB.
 
 ## 6. Repository layout
 

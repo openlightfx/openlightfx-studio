@@ -1365,11 +1365,12 @@
       </div>
       <div class="transport">
         <button
-          aria-label="Skip back 5 seconds"
-          disabled={screen.connected && (!screen.ready || !screen.canSeek)}
-          title="Back 5 seconds (Shift ←)"
-          onclick={() => session.skip(-1)}
-          ><StudioIcon name="rewind" size={17} /><span>5s</span></button
+          aria-label="Previous chapter"
+          disabled={!session.canNavigateChapter(-1) ||
+            (screen.connected && (!screen.ready || !screen.canSeek))}
+          title={session.chapterNavigationReason(-1) ?? 'Previous chapter'}
+          onclick={() => session.navigateChapter(-1)}
+          ><StudioIcon name="rewind" size={17} /><span aria-hidden="true">Ch</span></button
         >
         <button
           aria-label="Previous frame"
@@ -1400,11 +1401,12 @@
           onclick={() => session.step(1)}><StudioIcon name="next" size={17} /></button
         >
         <button
-          aria-label="Skip forward 5 seconds"
-          disabled={screen.connected && (!screen.ready || !screen.canSeek)}
-          title="Forward 5 seconds (Shift →)"
-          onclick={() => session.skip(1)}
-          ><span>5s</span><StudioIcon name="forward" size={17} /></button
+          aria-label="Next chapter"
+          disabled={!session.canNavigateChapter(1) ||
+            (screen.connected && (!screen.ready || !screen.canSeek))}
+          title={session.chapterNavigationReason(1) ?? 'Next chapter'}
+          onclick={() => session.navigateChapter(1)}
+          ><span aria-hidden="true">Ch</span><StudioIcon name="forward" size={17} /></button
         >
         <time>{timeLabel}</time>
         <button

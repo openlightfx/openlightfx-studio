@@ -1391,6 +1391,56 @@ export class StudioSession {
     this.seek(Math.min(Math.max(0, this.playheadMs + direction * 5000), this.durationMs()));
   }
 
+  chapterNavigationReason(direction: 1 | -1): string | undefined {
+    const chapters = this.chapterStops();
+    if (!chapters.length) return 'This movie has no chapters';
+    return this.chapterNavigationTime(direction, chapters) == null
+      ? direction < 0
+        ? 'No previous chapter'
+        : 'No next chapter'
+      : undefined;
+  }
+
+  canNavigateChapter(direction: 1 | -1): boolean {
+    return this.chapterNavigationReason(direction) == null;
+  }
+
+  navigateChapter(direction: 1 | -1): void {
+    const time = this.chapterNavigationTime(direction, this.chapterStops());
+    if (time == null) {
+      this.status = this.chapterNavigationReason(direction) ?? 'No chapter';
+      return;
+    }
+    this.seek(time);
+    this.revealNavigationPosition(time);
+  }
+
+  private chapterStops(): number[] {
+    return [
+      ...new Set(
+        (this.media?.chapters ?? [])
+          .map((chapter) => chapter.timeMs)
+          .filter((time) => Number.isSafeInteger(time) && time >= 0 && time <= this.durationMs())
+      ),
+    ].sort((a, b) => a - b);
+  }
+
+  private chapterNavigationTime(direction: 1 | -1, chapters: number[]): number | null {
+    const current = this.playheadMs;
+    if (direction > 0) return chapters.find((time) => time > current + 250) ?? null;
+
+    let index = -1;
+    for (let i = chapters.length - 1; i >= 0; i--) {
+      if (chapters[i] <= current + 250) {
+        index = i;
+        break;
+      }
+    }
+    if (index < 0) return null;
+    if (current - chapters[index] > 2500) return chapters[index];
+    return chapters[index - 1] ?? null;
+  }
+
   seekBoundary(end: boolean): void {
     const time = end ? this.durationMs() : 0;
     this.seek(time);
