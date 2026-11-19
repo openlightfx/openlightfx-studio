@@ -124,7 +124,7 @@ test('scene markers appear incrementally while detection is running', async ({ p
 test('cached scene cuts remain visible when the server cannot be reached', async ({ page }) => {
   await page.addInitScript(
     (cached) => {
-      localStorage.setItem('openlightfx.scene-cuts.v1', JSON.stringify(cached));
+      localStorage.setItem('openlightfx.scene-cuts.v2', JSON.stringify(cached));
     },
     { version: 1, items: { m1: cuts } }
   );

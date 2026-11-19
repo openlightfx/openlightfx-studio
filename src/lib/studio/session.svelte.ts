@@ -27,7 +27,7 @@ import {
   clampEffectMove,
   effectPreset,
   effectSafetyNote,
-  sceneCutLineTimesMs,
+  sceneTransitionTimesMs,
   snapEffectStart,
   crashKey,
   createHistory,
@@ -319,7 +319,7 @@ export class StudioSession {
   get playReason(): string {
     if (this.screenTransport)
       return this.screenTransport.ready ? '' : 'Waiting for room screen playback';
-    return proxyPlayReason({
+    const reason = proxyPlayReason({
       hasItem: Boolean(this.item),
       blob: this.videoSrc.startsWith('blob:'),
       state: this.media?.proxy.state,
@@ -328,16 +328,20 @@ export class StudioSession {
       videoError: this.videoError,
       reason: this.media?.proxy.reason ?? this.videoError,
     });
+    if (reason) return reason;
+    return this.videoSrc && !this.videoReady
+      ? this.videoSrc.startsWith('blob:')
+        ? 'Loading local video'
+        : 'Loading edit proxy'
+      : '';
   }
 
   get canPlay(): boolean {
     if (this.screenTransport) return this.screenTransport.ready;
-    return (
-      Boolean(this.videoSrc) &&
-      this.videoReady &&
-      !this.videoError &&
-      (this.media?.proxy.state === 'ready' || this.media?.proxy.state === 'building')
-    );
+    const localVideo = this.videoSrc.startsWith('blob:');
+    const proxyAvailable =
+      this.media?.proxy.state === 'ready' || this.media?.proxy.state === 'building';
+    return Boolean(this.videoSrc) && !this.videoError && (localVideo || proxyAvailable);
   }
 
   async boot(): Promise<void> {
@@ -627,7 +631,7 @@ export class StudioSession {
 
   private refreshCompletedProxy(info: MediaInfo): void {
     const video = this.video;
-    if (!this.wasGrowing || info.proxy.state !== 'ready' || !video || video.readyState < 1) return;
+    if (!this.wasGrowing || info.proxy.state !== 'ready' || !video) return;
     {
       // A Range response opened while encoding can end at its original byte horizon.
       // Reopen the completed edit proxy, retaining transport state and the requested seek.
@@ -635,6 +639,7 @@ export class StudioSession {
       this.resumeProxy = !video.paused;
       this.pendingSeekMs ??= this.playheadMs;
       this.videoReady = false;
+      this.videoError = '';
       this.appliedSeekMs = null;
       this.cancelEyedrop();
       video.load();
@@ -664,13 +669,20 @@ export class StudioSession {
       info.proxy.state === 'ready' && Number.isFinite(this.video.duration)
         ? Math.min(target / 1000, this.video.duration)
         : target / 1000;
-    let reachable = Math.abs(this.video.currentTime - reachableTarget) < 0.000001;
-    for (let i = 0; i < this.video.seekable.length; i++) {
-      if (
-        this.video.seekable.start(i) <= reachableTarget &&
-        this.video.seekable.end(i) + 0.000001 >= reachableTarget
-      )
-        reachable = true;
+    // A completed proxy is range-seekable even when the browser has not fetched the
+    // target fragment yet; assigning currentTime is what makes it request that range.
+    // While the proxy is growing, keep the seekable-range check to avoid seeking past
+    // bytes that do not exist yet.
+    let reachable =
+      info.proxy.state === 'ready' || Math.abs(this.video.currentTime - reachableTarget) < 0.000001;
+    if (info.proxy.state !== 'ready') {
+      for (let i = 0; i < this.video.seekable.length; i++) {
+        if (
+          this.video.seekable.start(i) <= reachableTarget &&
+          this.video.seekable.end(i) + 0.000001 >= reachableTarget
+        )
+          reachable = true;
+      }
     }
     if (!reachable) return;
     this.dispatchSeek(target);
@@ -1015,9 +1027,14 @@ export class StudioSession {
   }
 
   sceneNavigationReason(direction: -1 | 1): string | undefined {
-    const cuts = this.sceneCuts?.cuts ?? [];
-    if (!cuts.length) return 'No scene cuts for this movie';
-    return adjacentSceneStopMs(cuts, this.playheadMs, direction, this.durationMs()) == null
+    const transitions = this.sceneTransitionTimes();
+    if (!transitions.length) return 'No scene transitions for this movie';
+    return adjacentSceneStopMs(
+      transitions.map((timeMs) => timeMs / 1000),
+      this.playheadMs,
+      direction,
+      this.durationMs()
+    ) == null
       ? direction < 0
         ? 'No earlier scene'
         : 'No later scene'
@@ -1030,13 +1047,13 @@ export class StudioSession {
 
   navigateScene(direction: -1 | 1): void {
     const time = adjacentSceneStopMs(
-      this.sceneCuts?.cuts ?? [],
+      this.sceneTransitionTimes().map((timeMs) => timeMs / 1000),
       this.playheadMs,
       direction,
       this.durationMs()
     );
     if (time == null) {
-      this.status = this.sceneNavigationReason(direction) ?? 'No scene cuts for this movie';
+      this.status = this.sceneNavigationReason(direction) ?? 'No scene transitions for this movie';
       return;
     }
     this.seek(time);
@@ -1328,7 +1345,13 @@ export class StudioSession {
     if (video.paused) {
       this.manualFollowSuspended = false;
       this.cancelEyedrop();
-      void video.play();
+      void video.play().catch((error: unknown) => {
+        if (error && typeof error === 'object' && 'name' in error && error.name === 'AbortError')
+          return;
+        if (this.video !== video || !video.paused) return;
+        this.playing = false;
+        this.videoError = 'The edit proxy failed to play';
+      });
       this.playing = true;
     } else {
       this.auditionLoop.cancel();
@@ -1542,6 +1565,7 @@ export class StudioSession {
 
   onVideoData(): void {
     this.videoReady = true;
+    this.videoError = '';
     this.onVideoMetadata();
     if (this.resumeProxy) {
       this.resumeProxy = false;
@@ -1611,6 +1635,8 @@ export class StudioSession {
     if (!this.videoSrc) return;
     // A growing file can stall. The poll reports a real failure, which replaces this.
     if (this.media?.proxy.state === 'building') return;
+    if (this.video && this.video.readyState >= 2) return;
+    this.videoReady = false;
     this.videoError = 'The edit proxy failed to play';
     if (!this.screenTransport) this.playing = false;
   }
@@ -1774,7 +1800,7 @@ export class StudioSession {
       return;
     }
     const duration = this.durationMs();
-    const anchors = [Math.round(this.playheadMs), ...this.sceneCutAnchors()];
+    const anchors = [Math.round(this.playheadMs), ...this.sceneTransitionAnchors()];
     const created = channels.map((channelId) =>
       buildEffectKeyframe({
         id: this.allocateId('fx'),
@@ -1820,7 +1846,7 @@ export class StudioSession {
             ...placed,
             timestampMs: snapEffectStart(placed.timestampMs, [
               Math.round(this.playheadMs),
-              ...this.sceneCutAnchors(),
+              ...this.sceneTransitionAnchors(),
             ]),
           };
     const limited = clampEffectMove(snapped.timestampMs, snapped.durationMs, this.durationMs());
@@ -1861,8 +1887,16 @@ export class StudioSession {
     );
   }
 
-  private sceneCutAnchors(): number[] {
-    return sceneCutLineTimesMs(this.sceneCuts?.cuts ?? [], this.durationMs());
+  private sceneTransitionTimes(): number[] {
+    return sceneTransitionTimesMs(
+      this.sceneCuts?.cuts ?? [],
+      this.media?.chapters?.map((chapter) => chapter.timeMs) ?? [],
+      this.durationMs()
+    );
+  }
+
+  private sceneTransitionAnchors(): number[] {
+    return this.sceneTransitionTimes();
   }
 
   deleteEffect(id: string): void {

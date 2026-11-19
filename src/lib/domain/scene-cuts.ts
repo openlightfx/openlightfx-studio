@@ -114,6 +114,28 @@ export function sceneCutLineTimesMs(cutSeconds: readonly number[], durationMs: n
   return lines;
 }
 
+export const SCENE_TRANSITION_MERGE_TOLERANCE_MS = Math.ceil(1000 / 24);
+
+/**
+ * Detected cuts plus chapter boundaries, with chapters taking precedence within one
+ * 24-fps detection frame so the timeline never draws overlapping transition lines.
+ */
+export function sceneTransitionTimesMs(
+  cutSeconds: readonly number[],
+  chapterTimesMs: readonly number[],
+  durationMs: number
+): number[] {
+  const duration = Number.isFinite(durationMs) ? Math.max(0, Math.round(durationMs)) : 0;
+  const chapters = [...new Set(chapterTimesMs)].filter(
+    (time) => Number.isSafeInteger(time) && time > 0 && (duration <= 0 || time < duration)
+  );
+  const cuts = sceneCutLineTimesMs(cutSeconds, duration).filter(
+    (cut) =>
+      !chapters.some((chapter) => Math.abs(chapter - cut) <= SCENE_TRANSITION_MERGE_TOLERANCE_MS)
+  );
+  return [...new Set([...chapters, ...cuts])].sort((a, b) => a - b);
+}
+
 /**
  * Stops used by previous/next scene: the movie start, each cut, and the movie end.
  * Returns null when this movie has no cuts, or when the playhead is already at that end.

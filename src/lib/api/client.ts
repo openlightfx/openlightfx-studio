@@ -578,7 +578,11 @@ export async function startSceneCutDetection(
       : { sceneCutThreshold: Math.max(0.01, Math.min(1, sceneCutThreshold)) };
   const response = await postJson(SCENE_CUT_ROUTES.start(itemId), body);
   if (response.status === 403) throw new SceneCutForbiddenError();
-  if (response.status === 409) throw new SceneCutAlreadyRunningError();
+  if (response.status === 409) {
+    const message = await responseMessage(response, '');
+    if (!message || /already running/i.test(message)) throw new SceneCutAlreadyRunningError();
+    throw new Error(message);
+  }
   if (!response.ok)
     throw new Error(await responseMessage(response, 'Could not start scene detection'));
   const job = parseSceneCutJob(await response.json());

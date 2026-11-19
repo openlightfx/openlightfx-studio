@@ -11,7 +11,11 @@ import {
   reloadWithUnsaved,
 } from '../harness/browser';
 import { StudioPage } from '../pages/studio-page';
-import { DOCUMENT_ONLY_MEDIA, twoHourDocumentFixture } from '../fixtures/editor';
+import {
+  DOCUMENT_ONLY_MEDIA,
+  SHORT_PLAYABLE_MEDIA,
+  twoHourDocumentFixture,
+} from '../fixtures/editor';
 
 // Keep transport/performance measurements sequential within each browser. A failure
 // still runs the remaining tests; this is not Playwright's skip-on-failure serial mode.
@@ -190,6 +194,40 @@ requirement(
     await expect.poll(async () => Math.abs((await time(page)) - 4)).toBeLessThanOrEqual(0.5);
   }
 );
+requirement(
+  'MEDIA-017 @browser chapter seek followed by Play starts at the selected chapter',
+  async ({ page }) => {
+    const media = {
+      ...structuredClone(SHORT_PLAYABLE_MEDIA),
+      chapters: [{ title: 'Later', timeMs: 6000 }],
+    };
+    await openFixtureEditor(page, { media });
+    await page.locator('video').evaluate((node) => {
+      Object.defineProperty(node, 'seekable', {
+        configurable: true,
+        get: () => ({ length: 1, start: () => 0, end: () => 1 }),
+      });
+    });
+    await page.getByRole('button', { name: 'Next chapter' }).click();
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await expect.poll(() => time(page)).toBeGreaterThan(6.2);
+  }
+);
+requirement(
+  'MEDIA-018 @browser ruler scrub followed by Play starts at the scrubbed position',
+  async ({ page }) => {
+    await openFixtureEditor(page);
+    await page.locator('video').evaluate((node) => {
+      Object.defineProperty(node, 'seekable', {
+        configurable: true,
+        get: () => ({ length: 1, start: () => 0, end: () => 1 }),
+      });
+    });
+    await seekFraction(page, 0.6);
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await expect.poll(() => time(page)).toBeGreaterThan(6.2);
+  }
+);
 requirement('MEDIA-007 @browser 24 proxy frame steps land on 1000 ms', async ({ page }) => {
   await openFixtureEditor(page);
   await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
@@ -277,6 +315,7 @@ requirement(
     await expect(page.getByText(/Still encoding to/)).toBeVisible();
     backend.media.proxy.state = 'ready';
     backend.media.proxy.encodedThroughMs = 10000;
+    await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeEnabled();
     await expect
       .poll(async () => Math.abs((await time(page)) - 9), { timeout: 10000 })
       .toBeLessThanOrEqual(0.042);

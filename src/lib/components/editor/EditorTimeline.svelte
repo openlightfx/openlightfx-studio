@@ -17,6 +17,8 @@
     applyKeyframeMovePlan,
     quantizeProxyFrameTime,
     sceneCutLineTimesMs,
+    sceneTransitionTimesMs,
+    SCENE_TRANSITION_MERGE_TOLERANCE_MS,
     snapEffectStart,
   } from '$lib/domain';
   import type { EffectType } from '$lib/domain';
@@ -103,11 +105,26 @@
   const activePointers = new Set<number>();
   const pointerTargets = new Map<number, HTMLElement>();
   const duration = $derived(Math.max(session.durationMs(), 1));
-  const sceneCutLines = $derived(sceneCutLineTimesMs(session.sceneCuts?.cuts ?? [], duration));
   const chapterMarkers = $derived(
     (session.media?.chapters ?? []).filter(
       (chapter: MediaChapter) =>
         Number.isSafeInteger(chapter.timeMs) && chapter.timeMs > 0 && chapter.timeMs < duration
+    )
+  );
+  const sceneTransitionTimes = $derived(
+    sceneTransitionTimesMs(
+      session.sceneCuts?.cuts ?? [],
+      chapterMarkers.map((chapter: MediaChapter) => chapter.timeMs),
+      duration
+    )
+  );
+  const sceneCutLines = $derived(
+    sceneCutLineTimesMs(session.sceneCuts?.cuts ?? [], duration).filter(
+      (timeMs) =>
+        !chapterMarkers.some(
+          (chapter: MediaChapter) =>
+            Math.abs(chapter.timeMs - timeMs) <= SCENE_TRANSITION_MERGE_TOLERANCE_MS
+        )
     )
   );
   const timelineWidth = $derived(duration * session.pxPerMs);
@@ -533,7 +550,7 @@
     if (command && !commandEnabledReason(command, context)) void command.execute(context);
   }
   function effectAnchors(): number[] {
-    return [Math.round(session.playheadMs), ...sceneCutLines];
+    return [Math.round(session.playheadMs), ...sceneTransitionTimes];
   }
 
   function acceptEffectDrag(event: DragEvent) {

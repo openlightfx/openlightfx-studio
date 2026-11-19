@@ -1,7 +1,7 @@
 import { parseSceneCuts, type SceneCuts } from '$lib/domain/scene-cuts';
 
 /** Local copy of scene cuts, keyed by Emby item id. Survives reloads without the server. */
-export const SCENE_CUT_CACHE_KEY = 'openlightfx.scene-cuts.v1';
+export const SCENE_CUT_CACHE_KEY = 'openlightfx.scene-cuts.v2';
 
 type SceneCutCacheFile = {
   version: 1;
@@ -69,7 +69,6 @@ export function mergeSceneCuts(
     return local;
   }
   if (remote.status === 'running') return remote;
-  if (remote.status === 'stale' && remote.cuts.length === 0 && local.cuts.length > 0)
-    return { ...local, status: remote.status };
+  if (remote.status === 'stale') return { ...remote, cuts: [] };
   return remote;
 }
