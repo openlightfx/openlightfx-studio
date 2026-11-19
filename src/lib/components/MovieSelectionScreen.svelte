@@ -1,16 +1,18 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import StudioHeader from '$lib/components/layout/StudioHeader.svelte';
-  import { Button, Modal } from '$lib/components/shared/index.js';
+  import { Button, Modal, Select } from '$lib/components/shared/index.js';
   import {
     deleteTrack as deleteTrackApi,
+    embyMovieUrl,
     fetchActiveTrackPath,
     fetchItem,
     fetchMediaInfo,
     fetchTrackBytes,
     fetchTracks,
+    setActiveTrack,
   } from '$lib/api/client';
-  import { loadRooms, loadRoomRouting, type RoomRouting } from '$lib/api/rooms';
+  import { loadRooms, loadRoomRouting, loadSetup, type RoomRouting } from '$lib/api/rooms';
   import type { Room } from '$lib/api/rooms';
   import type { LibraryItem, TrackSummary } from '$lib/api/types';
   import {
@@ -51,6 +53,29 @@
   let missingPoster = $state(false);
   let routing = $state<Record<string, RoomRouting>>({});
   let routingGeneration = 0;
+  let activeSelection = $state('automatic');
+  let selectionReady = $state(false);
+  let selectionAdmin = $state<boolean | null>(null);
+  let selectionPending = $state(false);
+  let selectionError = $state('');
+  let selectionStatus = $state('');
+  const selectionOptions = $derived([
+    ...(activeSelection === 'automatic'
+      ? [{ value: 'automatic', label: 'Automatic (not selected yet)', disabled: true }]
+      : []),
+    ...(activeSelection === 'unavailable'
+      ? [{ value: 'unavailable', label: 'Selected track unavailable', disabled: true }]
+      : []),
+    { value: 'none', label: 'None' },
+    ...tracks.map((track) => ({
+      value: `track:${track.trackId}`,
+      label:
+        tracks.filter((candidate) => candidate.title === track.title).length > 1
+          ? `${track.title || 'Untitled track'} (${track.trackId})`
+          : track.title || 'Untitled track',
+      disabled: !trackDetails[track.trackId]?.layout,
+    })),
+  ]);
 
   $effect(() => {
     const selected = roomId;
@@ -108,9 +133,14 @@
 
   onMount(() => {
     const routeId = decodeURIComponent(location.hash.split('/')[2] ?? '');
-    void Promise.all([loadRooms(), fetchItem(routeId).catch(() => null)])
-      .then(async ([loadedRooms, movie]) => {
+    void Promise.all([
+      loadRooms(),
+      fetchItem(routeId).catch(() => null),
+      loadSetup().catch(() => null),
+    ])
+      .then(async ([loadedRooms, movie, setup]) => {
         rooms = loadedRooms;
+        selectionAdmin = setup?.isAdmin ?? null;
         roomId = rooms[0]?.id ?? '';
         if (!movie?.itemId) {
           failed = 'Movie not found. It may have been removed from Emby.';
@@ -133,7 +163,9 @@
         tracks = await fetchTracks(itemId);
         try {
           const activePath = await fetchActiveTrackPath(itemId);
-          if (activePath) {
+          if (activePath === '') {
+            activeSelection = 'none';
+          } else if (activePath) {
             const normalizedPath = activePath.replaceAll('\\', '/').toLowerCase();
             tracks = tracks.map((track) => ({
               ...track,
@@ -141,9 +173,12 @@
                 normalizedPath.endsWith(`/${track.trackId.toLowerCase()}.lightfx`) ||
                 normalizedPath.endsWith(`/${track.trackId.toLowerCase()}`),
             }));
+            const active = tracks.find((track) => track.active);
+            activeSelection = active ? `track:${active.trackId}` : 'unavailable';
           }
+          selectionReady = true;
         } catch {
-          // Track listing remains useful if the server doesn't expose legacy selection details.
+          selectionError = 'Could not load the active track. Refresh to try again.';
         }
         await Promise.all(
           tracks.map(async (track) => {
@@ -190,6 +225,27 @@
     location.hash = `#/edit/${encodeURIComponent(item!.itemId)}/${encodeURIComponent(track.trackId)}`;
   }
 
+  async function changeActiveTrack(value: string) {
+    if (!item || selectionPending || (value !== 'none' && !value.startsWith('track:'))) return;
+    const previous = activeSelection;
+    activeSelection = value;
+    selectionPending = true;
+    selectionError = '';
+    selectionStatus = '';
+    try {
+      const trackId = value === 'none' ? null : value.slice('track:'.length);
+      await setActiveTrack(item.itemId, trackId);
+      tracks = tracks.map((track) => ({ ...track, active: track.trackId === trackId }));
+      selectionStatus =
+        trackId === null ? 'Lighting is off for this movie.' : 'Active track saved.';
+    } catch (error) {
+      activeSelection = previous;
+      selectionError = (error as Error).message || 'Could not change the active track.';
+    } finally {
+      selectionPending = false;
+    }
+  }
+
   function requestDeleteTrack(track: TrackSummary) {
     deleteError = '';
     pendingDeleteTrack = track;
@@ -209,6 +265,10 @@
     try {
       await deleteTrackApi(track.trackId, item.itemId);
       tracks = tracks.filter((candidate) => candidate.trackId !== track.trackId);
+      if (activeSelection === `track:${track.trackId}`) {
+        activeSelection = 'automatic';
+        selectionStatus = 'The active track was deleted. Emby will choose a track at playback.';
+      }
       const remainingDetails = { ...trackDetails };
       delete remainingDetails[track.trackId];
       trackDetails = remainingDetails;
@@ -298,6 +358,30 @@
               : ''}
           </p>
         </div>
+      </section>
+      <section class="playback-controls" aria-label="Emby playback">
+        <div class="active-track">
+          <Select
+            label="Active Track"
+            value={activeSelection}
+            options={selectionOptions}
+            disabled={!selectionReady || selectionPending || selectionAdmin !== true}
+            onchange={(value) => void changeActiveTrack(value)}
+          />
+          {#if selectionAdmin === false}
+            <p class="muted">Only an Emby administrator can change the active track.</p>
+          {:else if selectionAdmin === null}
+            <p class="muted">
+              Track selection is unavailable because permissions could not be checked.
+            </p>
+          {:else}
+            <p class="muted">Applies to all rooms the next time this movie starts in Emby.</p>
+          {/if}
+          {#if selectionPending}<p role="status">Saving selection…</p>{/if}
+          {#if selectionStatus}<p role="status">{selectionStatus}</p>{/if}
+          {#if selectionError}<p class="error" role="alert">{selectionError}</p>{/if}
+        </div>
+        <a class="button-link" href={embyMovieUrl(item.itemId)}>Go To Emby</a>
       </section>
       <div class="columns">
         <section class="panel tracks">
@@ -494,6 +578,23 @@
   .muted {
     color: var(--text-muted);
   }
+  .playback-controls {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+  }
+  .active-track {
+    flex: 1;
+    min-width: 0;
+    max-width: 32rem;
+  }
+  .active-track p {
+    margin: var(--space-2) 0 0;
+  }
+  .playback-controls > a {
+    margin-top: var(--space-5);
+  }
   .columns {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
@@ -672,6 +773,15 @@
     }
     .movie-heading {
       align-items: flex-start;
+    }
+    .playback-controls {
+      flex-direction: column;
+    }
+    .active-track {
+      width: 100%;
+    }
+    .playback-controls > a {
+      margin-top: 0;
     }
   }
 </style>

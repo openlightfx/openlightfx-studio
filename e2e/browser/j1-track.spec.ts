@@ -25,6 +25,12 @@ async function openMovie(page: Page, tracks: unknown[] = []) {
     route.fulfill({ json: { accessToken: 'browser-test' } })
   );
   await page.route('**/OpenLightFX/Studio/Rooms', (route) => route.fulfill({ json: [room] }));
+  await page.route('**/OpenLightFX/Studio/Setup', (route) =>
+    route.fulfill({ json: { roomCount: 1 } })
+  );
+  await page.route('**/OpenLightFX/Studio/CanManageRooms', (route) =>
+    route.fulfill({ status: 204 })
+  );
   await page.route('**/OpenLightFX/Studio/Items**', (route) => route.fulfill({ json: movies }));
   await page.route('**/OpenLightFX/Studio/Tracks?*', (route) => route.fulfill({ json: tracks }));
   await page.route('**/OpenLightFX/Studio/Tracks/*', (route) => {
@@ -55,8 +61,8 @@ requirement(
       },
     ]);
     await expect(page.locator('.track-row')).toHaveCount(2);
-    await expect(page.getByText('First track')).toBeVisible();
-    await expect(page.getByText('Second track')).toBeVisible();
+    await expect(page.locator('.track-row').getByText('First track')).toBeVisible();
+    await expect(page.locator('.track-row').getByText('Second track')).toBeVisible();
     await expect(page.getByText('Plays in Emby')).toHaveCount(1);
     await expect(page.locator('.track-row').first()).toContainText('2.0');
     await expect(page.locator('.track-row').first()).toContainText('studio');
@@ -70,6 +76,83 @@ requirement(
     await expect(page.locator('.panel.tracks')).toHaveScreenshot('movie-track-actions.png', {
       animations: 'disabled',
     });
+  }
+);
+
+requirement(
+  'TRACK-001 @browser active track selector saves None and tracks, and opens the movie in Emby',
+  async ({ page }) => {
+    await openMovie(page, [
+      { trackId: 'track-a', title: 'First track', itemId: 'm1' },
+      { trackId: 'track-b', title: 'Second track', itemId: 'm1' },
+    ]);
+    let selectedPath: string | null = '/movies/Clip Short/lightfx/track-a.lightfx';
+    const changes: unknown[] = [];
+    await page.route('**/OpenLightFX/Tracks/ByItem?*', (route) =>
+      route.fulfill({ json: { globalSelectedTrack: selectedPath } })
+    );
+    await page.route('**/OpenLightFX/Studio/Items/m1/ActiveTrack', async (route) => {
+      const data = route.request().postDataJSON();
+      changes.push(data);
+      selectedPath = data.disabled ? '' : `/movies/Clip Short/lightfx/${data.trackId}.lightfx`;
+      return route.fulfill({ json: { trackId: data.trackId || '', embyUrl: '/web/' } });
+    });
+    await page.reload();
+    const selector = page.getByLabel('Active Track');
+    await expect(selector).toHaveValue('track:track-a');
+    await expect(page.locator('.playback-controls')).toHaveScreenshot(
+      'movie-playback-controls.png',
+      {
+        animations: 'disabled',
+      }
+    );
+    await selector.selectOption('none');
+    await expect(page.getByRole('status')).toContainText('Lighting is off for this movie.');
+    expect(changes[0]).toMatchObject({ disabled: true });
+    await expect(page.getByText('Plays in Emby')).toHaveCount(0);
+    await page.reload();
+    await expect(selector).toHaveValue('none');
+    await selector.selectOption('track:track-b');
+    await expect(page.getByRole('status')).toContainText('Active track saved.');
+    expect(changes[1]).toMatchObject({ trackId: 'track-b' });
+    await expect(page.locator('.track-row').nth(1)).toContainText('Plays in Emby');
+    await expect(page.getByRole('link', { name: 'Go To Emby' })).toHaveAttribute(
+      'href',
+      '/web/index.html#!/item?id=m1'
+    );
+  }
+);
+
+requirement(
+  'TRACK-001 @browser selection failure restores the previous track',
+  async ({ page }) => {
+    await openMovie(page, [{ trackId: 'track-a', title: 'First track', itemId: 'm1' }]);
+    await page.route('**/OpenLightFX/Studio/Items/m1/ActiveTrack', (route) =>
+      route.fulfill({ status: 403 })
+    );
+    const selector = page.getByLabel('Active Track');
+    await expect(selector).toHaveValue('track:track-a');
+    await selector.selectOption('none');
+    await expect(page.getByRole('alert')).toContainText('administrator');
+    await expect(selector).toHaveValue('track:track-a');
+    await expect(page.getByText('Plays in Emby')).toHaveCount(1);
+  }
+);
+
+requirement(
+  'TRACK-001 @browser non-admins can see but cannot change the active track',
+  async ({ page }) => {
+    await openMovie(page, [{ trackId: 'track-a', title: 'First track', itemId: 'm1' }]);
+    await page.route('**/OpenLightFX/Studio/CanManageRooms', (route) =>
+      route.fulfill({ status: 403 })
+    );
+    await page.reload();
+    await expect(page.getByLabel('Active Track')).toHaveValue('track:track-a');
+    await expect(page.getByLabel('Active Track')).toBeDisabled();
+    await expect(
+      page.getByText('Only an Emby administrator can change the active track.')
+    ).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Go To Emby' })).toBeVisible();
   }
 );
 

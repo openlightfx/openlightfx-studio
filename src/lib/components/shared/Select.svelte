@@ -4,11 +4,13 @@
     options,
     label,
     onchange,
+    disabled = false,
   }: {
     value: string;
-    options: { value: string; label: string }[];
+    options: { value: string; label: string; disabled?: boolean }[];
     label?: string;
     onchange: (value: string) => void;
+    disabled?: boolean;
   } = $props();
 
   const selectId = $derived(`select-${label?.replace(/\s+/g, '-').toLowerCase() ?? 'field'}`);
@@ -28,11 +30,14 @@
     <select
       id={selectId}
       {value}
+      {disabled}
       onchange={handleChange}
       class="w-full appearance-none rounded-md border border-surface2 bg-surface2 px-3 py-1.5 pr-8 text-sm text-text-base transition-colors hover:border-surface3 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 focus:ring-offset-bg"
     >
       {#each options as opt (opt.value)}
-        <option value={opt.value} selected={opt.value === value}>{opt.label}</option>
+        <option value={opt.value} disabled={opt.disabled} selected={opt.value === value}
+          >{opt.label}</option
+        >
       {/each}
     </select>
 
