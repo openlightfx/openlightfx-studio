@@ -55,7 +55,7 @@ function timestamp(value: string): number {
 /**
  * A failed fetch keeps `local`. A successful document replaces it when the server
  * has a ready copy at least as new, or when it reports running/stale/none.
- * Running and stale responses already include any saved cuts.
+ * Running responses already include any saved cuts; stale ones carry only cuts the person added.
  */
 export function mergeSceneCuts(
   local: SceneCuts | null,
@@ -69,6 +69,6 @@ export function mergeSceneCuts(
     return local;
   }
   if (remote.status === 'running') return remote;
-  if (remote.status === 'stale') return { ...remote, cuts: [] };
+  // Stale responses already withhold detected cuts; any cuts left are ones the person added.
   return remote;
 }

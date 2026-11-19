@@ -104,11 +104,16 @@ export interface Track {
   safety: SafetyInfo | null;
 }
 
+/**
+ * One scene marker on a movie's timeline, stored by the plugin's scene-cut document (the only
+ * place scene markers live). `detected` came from scene detection; a re-run replaces those.
+ * `manual` was placed by a person and survives re-runs.
+ */
 export interface SceneMarker {
   id: string;
   timeMs: number;
   label: string;
-  kind: 'manual' | 'chapter' | 'detected';
+  kind: 'manual' | 'detected';
 }
 
 export interface ChannelGroup {
@@ -123,7 +128,6 @@ export interface ProjectSidecar {
   version: 1;
   itemId: string;
   trackId: string;
-  sceneMarkers: SceneMarker[];
   channelGroups: ChannelGroup[];
   /** Plugin-preserved v1 metadata; values must remain JSON-serializable. */
   [field: string]: unknown;

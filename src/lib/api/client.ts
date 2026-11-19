@@ -33,12 +33,18 @@ export type {
 
 /**
  * Scene-cut routes from openlightfx-emby#15.
- * GET document is any signed-in user. POST start and GET job are Admin.
+ * GET document is any signed-in user. POST start, GET job, and marker edits are Admin.
+ * The plugin's scene-cut document is the only store of a movie's scene markers (detected and
+ * manual). Marker edits return the updated document.
  */
 export const SCENE_CUT_ROUTES = {
   document: (itemId: string) => `/OpenLightFX/Studio/Items/${encodeURIComponent(itemId)}/SceneCuts`,
   start: (itemId: string) => `/OpenLightFX/Studio/Items/${encodeURIComponent(itemId)}/SceneCuts`,
   job: (jobId: string) => `/OpenLightFX/Studio/SceneCuts/${encodeURIComponent(jobId)}`,
+  markers: (itemId: string) =>
+    `/OpenLightFX/Studio/Items/${encodeURIComponent(itemId)}/SceneCuts/Markers`,
+  marker: (itemId: string, markerId: string) =>
+    `/OpenLightFX/Studio/Items/${encodeURIComponent(itemId)}/SceneCuts/Markers/${encodeURIComponent(markerId)}`,
 } as const;
 
 export interface SourceWorkspaceProgress {
@@ -235,7 +241,6 @@ export async function fetchProjectSidecar(
       version: 1,
       itemId,
       trackId,
-      sceneMarkers: [],
       channelGroups: [],
     };
   if (!response.ok)
@@ -588,6 +593,50 @@ export async function startSceneCutDetection(
   const job = parseSceneCutJob(await response.json());
   if (!job) throw new Error('Scene detection did not return a job');
   return job;
+}
+
+async function sceneCutEditResult(
+  itemId: string,
+  response: Response,
+  fallback: string
+): Promise<SceneCuts> {
+  if (response.status === 403) throw new SceneCutForbiddenError();
+  if (!response.ok) throw new Error(await responseMessage(response, fallback));
+  const parsed = parseSceneCuts(await response.json());
+  if (!parsed || parsed.itemId !== itemId)
+    throw new Error('Scene cuts response did not match this movie');
+  return parsed;
+}
+
+/** Add a manual scene marker to the movie. */
+export async function addSceneMarker(
+  itemId: string,
+  marker: { timeMs: number; label?: string }
+): Promise<SceneCuts> {
+  const response = await postJson(SCENE_CUT_ROUTES.markers(itemId), {
+    timeMs: Math.round(marker.timeMs),
+    ...(marker.label == null ? {} : { label: marker.label }),
+  });
+  return sceneCutEditResult(itemId, response, 'Could not add the scene marker');
+}
+
+/** Move or rename one of the movie's scene markers. A detected marker stays detected. */
+export async function updateSceneMarker(
+  itemId: string,
+  markerId: string,
+  patch: { timeMs?: number; label?: string }
+): Promise<SceneCuts> {
+  const response = await putJson(SCENE_CUT_ROUTES.marker(itemId, markerId), {
+    ...(patch.timeMs == null ? {} : { timeMs: Math.round(patch.timeMs) }),
+    ...(patch.label == null ? {} : { label: patch.label }),
+  });
+  return sceneCutEditResult(itemId, response, 'Could not change the scene marker');
+}
+
+/** Delete one of the movie's scene markers. */
+export async function deleteSceneMarker(itemId: string, markerId: string): Promise<SceneCuts> {
+  const response = await send(SCENE_CUT_ROUTES.marker(itemId, markerId), { method: 'DELETE' });
+  return sceneCutEditResult(itemId, response, 'Could not delete the scene marker');
 }
 
 export async function fetchSceneCutJob(

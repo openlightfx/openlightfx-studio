@@ -3,6 +3,8 @@
   import EffectStrip from './EffectStrip.svelte';
   import EditorMarkers from './EditorMarkers.svelte';
   import EditorAuditionRange from './EditorAuditionRange.svelte';
+  import ContextMenuComponent from '$lib/components/shared/ContextMenu.svelte';
+  import type { ContextMenu } from '$lib/types/ui';
   import { onDestroy, onMount, untrack } from 'svelte';
   import {
     clientXToTimelineTime,
@@ -16,7 +18,6 @@
     planSharedKeyframeMove,
     applyKeyframeMovePlan,
     quantizeProxyFrameTime,
-    sceneCutLineTimesMs,
     sceneTransitionTimesMs,
     SCENE_TRANSITION_MERGE_TOLERANCE_MS,
     snapEffectStart,
@@ -118,15 +119,53 @@
       duration
     )
   );
-  const sceneCutLines = $derived(
-    sceneCutLineTimesMs(session.sceneCuts?.cuts ?? [], duration).filter(
-      (timeMs) =>
-        !chapterMarkers.some(
-          (chapter: MediaChapter) =>
-            Math.abs(chapter.timeMs - timeMs) <= SCENE_TRANSITION_MERGE_TOLERANCE_MS
-        )
-    )
+  /** One draggable scene marker handle. Every scene marker comes from the plugin's store. */
+  interface SceneHandle {
+    key: string;
+    timeMs: number;
+    source: 'cut' | 'marker';
+    id: string;
+    label: string;
+  }
+  const sceneHandles = $derived<SceneHandle[]>(
+    session.sceneMarkers
+      // A chapter boundary already draws its own line at a detected cut.
+      .filter(
+        (marker: SceneMarker) =>
+          marker.kind !== 'detected' ||
+          (marker.timeMs > 0 &&
+            marker.timeMs <= duration &&
+            !chapterMarkers.some(
+              (chapter: MediaChapter) =>
+                Math.abs(chapter.timeMs - marker.timeMs) <= SCENE_TRANSITION_MERGE_TOLERANCE_MS
+            ))
+      )
+      .map(
+        (marker: SceneMarker): SceneHandle => ({
+          key: marker.id,
+          timeMs: marker.timeMs,
+          source: marker.kind === 'detected' ? 'cut' : 'marker',
+          id: marker.id,
+          label: marker.label || (marker.kind === 'detected' ? 'Scene transition' : 'Scene marker'),
+        })
+      )
   );
+  interface MarkerDrag {
+    pointerId: number;
+    handle: SceneHandle;
+    startX: number;
+    startScroll: number;
+    started: boolean;
+    altKey: boolean;
+    timeMs: number;
+  }
+  let markerDrag: MarkerDrag | null = null;
+  let markerDragPreview = $state<{ key: string; timeMs: number } | null>(null);
+  let suppressMarkerClick = false;
+  let markerMenu = $state<ContextMenu | null>(null);
+  function handleTime(handle: SceneHandle): number {
+    return markerDragPreview?.key === handle.key ? markerDragPreview.timeMs : handle.timeMs;
+  }
   const timelineWidth = $derived(duration * session.pxPerMs);
   const proxyProcessedMs = $derived(
     session.media?.proxy.state === 'ready'
@@ -278,7 +317,7 @@
           .map(
             (key): SnapTarget => ({ timeMs: key.timestampMs, kind: 'keyframe', label: 'Keyframe' })
           ),
-        ...session.projectSidecar.sceneMarkers.map(
+        ...session.sceneMarkers.map(
           (marker: SceneMarker): SnapTarget => ({
             timeMs: marker.timeMs,
             kind: 'marker',
@@ -358,6 +397,13 @@
     onGestureChange(true);
   }
   function endPointerGesture(event: PointerEvent) {
+    if (markerDrag?.pointerId === event.pointerId) {
+      if (event.type === 'pointerup') finishMarkerDrag(event);
+      else {
+        cancelGesture();
+        return;
+      }
+    }
     if (fadeGesture?.pointerId === event.pointerId) {
       if (event.type === 'pointerup') {
         updateFadeGesture(event);
@@ -410,6 +456,11 @@
   }
   export function cancelGesture() {
     pan = null;
+    if (markerDrag) {
+      if (markerDrag.started) session.status = 'Gesture cancelled';
+      markerDrag = null;
+      markerDragPreview = null;
+    }
     if (fadeGesture) {
       fadeGesture = null;
       session.cancelEdit();
@@ -492,6 +543,140 @@
     session.status = `Incoming fade ${gesture.key.timestampMs - start} ms · arrival ${format(gesture.key.timestampMs)}`;
   }
 
+  function beginMarkerDrag(event: PointerEvent, handle: SceneHandle) {
+    suppressMarkerClick = false;
+    // Middle button still pans from the ruler.
+    if (event.button === 1) return;
+    // Keep the ruler from scrubbing under a marker, including on right-click.
+    event.stopPropagation();
+    if (event.button !== 0 || markerDrag || laneGesture || !session.track) return;
+    markerMenu = null;
+    beginPointerGesture(event.currentTarget as HTMLElement, event);
+    markerDrag = {
+      pointerId: event.pointerId,
+      handle,
+      startX: event.clientX,
+      startScroll: session.scrollX,
+      started: false,
+      altKey: event.altKey,
+      timeMs: handle.timeMs,
+    };
+  }
+  function updateMarkerDrag(event: PointerEvent) {
+    const drag = markerDrag;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    drag.altKey = event.altKey;
+    const deltaPx = event.clientX - drag.startX + session.scrollX - drag.startScroll;
+    if (!drag.started) {
+      if (Math.abs(deltaPx) <= 3) return;
+      drag.started = true;
+    }
+    const raw = Math.max(0, Math.min(duration, drag.handle.timeMs + deltaPx / session.pxPerMs));
+    const targets: SnapTarget[] = [
+      { timeMs: session.playheadMs, kind: 'playhead', label: 'Playhead' },
+      { timeMs: 0, kind: 'boundary', label: 'Movie start' },
+      { timeMs: duration, kind: 'boundary', label: 'Movie end' },
+      ...sceneHandles
+        .filter((handle) => handle.key !== drag.handle.key)
+        .map(
+          (handle): SnapTarget => ({ timeMs: handle.timeMs, kind: 'marker', label: handle.label })
+        ),
+      ...chapterMarkers.map(
+        (chapter: MediaChapter): SnapTarget => ({
+          timeMs: chapter.timeMs,
+          kind: 'marker',
+          label: `Chapter ${chapter.title}`,
+        })
+      ),
+      ...(renderedTrack?.keyframes ?? []).map(
+        (key: Keyframe): SnapTarget => ({
+          timeMs: key.timestampMs,
+          kind: 'keyframe',
+          label: 'Keyframe',
+        })
+      ),
+      ...ticks.map((tick): SnapTarget => ({ timeMs: tick.timeMs, kind: 'tick', label: 'Ruler' })),
+    ];
+    const snapped =
+      session.snapEnabled && !drag.altKey ? magneticSnap(raw, session.pxPerMs, targets) : null;
+    snapGuide = snapped;
+    // Markers sit after the movie start (the plugin rejects 0).
+    const timeMs = Math.max(
+      1,
+      Math.min(
+        Math.floor(duration),
+        Math.round(
+          snapped
+            ? snapped.timeMs
+            : quantizeProxyFrameTime(raw, session.media?.proxy.fps ?? 24, duration)
+        )
+      )
+    );
+    drag.timeMs = timeMs;
+    markerDragPreview = { key: drag.handle.key, timeMs };
+    session.status = `${snapped ? `Snap ${format(snapped.timeMs)} · ` : ''}Scene marker ${format(timeMs)}`;
+  }
+  function finishMarkerDrag(event: PointerEvent) {
+    const drag = markerDrag;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    updateMarkerDrag(event);
+    markerDrag = null;
+    markerDragPreview = null;
+    snapGuide = null;
+    // A press without movement falls through to the click handler (seek).
+    if (!drag.started) return;
+    suppressMarkerClick = true;
+    if (drag.timeMs === drag.handle.timeMs) return;
+    if (session.updateMarker(drag.handle.id, { timeMs: drag.timeMs }))
+      session.selectedMarkerId = drag.handle.id;
+  }
+  function deleteSceneHandle(handle: SceneHandle) {
+    session.deleteMarker(handle.id);
+  }
+  function openSceneHandleMenu(x: number, y: number, handle: SceneHandle) {
+    onCloseMenus();
+    markerMenu = {
+      x,
+      y,
+      items: [
+        {
+          id: 'delete-scene-marker',
+          label: 'Delete scene marker',
+          icon: '✕',
+          enabled: Boolean(session.track),
+          action: () => deleteSceneHandle(handle),
+        },
+      ],
+    };
+  }
+  function openRulerMenu(event: MouseEvent) {
+    event.preventDefault();
+    if (!ruler) return;
+    const bounds = ruler.getBoundingClientRect();
+    const time = clientXToTimelineTime(event.clientX, {
+      originClientX: bounds.left,
+      scrollX: 0,
+      pxPerMs: session.pxPerMs,
+      durationMs: duration,
+    });
+    if (time === null) return;
+    const timeMs = Math.max(1, Math.min(Math.floor(duration), Math.round(time)));
+    onCloseMenus();
+    markerMenu = {
+      x: event.clientX,
+      y: event.clientY,
+      items: [
+        {
+          id: 'add-scene-marker',
+          label: `Add scene marker at ${format(timeMs)}`,
+          icon: '+',
+          enabled: Boolean(session.track),
+          action: () => session.addMarker(timeMs),
+        },
+      ],
+    };
+  }
+
   function beginDiamond(event: PointerEvent, keyframeId: string) {
     const frame = session.track?.keyframes.find(
       (candidate: Keyframe) => candidate.id === keyframeId
@@ -503,6 +688,7 @@
     const pointermove = (event: PointerEvent) => {
       movePan(event);
       updateFadeGesture(event);
+      updateMarkerDrag(event);
       if (laneGesture?.pointerId === event.pointerId) {
         laneGesture.lastX = event.clientX;
         laneGesture.lastY = event.clientY;
@@ -521,12 +707,19 @@
       event.stopImmediatePropagation();
       cancelGesture();
     };
+    // Lane gestures prevent default on pointerdown (no mousedown), so close the marker menu here.
+    const closeMarkerMenu = (event: PointerEvent) => {
+      if (markerMenu && !(event.target as Element | null)?.closest?.('[role="menu"]'))
+        markerMenu = null;
+    };
+    window.addEventListener('pointerdown', closeMarkerMenu, true);
     window.addEventListener('blur', blur);
     window.addEventListener('pointermove', pointermove);
     window.addEventListener('pointerup', endPointerGesture);
     window.addEventListener('pointercancel', endPointerGesture);
     window.addEventListener('keydown', keydown, true);
     return () => {
+      window.removeEventListener('pointerdown', closeMarkerMenu, true);
       window.removeEventListener('blur', blur);
       window.removeEventListener('pointermove', pointermove);
       window.removeEventListener('pointerup', endPointerGesture);
@@ -787,10 +980,12 @@
       tabindex="0"
       onpointerdown={(event) => {
         beginPan(event);
-        if (event.button === 1) return;
+        // Middle button pans; right button opens the scene marker menu without moving the playhead.
+        if (event.button === 1 || event.button === 2) return;
         beginPointerGesture(event.currentTarget as HTMLElement, event);
         scrub(event);
       }}
+      oncontextmenu={openRulerMenu}
       onpointermove={(event) => {
         if (event.buttons & 1) scrub(event);
       }}
@@ -836,33 +1031,47 @@
           }}>C</button
         >
       {/each}
-      {#each sceneCutLines as timeMs (timeMs)}
+      {#each sceneHandles as handle (handle.key)}
+        {@const timeMs = handleTime(handle)}
         <button
           type="button"
-          class="scene-transition"
-          aria-label={`Scene transition at ${format(timeMs)}`}
-          title={`Scene transition · ${format(timeMs)}`}
+          class="scene-handle"
+          class:user={handle.source === 'marker'}
+          class:selected={session.selectedMarkerId === handle.id}
+          class:dragging={markerDragPreview?.key === handle.key}
+          aria-label={handle.source === 'cut'
+            ? `Scene transition at ${format(timeMs)}`
+            : `Marker ${handle.label} at ${format(timeMs)}`}
+          title={`${handle.label} · ${format(timeMs)}\nDrag to move · right-click for options`}
           style={`left:${timeMs * session.pxPerMs}px`}
-          onpointerdown={(event) => event.stopPropagation()}
+          onpointerdown={(event) => beginMarkerDrag(event, handle)}
           onclick={(event) => {
             event.stopPropagation();
-            session.seek(timeMs);
-          }}>▾</button
-        >
-      {/each}
-      {#each session.projectSidecar.sceneMarkers as marker (marker.id)}
-        <button
-          class="scene-marker"
-          aria-label={`Marker ${marker.label} at ${format(marker.timeMs)}`}
-          title={`${marker.label} · ${format(marker.timeMs)}`}
-          style={`left:${marker.timeMs * session.pxPerMs}px`}
-          onpointerdown={(event) => event.stopPropagation()}
-          onclick={(event) => {
+            if (suppressMarkerClick) {
+              suppressMarkerClick = false;
+              return;
+            }
+            session.selectedMarkerId = handle.id;
+            session.seek(handle.timeMs);
+          }}
+          oncontextmenu={(event) => {
+            event.preventDefault();
             event.stopPropagation();
-            session.selectedMarkerId = marker.id;
-            session.seek(marker.timeMs);
-          }}>◆</button
-        >
+            openSceneHandleMenu(event.clientX, event.clientY, handle);
+          }}
+          onkeydown={(event) => {
+            if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
+              event.preventDefault();
+              event.stopPropagation();
+              const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+              openSceneHandleMenu(rect.left, rect.bottom, handle);
+            } else if (event.key === 'Delete' || event.key === 'Backspace') {
+              event.preventDefault();
+              event.stopPropagation();
+              deleteSceneHandle(handle);
+            }
+          }}
+        ></button>
       {/each}
       {#each ticks as tick (tick.timeMs)}
         <span
@@ -893,12 +1102,14 @@
         style={`left:${headerWidth + chapter.timeMs * session.pxPerMs}px;height:${30 + session.channels.length * 40}px`}
       ></i>
     {/each}
-    {#each sceneCutLines as timeMs (timeMs)}
+    {#each sceneHandles as handle (handle.key)}
+      {@const timeMs = handleTime(handle)}
       <i
-        class="scene-cut"
+        class={handle.source === 'cut' ? 'scene-cut' : 'scene-marker-line'}
+        class:dragging={markerDragPreview?.key === handle.key}
         aria-hidden="true"
-        title={`Scene cut ${format(timeMs)}`}
-        style={`left:${headerWidth + timeMs * session.pxPerMs}px;height:${30 + session.channels.length * 40}px`}
+        title={`${handle.label} ${format(timeMs)}`}
+        style={`left:${headerWidth + timeMs * session.pxPerMs}px;height:${session.channels.length * 40}px`}
       ></i>
     {/each}
     <i
@@ -1088,6 +1299,7 @@
       ></div>
     {/if}
   </div>
+  <ContextMenuComponent menu={markerMenu} onclose={() => (markerMenu = null)} />
 </section>
 
 <style>
@@ -1114,23 +1326,57 @@
     background: color-mix(in srgb, var(--accent) 15%, transparent);
     pointer-events: none;
   }
-  .scene-marker,
-  .scene-transition {
+  /* Scene marker handles sit in a thin strip along the ruler's bottom edge so the
+     timecode labels at the top stay readable. The button is the hit area; ::before is the notch. */
+  .scene-handle {
     position: absolute;
-    top: 13px;
-    transform: translateX(-50%);
-    padding: 0;
-    min-height: 16px;
-    min-width: 16px;
-    color: var(--accent);
-    background: var(--surface);
+    bottom: 0;
     z-index: 3;
+    width: 14px;
+    min-width: 0;
+    height: 11px;
+    min-height: 0;
+    padding: 0;
+    transform: translateX(-50%);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    cursor: grab;
+    touch-action: none;
+    --scene-handle-color: color-mix(in srgb, var(--text) 45%, transparent);
   }
-  .scene-transition {
-    top: 1px;
-    color: var(--text);
-    font-size: 12px;
-    line-height: 14px;
+  .scene-handle::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    width: 9px;
+    height: 7px;
+    transform: translateX(-50%);
+    background: var(--scene-handle-color);
+    clip-path: polygon(0 0, 100% 0, 50% 100%);
+    transition: background var(--transition);
+  }
+  .scene-handle.user {
+    --scene-handle-color: color-mix(in srgb, var(--accent) 75%, transparent);
+  }
+  .scene-handle:hover:not(:disabled),
+  .scene-handle:active:not(:disabled) {
+    background: transparent;
+    border-color: transparent;
+  }
+  .scene-handle:hover:not(:disabled),
+  .scene-handle:focus-visible {
+    --scene-handle-color: var(--text);
+  }
+  .scene-handle.user:hover:not(:disabled),
+  .scene-handle.selected,
+  .scene-handle.dragging {
+    --scene-handle-color: var(--accent);
+  }
+  .scene-handle.dragging {
+    cursor: grabbing;
+    z-index: 4;
   }
   .chapter-marker {
     position: absolute;
@@ -1301,13 +1547,22 @@
   .tick.major:not(:empty) {
     padding-top: 2px;
   }
-  .scene-cut {
+  /* Subtle guides: they start below the ruler so they never cross the timecodes. */
+  .scene-cut,
+  .scene-marker-line {
     position: absolute;
     z-index: 1;
-    top: 0;
+    top: 30px;
     width: 1px;
-    background: color-mix(in srgb, var(--text) 45%, transparent);
+    background: color-mix(in srgb, var(--text) 12%, transparent);
     pointer-events: none;
+  }
+  .scene-marker-line {
+    background: color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+  .scene-cut.dragging,
+  .scene-marker-line.dragging {
+    background: color-mix(in srgb, var(--accent) 70%, transparent);
   }
   .chapter-line {
     position: absolute;

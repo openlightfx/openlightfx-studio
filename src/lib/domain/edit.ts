@@ -1,4 +1,4 @@
-import type { Channel, ChannelGroup, EffectType, Keyframe, Rgb, SceneMarker, Track } from './types';
+import type { Channel, ChannelGroup, EffectType, Keyframe, Rgb, Track } from './types';
 import { BLACK, rgb } from './types';
 import { quantizeProxyFrameTime } from './media';
 
@@ -465,13 +465,6 @@ export function applySpread(group: ChannelGroup, source: Keyframe): Keyframe[] {
     channelId: id,
     timestampMs: source.timestampMs + index * group.spreadMs,
   }));
-}
-
-export function markerInSidecarOnly(markers: SceneMarker[]): {
-  protobufHasMarkers: false;
-  sidecar: SceneMarker[];
-} {
-  return { protobufHasMarkers: false, sidecar: markers };
 }
 
 export function l1ExposesAutomaticGeneration(): boolean {

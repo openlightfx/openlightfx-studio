@@ -92,7 +92,6 @@ const reservedSidecarFields = new Set([
   'apikey',
   'credentials',
 ]);
-const markerKinds = new Set(['manual', 'chapter', 'detected']);
 const groupModes = new Set(['mirror', 'spread', 'alternate']);
 
 export class InvalidProjectSidecarError extends Error {
@@ -119,17 +118,11 @@ export function parseProjectSidecar(
     (!options.allowItemIdRebind || typeof input.itemId !== 'string' || input.itemId.length === 0)
   )
     throw new InvalidProjectSidecarError('Project sidecar identity does not match this track');
-  const sceneMarkers = input.sceneMarkers ?? [];
+  // Scene markers live in the plugin's scene-cut document; any old `sceneMarkers` is ignored
+  // here (the plugin migrates it) and stripped by sidecarDocument as a reserved field.
   const channelGroups = input.channelGroups ?? [];
-  if (!Array.isArray(sceneMarkers) || !Array.isArray(channelGroups))
-    throw new InvalidProjectSidecarError('Project markers and channel groups must be arrays');
-  for (const marker of sceneMarkers) {
-    if (!marker || typeof marker !== 'object' || Array.isArray(marker))
-      throw new InvalidProjectSidecarError('Project scene marker is malformed');
-    const kind = (marker as Record<string, unknown>).kind;
-    if (typeof kind !== 'string' || !markerKinds.has(kind))
-      throw new InvalidProjectSidecarError('Project scene marker kind is unsupported');
-  }
+  if (!Array.isArray(channelGroups))
+    throw new InvalidProjectSidecarError('Project channel groups must be an array');
   for (const group of channelGroups) {
     if (!group || typeof group !== 'object' || Array.isArray(group))
       throw new InvalidProjectSidecarError('Project channel group is malformed');
@@ -142,7 +135,6 @@ export function parseProjectSidecar(
     version: 1,
     itemId: identity.itemId,
     trackId: identity.trackId,
-    sceneMarkers: sceneMarkers as ProjectSidecar['sceneMarkers'],
     channelGroups: channelGroups as ProjectSidecar['channelGroups'],
   });
 }
@@ -156,7 +148,6 @@ export function sidecarDocument(input: ProjectSidecar): ProjectSidecar {
   output.version = 1;
   output.itemId = input.itemId;
   output.trackId = input.trackId;
-  output.sceneMarkers = input.sceneMarkers;
   output.channelGroups = input.channelGroups;
   return output as ProjectSidecar;
 }

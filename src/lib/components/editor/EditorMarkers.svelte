@@ -3,7 +3,8 @@
   import type { StudioSession } from '$lib/studio/session.svelte';
   import { formatElapsedTime, parseElapsedTime } from '$lib/domain';
   let { session } = $props<{ session: StudioSession }>();
-  const markers = $derived(session.projectSidecar.sceneMarkers);
+  // All of the movie's scene markers (detected and manual), stored by the plugin.
+  const markers = $derived(session.sceneMarkers);
   let error = $state('');
   function updateTime(id: string, value: string) {
     const timeMs = parseElapsedTime(value);
@@ -48,6 +49,7 @@
           >Name <input
             aria-label={`Marker name ${marker.id}`}
             value={marker.label}
+            placeholder={marker.kind === 'detected' ? 'Scene transition' : 'Scene marker'}
             onchange={(event) =>
               session.updateMarker(marker.id, { label: event.currentTarget.value })}
           /></label

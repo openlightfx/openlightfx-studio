@@ -1,3 +1,5 @@
+import type { SceneMarker } from './types';
+
 export type SceneCutStatus = 'ready' | 'running' | 'none' | 'stale';
 
 export interface SceneCutDetector {
@@ -7,13 +9,17 @@ export interface SceneCutDetector {
   minSceneLen: number;
 }
 
-/** ContentDetector cuts for one movie. `cuts` are seconds, ascending. */
+/**
+ * One movie's scene markers from the plugin: detected cuts plus markers a person placed.
+ * `cuts` are every marker time in seconds, ascending; `markers` carry ids, kinds, and labels.
+ */
 export interface SceneCuts {
   itemId: string;
   status: SceneCutStatus;
   detector: SceneCutDetector;
   durationSeconds: number;
   cuts: number[];
+  markers: SceneMarker[];
   updatedAt: string;
 }
 
@@ -43,8 +49,33 @@ export function emptySceneCuts(itemId: string, status: 'none' | 'stale' = 'none'
     detector: { name: 'ContentDetector', threshold: 27, fps: 24, minSceneLen: 15 },
     durationSeconds: 0,
     cuts: [],
+    markers: [],
     updatedAt: '',
   };
+}
+
+function parseMarkers(value: unknown, cutSeconds: readonly number[]): SceneMarker[] | null {
+  // Older plugins sent only `cuts`; treat each as a detected marker.
+  if (value === undefined)
+    return cutSeconds.map((seconds) => {
+      const timeMs = Math.round(seconds * 1000);
+      return { id: `d${timeMs}`, timeMs, label: '', kind: 'detected' as const };
+    });
+  if (!Array.isArray(value)) return null;
+  const markers: SceneMarker[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') return null;
+    const record = entry as Record<string, unknown>;
+    if (typeof record.id !== 'string' || !record.id) return null;
+    if (!Number.isSafeInteger(record.timeMs) || (record.timeMs as number) < 0) return null;
+    markers.push({
+      id: record.id,
+      timeMs: record.timeMs as number,
+      label: typeof record.label === 'string' ? record.label : '',
+      kind: record.kind === 'manual' ? 'manual' : 'detected',
+    });
+  }
+  return markers.sort((a, b) => a.timeMs - b.timeMs || a.id.localeCompare(b.id));
 }
 
 export function parseSceneCuts(body: unknown): SceneCuts | null {
@@ -68,6 +99,8 @@ export function parseSceneCuts(body: unknown): SceneCuts | null {
     return null;
   if (typeof record.updatedAt !== 'string') return null;
   const cuts = [...new Set(record.cuts)].sort((left, right) => left - right);
+  const markers = parseMarkers(record.markers, cuts);
+  if (!markers) return null;
   return {
     itemId: record.itemId,
     status: record.status as SceneCutStatus,
@@ -79,6 +112,7 @@ export function parseSceneCuts(body: unknown): SceneCuts | null {
     },
     durationSeconds: record.durationSeconds,
     cuts,
+    markers,
     updatedAt: record.updatedAt,
   };
 }

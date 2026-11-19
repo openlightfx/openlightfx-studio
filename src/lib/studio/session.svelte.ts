@@ -28,6 +28,7 @@ import {
   effectPreset,
   effectSafetyNote,
   sceneTransitionTimesMs,
+  formatElapsedTime,
   snapEffectStart,
   crashKey,
   createHistory,
@@ -71,8 +72,13 @@ import {
   changeTrackLayout,
   upgradeLegacyTrackLayout,
 } from '$lib/domain';
-import { adjacentSceneStopMs, type SceneCutJob, type SceneCuts } from '$lib/domain/scene-cuts';
-import type { EffectKeyframe, EffectType } from '$lib/domain/types';
+import {
+  adjacentSceneStopMs,
+  emptySceneCuts,
+  type SceneCutJob,
+  type SceneCuts,
+} from '$lib/domain/scene-cuts';
+import type { EffectKeyframe, EffectType, SceneMarker } from '$lib/domain/types';
 import {
   bytesAsBuffer,
   fetchBulbs,
@@ -83,6 +89,9 @@ import {
   fetchProjectSidecar,
   fetchSceneCutJob,
   fetchSceneCuts,
+  addSceneMarker,
+  updateSceneMarker,
+  deleteSceneMarker,
   fetchSourceWorkspace,
   releaseSourceWorkspace,
   startSourceWorkspace,
@@ -287,7 +296,6 @@ export class StudioSession {
   private allocateId = createIdAllocator(() => [
     ...(this.track?.keyframes.map((keyframe) => keyframe.id) ?? []),
     ...(this.track?.effects.map((effect) => effect.id) ?? []),
-    ...(this.sidecarState?.sceneMarkers.map((marker) => marker.id) ?? []),
     ...(this.draftTrack?.keyframes.map((keyframe) => keyframe.id) ?? []),
     ...(this.draftTrack?.effects.map((effect) => effect.id) ?? []),
   ]);
@@ -837,7 +845,6 @@ export class StudioSession {
       version: 1,
       itemId,
       trackId,
-      sceneMarkers: [],
       channelGroups: [],
     };
     this.sidecarLoadError = sidecarError;
@@ -970,60 +977,115 @@ export class StudioSession {
     return this.sidecar();
   }
 
-  addMarker(): void {
-    if (!this.track) return;
-    const timeMs = Math.max(0, Math.min(this.durationMs(), Math.round(this.playheadMs)));
-    const marker = {
-      id: this.allocateId('marker'),
-      timeMs,
-      label: 'Scene marker',
-      kind: 'manual' as const,
-    };
-    const sidecar = this.projectSidecar;
-    if (
-      this.editSidecar(
-        {
-          ...sidecar,
-          sceneMarkers: [...sidecar.sceneMarkers, marker].sort(
-            (a, b) => a.timeMs - b.timeMs || a.id.localeCompare(b.id)
-          ),
-        },
-        'Add scene marker'
-      )
-    )
-      this.selectedMarkerId = marker.id;
+  /**
+   * The movie's scene markers (detected and manual), sorted by time. The plugin's scene-cut
+   * document is their only store; edits go through its routes.
+   */
+  get sceneMarkers(): SceneMarker[] {
+    return this.sceneCuts?.markers ?? [];
   }
 
+  /** Add a manual scene marker at `atMs` (default: the playhead). */
+  addMarker(atMs?: number): void {
+    const requested = atMs ?? this.playheadMs;
+    const timeMs = Math.max(
+      1,
+      Math.min(
+        Math.floor(this.durationMs()),
+        Math.round(Number.isFinite(requested) ? requested : 0)
+      )
+    );
+    const before = new Set(this.sceneMarkers.map((marker) => marker.id));
+    void this.editSceneMarkers(
+      (itemId) => addSceneMarker(itemId, { timeMs, label: 'Scene marker' }),
+      (markers) => [
+        ...markers,
+        { id: `pending-${timeMs}`, timeMs, label: 'Scene marker', kind: 'manual' as const },
+      ],
+      `Scene marker added at ${formatElapsedTime(timeMs)}`
+    ).then((ok) => {
+      if (!ok) return;
+      const added = this.sceneMarkers.find(
+        (marker) => marker.timeMs === timeMs && marker.kind === 'manual' && !before.has(marker.id)
+      );
+      if (added) this.selectedMarkerId = added.id;
+    });
+  }
+
+  /** Move or rename one scene marker. A moved detected marker stays detected. */
   updateMarker(id: string, patch: { label?: string; timeMs?: number }): boolean {
     if (
       patch.timeMs != null &&
-      (!Number.isSafeInteger(patch.timeMs) || patch.timeMs < 0 || patch.timeMs > this.durationMs())
+      (!Number.isSafeInteger(patch.timeMs) || patch.timeMs <= 0 || patch.timeMs > this.durationMs())
     ) {
       this.status = 'Marker time must be inside the movie';
       return false;
     }
-    const sidecar = this.projectSidecar;
-    return this.editSidecar(
-      {
-        ...sidecar,
-        sceneMarkers: sidecar.sceneMarkers
-          .map((marker) => (marker.id === id ? { ...marker, ...patch } : marker))
-          .sort((a, b) => a.timeMs - b.timeMs || a.id.localeCompare(b.id)),
-      },
-      'Edit scene marker'
+    const current = this.sceneMarkers.find((marker) => marker.id === id);
+    if (!current) return false;
+    if (
+      (patch.timeMs == null || patch.timeMs === current.timeMs) &&
+      (patch.label == null || patch.label === current.label)
+    )
+      return false;
+    void this.editSceneMarkers(
+      (itemId) => updateSceneMarker(itemId, id, patch),
+      (markers) => markers.map((marker) => (marker.id === id ? { ...marker, ...patch } : marker)),
+      patch.timeMs != null
+        ? `Scene marker moved to ${formatElapsedTime(patch.timeMs)}`
+        : 'Scene marker renamed'
     );
+    return true;
   }
 
   deleteMarker(id: string): void {
-    const sidecar = this.projectSidecar;
-    if (
-      this.editSidecar(
-        { ...sidecar, sceneMarkers: sidecar.sceneMarkers.filter((marker) => marker.id !== id) },
-        'Delete scene marker'
-      ) &&
-      this.selectedMarkerId === id
-    )
-      this.selectedMarkerId = null;
+    void this.editSceneMarkers(
+      (itemId) => deleteSceneMarker(itemId, id),
+      (markers) => markers.filter((marker) => marker.id !== id),
+      'Scene marker deleted'
+    ).then((ok) => {
+      if (ok && this.selectedMarkerId === id) this.selectedMarkerId = null;
+    });
+  }
+
+  /**
+   * Show a marker edit immediately, then replace it with the plugin's document. A failure
+   * restores the previous markers and reports why.
+   */
+  private async editSceneMarkers(
+    request: (itemId: string) => Promise<SceneCuts>,
+    optimistic: (markers: SceneMarker[]) => SceneMarker[],
+    done: string
+  ): Promise<boolean> {
+    const itemId = this.item?.itemId;
+    if (!itemId) {
+      this.status = 'Open a movie to edit its scene markers';
+      return false;
+    }
+    const previous = this.sceneCuts;
+    const base = previous?.itemId === itemId ? previous : emptySceneCuts(itemId);
+    const markers = optimistic(base.markers).sort(
+      (a, b) => a.timeMs - b.timeMs || a.id.localeCompare(b.id)
+    );
+    this.sceneCuts = {
+      ...base,
+      markers,
+      cuts: [...new Set(markers.map((marker) => marker.timeMs / 1000))],
+    };
+    try {
+      const updated = await request(itemId);
+      if (this.item?.itemId !== itemId) return false;
+      this.rememberSceneCuts(itemId, updated);
+      this.status = done;
+      return true;
+    } catch (error) {
+      if (this.item?.itemId === itemId) this.sceneCuts = previous;
+      this.status =
+        error instanceof SceneCutForbiddenError
+          ? 'Only an Emby administrator can edit scene markers'
+          : (error as Error).message || 'Scene marker edit failed';
+      return false;
+    }
   }
 
   sceneNavigationReason(direction: -1 | 1): string | undefined {
@@ -1175,7 +1237,7 @@ export class StudioSession {
 
   navigateMarker(direction: -1 | 1): void {
     const time = adjacentKeyframeTime(
-      this.projectSidecar.sceneMarkers.map((marker) => ({ timestampMs: marker.timeMs })),
+      this.sceneMarkers.map((marker) => ({ timestampMs: marker.timeMs })),
       this.playheadMs,
       direction
     );
@@ -2821,7 +2883,6 @@ export class StudioSession {
         version: 1 as const,
         itemId: this.item?.itemId ?? '',
         trackId: this.trackId,
-        sceneMarkers: [],
         channelGroups: [],
       }),
       itemId: this.item?.itemId ?? '',
